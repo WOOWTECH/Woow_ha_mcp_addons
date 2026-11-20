@@ -119,7 +119,9 @@ async def run(args, *, child_port=CHILD_PORT, adapter=None):
             # administration: the apps make their own AdminAuthority and management slots, as before. HM-13b: dormant
             # profiles (profile data on disk) add their number to the bootstrap; without profile data, nothing changes.
             profile = ProfileRuntime(store, adapter.tools, adapter.child_spec, port=child_port, app_options=options,
-                                     dormant_profiles=guarded.dormant, restore_notice=notice)
+                                     dormant_profiles=guarded.dormant, restore_notice=notice,
+                                     prepare_child=(None if adapter.prepare_child is None else
+                                                    lambda state: adapter.prepare_child('default', state)))
         async with profile:
             servers = [Listener(uvicorn.Config(app, host=args.host, port=port,
                 proxy_headers=False, access_log=False, log_level='warning', server_header=False,

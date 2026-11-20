@@ -695,10 +695,12 @@ class N8nCatalogTests(unittest.TestCase):
         self.user = (os.getuid(), os.getgid())
         self.created = [(A, 18000), (B, 18001)]
         for profile_id, _ in self.created:
-            directory = self.root / 'profiles' / profile_id
+            profile = self.root / 'profiles' / profile_id
+            directory = profile / 'n8n-mcp'
             directory.mkdir(mode=0o700, parents=True)
-            (directory / 'nodes.db').write_bytes(b'catalog')
-            os.chmod(directory / 'nodes.db', 0o600)
+            profile.chmod(0o700)
+            (directory / ('d' * 64 + '.db')).write_bytes(b'catalog')
+            os.chmod(directory / ('d' * 64 + '.db'), 0o600)
         for directory in (self.root, self.root / 'profiles'):
             os.chmod(directory, 0o700)
 
@@ -716,13 +718,13 @@ class N8nCatalogTests(unittest.TestCase):
             'open directory': lambda copy, other: os.chmod(copy.parent, 0o755),
             'a link': lambda copy, other: (copy.unlink(), copy.symlink_to(other)),
             'empty': lambda copy, other: copy.write_bytes(b''),
-            'another profile': lambda copy, other: (copy.parent.parent / ('c' * 24)).mkdir(mode=0o700),
+            'another profile': lambda copy, other: (copy.parent.parent.parent / ('c' * 24)).mkdir(mode=0o700),
             'a profile without one': lambda copy, other: shutil.rmtree(copy.parent),
         }
         for name, damage in cases.items():
             with self.subTest(name):
                 self.setUp()  # a fresh tree for each case
-                damage(self.root / 'profiles' / B / 'nodes.db', self.root / 'profiles' / A / 'nodes.db')
+                damage(self.root / 'profiles' / B / 'n8n-mcp' / ('d' * 64 + '.db'), self.root / 'profiles' / A / 'n8n-mcp' / ('d' * 64 + '.db'))
                 with self.assertRaises((AssertionError, OSError)):
                     self.check()
 

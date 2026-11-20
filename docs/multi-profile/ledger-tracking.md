@@ -15,6 +15,8 @@
 
 | 模組 | 建立的片 | 之後會改的片（照合併順序） | 帳本 | tool-surface | 用途 |
 |---|---|---|---|---|---|
+| `apps/n8n/persistent_catalog.py` | 2026-11-20 n8n parity 候選 | — | 列管 | — | 各帳號、後端身分獨立的持久 SQLite catalog 與歷史 |
+| `packages/mcp-admin-core/mcp_admin_core/n8n_ssrf.py` | 2026-11-20 n8n parity 候選 | — | 列管 | — | 後端存檔的 PaaS strict URL 與 DNS 檢查 |
 | `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | 每個產品的升版片（加產品；受發版鎖）。HM-17 沒改它：HM-17 先合併，那時這個檔還不存在 | 列管（HM-07 起） | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
 | `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；#97）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-13b（隔離名稱不覆蓋、守門的移開名稱）→ HM-13c（還原提示的檔名、隔離目錄在管理 API 上的名稱與刪除）→ HM-27（Origin 政策與它的收據的檔名、收據封存加進守門的名稱；合併 HM-13c 時）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
 | `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |

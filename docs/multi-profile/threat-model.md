@@ -246,30 +246,9 @@
   `docs/operations/update-backup-rollback.md`）。備份裡的政策檔不能用或是目錄時，還原後密鑰網址一律 503（目錄只能再還原別份備份）。
   收據檔照索引旁的封存，還原前的存檔重送一律 410，不會把備份之後的設定再寫一次。
 - Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14；HM-03b 沒做，交 HM-19b）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
-- n8n 的 webhook、chat、form 網址照舊是 `permissive`（契約第 9 節 #90；HM-25 沒改）。網址一律是設定的 n8n 網址（去掉 `/api/v1`）
-  加 `/webhook/…`、`/form/…`（n8n-mcp 2.96.2 `triggers/handlers/base-handler.js` 的 `getBaseUrl`；`x-n8n-url` 不轉送，換不掉），
-  `n8n_test_workflow` 每次觸發前先經 API 讀那個 workflow（`mcp/handlers-n8n-manager.js:1285`），開通後這次拒 loopback（#39，HM-20）。
-  所以只有 DNS rebinding 打得到 loopback：設定的名稱在 API 那次查到公開位址、在 webhook 那次查到 127.0.0.1，port 是設定網址的 port；
-  路徑可以用 `..` 走到同一個 origin 的任何路徑，方法、標頭與內容由持有人定（n8n 的 API key 不會跟著送）。打到別帳號子程式的 port
-  （18000 起、3000）要那個帳號的 child bearer（每個子程式的環境只有自己的，n8n-mcp 驗 `AUTH_TOKEN`）；打到 8081 要某個帳號的 token；
-  打到 8099 的來源是 127.0.0.1，不是 Ingress，管理 API 一律 403。另外三件（HM-25 獨立安全審查 S-2）：
-  - n8n-mcp 的 `/` 與 `/health` 不驗 bearer（`http-server-single-session.js:803,832`）：loopback 上任何來源都讀得到它的版本與 uptime。
-  - n8n-mcp 的登入限流（`authLimiter`）以來源 IP 計、15 分鐘 20 次失敗（`AUTH_RATE_LIMIT_MAX` 沒設，HA 現值；PaaS 是 1000，#62）：
-    閘道的請求都從 127.0.0.1 來，所以對一個子程式的 port 送 20 次錯的 bearer，那個子程式對閘道也回 429 十五分鐘（跨帳號的 DoS；
-    從別帳號只有上面那條 DNS rebinding 做得到，拿不到任何憑證）。
-  - 兩個帳號接同一台 n8n 時，n8n 的 webhook、form 是整台共用、不看 API key：A 的持有人可以用自己看得到的 workflow 帶 B 的 webhook
-    路徑觸發 B 的 workflow。HAOS 驗收 T-04「標記只在對角線」只對 API 成立；要 webhook 也分開，就每個帳號接自己的 n8n，或 webhook
-    節點加 header 驗證（寫進 DOCS 草稿，`unreleased-changes.md` 第 3.2 節）。
-  審查建議開通後 webhook、chat、form 也拒 loopback、區網照舊（契約 #90），等使用者定；定之前照舊。
-- n8n 每個額外帳號的 `nodes.db` 副本（`/tmp/woow-n8n-mcp/profiles/<id>/`）只讓 n8n-mcp 自己的版本歷史分開（UC-09：單一租戶模式的
-  `instance_id` 一律是空字串，共用一份就會互看、互刪、互相回滾），不是安全邊界：同 uid 的子程式讀寫得到每一份（DQ-37）。副本不在
-  `/data`、不進備份，容器重建或管理程序重啟後重做（版本歷史跟著清掉，同預設帳號今天）；額外帳號換了後端（網址或 key）時也重做，
-  帳號交給另一個後端的持有人時讀不到前一個後端的快照（HM-25 安全審查 S-8）。預設帳號的副本照舊只在管理程序啟動時重做：預設帳號換
-  後端之後，前一個後端的版本快照要到 add-on 重啟才清掉（今天就是如此）。
-- n8n 的版本歷史沒有大小上限（HM-25 安全審查 S-7）：n8n-mcp 每次更新 workflow 自動存一版、每個 workflow 留 10 版，workflow 的數量由
-  持有人在自己的後端決定。`/tmp` 不是 tmpfs，在容器的可寫層上（HM-03b 的 UC-03 實測），也就是 HAOS 的資料分割區：任一帳號的持有人都能
-  讓自己的副本長大，佔用其他帳號與主機的磁碟。預設帳號今天就是如此，不是 HM-25 造成的；寫進 DOCS 的已知限制（草稿在
-  `unreleased-changes.md` 第 3.2 節）。上限要不要做、多大、超過時清掉歷史重做副本，交 n8n 升版前由使用者定。
+- n8n 的 webhook、chat、form 與設定的 API 後端採 `strict` SSRF 規則（2026-11-20 使用者要求與 PaaS 對齊）：拒絕 loopback、私網與 metadata，並驗證 DNS 全部答案後 pin。相同 n8n instance 的 webhook/form 仍是共用資源；若需隔離，請使用不同 instance 或設定 webhook 驗證。
+- 每個 n8n 帳號與後端身分有自己的持久 SQLite 檔，保存於帳號資料目錄並進入 cold backup。這避免工具經另一個帳號或後端讀到版本快照，但同 uid 的子程式仍能讀取所有檔案，不是安全邊界。換網址或 key 後的舊資料庫仍保留，刪除帳號時隨帳號目錄刪除。
+- 歷史快照可能包含敏感資訊，備份需要保護；歷史與不同後端的保留資料庫沒有總大小上限，可能佔滿資料磁碟並增加備份大小。
 
 ## 4. 事故處理：懷疑某個子程式或帳號被攻破（計畫 §8.10；HM-18 已寫進 `docs/operations/guide.md`）
 

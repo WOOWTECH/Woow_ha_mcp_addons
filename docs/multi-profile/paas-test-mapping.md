@@ -399,14 +399,14 @@
 | 8 | 186 | `test_post_publish_fsync_failure_never_starts_service` | HA：`tests/test_restore_lock.py`（HM-13b），每一步中途當掉重做、fsync 失敗保留標記 |
 | 9 | 238 | `test_n8n_restore_rotates_each_internal_pair_and_preserves_history` | HA：`tests/test_restore_lock.py`（HM-13b），child_token 全部重產；§8.8 #22 |
 | 10 | 259 | `test_n8n_incomplete_or_unsafe_backup_never_starts` | HA：`tests/test_restore_detection.py`（HM-13a）；§8.8 #20 |
-| 11 | 298 | `test_n8n_partial_database_copy_and_crash_do_not_publish` | 不適用：HA 的 n8n nodes.db 在 /tmp、不進備份；§8.8 #47 |
+| 11 | 298 | `test_n8n_partial_database_copy_and_crash_do_not_publish` | 候選：HA 的 n8n nodes.db 已持久化並進備份；還原時在啟動前檢查完整性與必要資料表；完整 PaaS schema 比對尚未移植，見候選證據；§8.8 #47 |
 | 12 | 328 | `test_missing_policy_components_never_publish` | HA：`tests/test_restore_lock.py`（HM-13b），鍵集合不符＝讀不到→隔離 |
 | 13 | 345 | `test_deeply_nested_input_fails_without_traceback_or_secret` | HA：`tests/test_restore_lock.py`（HM-13b）；HA：`tests/log_scan.py`（HM-01） |
 | 14 | 354 | `test_untrusted_configuration_keys_are_not_logged` | HA：`tests/test_restore_lock.py`（HM-13b）；HA：`tests/log_scan.py`（HM-01） |
 | 15 | 370 | `test_journal_is_archived_and_old_operation_id_cannot_replay` | HA：`tests/test_restore_lock.py`（HM-13b），舊收據封存、舊操作 ID 回 410 |
 | 16 | 405 | `test_n8n_bad_journal_is_not_discarded_or_published` | HA：`tests/test_restore_lock.py`（HM-13b），舊收據封存、舊操作 ID 回 410 |
-| 17 | 416 | `test_n8n_incomplete_catalog_schema_cannot_be_published` | 不適用：HA 的 n8n nodes.db 在 /tmp、不進備份；§8.8 #47 |
-| 18 | 432 | `test_n8n_wrong_runtime_or_broken_search_index_cannot_be_published` | 不適用：HA 的 n8n nodes.db 在 /tmp、不進備份；§8.8 #47 |
+| 17 | 416 | `test_n8n_incomplete_catalog_schema_cannot_be_published` | 候選：HA 的 n8n nodes.db 已持久化並進備份；還原時在啟動前檢查完整性與必要資料表；完整 PaaS schema 比對尚未移植，見候選證據；§8.8 #47 |
+| 18 | 432 | `test_n8n_wrong_runtime_or_broken_search_index_cannot_be_published` | 候選：HA 的 n8n nodes.db 已持久化並進備份；還原時在啟動前檢查完整性與必要資料表；完整 PaaS schema 比對尚未移植，見候選證據；§8.8 #47 |
 | 19 | 451 | `test_journal_capacity_compacts_without_losing_bytes_and_can_restore_again` | §8.8 #67 |
 | 20 | 482 | `test_corrupt_journal_bundle_is_rejected_without_publication` | §8.8 #67 |
 | 21 | 497 | `test_ambiguous_journal_is_rejected_in_either_profile` | HA：`tests/test_restore_lock.py`（HM-13b），舊收據封存、舊操作 ID 回 410 |

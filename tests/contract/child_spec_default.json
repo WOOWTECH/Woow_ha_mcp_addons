@@ -424,7 +424,7 @@
         "DISABLE_CONSOLE_OUTPUT=true",
         "N8N_MCP_MAX_SESSIONS=20",
         "SESSION_TIMEOUT_MINUTES=10",
-        "WEBHOOK_SECURITY_MODE=permissive"
+        "WEBHOOK_SECURITY_MODE=strict"
       ],
       "cwd": "{DATA}"
     },
@@ -452,7 +452,7 @@
         "N8N_API_URL=https://n8n.invalid",
         "N8N_API_KEY=DUMMY-port-workflow-key",
         "N8N_MCP_ACCESS_TOKEN=DUMMY-port-workflow-access",
-        "WEBHOOK_SECURITY_MODE=permissive",
+        "WEBHOOK_SECURITY_MODE=strict",
         "NODE_DB_PATH={CATALOG}"
       ],
       "cwd": "{DATA}"

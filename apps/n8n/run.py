@@ -18,20 +18,16 @@ from types import SimpleNamespace
 from mcp_admin_core import run_product
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.lifecycle import CHILD_PORT
-from n8n_adapter import TOOLS, child_spec, prepare_catalog, prepare_child, remove_profile_catalog
-
-
-def before_start():
-    # Made once when the management process starts (n8n_adapter: the private writable copy of the node catalog).
-    if prepare_catalog() is None:  # unreleased (0.4.12 line): the child still starts; only the version history cannot be written
-        print('n8n: no writable catalog copy; workflow version history is unavailable', flush=True)
+from n8n_adapter import TOOLS, child_spec, prepare_child, remove_profile_catalog
 
 
 async def run(args, *, child_port=CHILD_PORT):
     # HM-04: one port for the child's spec (PORT), the health monitor, the gateway and its capability probe. main()
     # runs the default profile's child on CHILD_PORT; an extra profile's runtime (multi-profile plan 5.4) passes its own.
     # The adapter's names are looked up here, at each start (tests replace them in this module).
-    adapter = run_product.ProductAdapter(TOOLS, child_spec, before_start=before_start, prepare_child=prepare_child,
+    async def prepare(profile_id, state):
+        await prepare_child(profile_id, state, root=args.data)
+    adapter = run_product.ProductAdapter(TOOLS, child_spec, prepare_child=prepare,
                                          profile_removed=remove_profile_catalog)
     await run_product.run(SimpleNamespace(**{**vars(args), 'product': 'n8n'}), child_port=child_port, adapter=adapter)
 

@@ -209,7 +209,7 @@ CLOSE_SECONDS = 30
 @asynccontextmanager
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
-                                stagger=None, verifier=None, may_stop=False):
+                                stagger=None, verifier=None, may_stop=False, sqlite_catalog=True):
     """run_product.run of *product* on *data* with the switch on (switch=False: off), the outside replaced as
     production_runtime replaces it. children: a Children for MockTransport (left out: the default profile's golden
     MockChild on 3000, nobody else's); real_children:
@@ -261,11 +261,24 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
         patch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.05 if stagger is None else stagger)
         runner = run_product.run
         if product == 'n8n':  # HM-25: apps/n8n/run.py runs run_product's runtime with the n8n adapter
+            from mcp_admin_core import n8n_ssrf
+            from urllib.parse import urlsplit
+            original_check = n8n_ssrf.check_url
+            async def fixture_check(url, mode=None):
+                if (urlsplit(url).hostname or '').endswith('.invalid'):
+                    return n8n_ssrf.SsrfCheck(True, addresses=['8.8.8.8'])
+                return await original_check(url, mode)
+            patch.setattr(n8n_ssrf, 'check_url', fixture_check)
             runner = n8n_run.run
             catalogs = Path(data).parent / 'n8n-catalogs'
             catalogs.mkdir(mode=0o700, exist_ok=True)
             (catalogs / 'source.db').write_bytes(CATALOG_STAND_IN)
-            patch.setattr(n8n_run, 'prepare_catalog', lambda: None)  # as HM-01's harness: the default's copy skipped
+            if sqlite_catalog:
+                import sqlite3
+                (catalogs / 'source.db').unlink()
+                with sqlite3.connect(catalogs / 'source.db') as db:
+                    db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
+                                     'CREATE TABLE workflow_versions(id INTEGER);')
             patch.setattr(n8n_adapter, 'PACKAGED_CATALOG', catalogs / 'source.db')
             patch.setattr(n8n_adapter, 'CATALOG_DIR', catalogs / 'copies')
             patch.setattr(n8n_adapter, '_profile_catalogs', {})

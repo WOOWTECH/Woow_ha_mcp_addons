@@ -1453,6 +1453,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if name in ("backend", "backend/patch"):
                         from .products import check_saved_destinations
                         check_saved_destinations(candidate, state)
+                        if (getattr(candidate, 'product', None) == 'n8n' and candidate.backend_url
+                                and candidate.backend_url != state.backend_url):
+                            from .n8n_ssrf import check_url
+                            try:
+                                async with asyncio.timeout(3):
+                                    check = await check_url(candidate.backend_url, 'strict')
+                            except TimeoutError:
+                                raise ValueError('backend resolution timed out') from None
+                            if not check.ok:
+                                raise ValueError('backend URL refused')
                     if name == 'policy' and 'denied_operations' in changes:
                         validate_operation_denies(candidate.denied_operations, tools, state)
                 except ValueError:

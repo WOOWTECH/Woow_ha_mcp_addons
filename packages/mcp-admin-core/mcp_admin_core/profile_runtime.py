@@ -927,7 +927,7 @@ class ProfileManager:
                                  restore_notice=self.restore_notice if default else None,
                                  review_required=partial(self.admin.review_required, profile_id),
                                  origin_policy=None if self.origin is None else self.origin.guard(profile_id),
-                                 prepare_child=(None if default or self.prepare_child is None
+                                 prepare_child=(None if self.prepare_child is None
                                                 else partial(self.prepare_child, profile_id)))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)

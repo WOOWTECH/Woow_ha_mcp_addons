@@ -125,16 +125,16 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
     `An additional profile without an n8n backend runs no n8n-mcp process: every tool, the seven documentation tools included, answers "Backend not configured"; the default profile is unchanged.`
   - session 名額與逾時每個帳號各自（沒存過是 20 個、10 分鐘）：
     `MCP sessions are counted per profile: each profile has its own 20 sessions (10 minutes idle) unless its own settings say otherwise.`
-  - 每個額外帳號有自己的 node catalog 與 workflow 版本歷史（`/tmp`，不進備份；換了後端（網址或 key）時重做、刪帳號一起刪；HM-25 安全審查 S-8）：
-    `Each additional profile keeps its own node catalog and workflow version history (in /tmp, not in backups): a new backend (URL or key) starts it afresh, and it is deleted with the profile.`
+  - 每個帳號的 catalog 與 workflow 版本歷史存於自己的資料目錄，包含在 cold backup；不同網址或 key 使用不同資料庫，刪除帳號時一併刪除。
+    `Each profile's catalog and workflow history is included in cold backups. Different backend URLs or keys use separate databases; deleting a profile removes its history.`
   - DOCS 要跟著改（`addons/n8n/DOCS.md`，升版 PR 改）：「所有 client **共用 20 個**同時 session」改成「每個帳號的 client 共用該帳號的 20 個
     session」；「n8n 沒有後端時子程序照常啟動，7 個文件工具照常回答」補「額外帳號沒有後端時不起子程序，每支工具都回 `Backend not configured`」。
   - DOCS 的已知限制要加（HM-25 的獨立安全審查 S-2、S-7、S-8；`threat-model.md` 第 3 節）：
     - 兩個帳號接同一台 n8n 時，n8n 的 webhook 與 form 是整台共用、不看 API key，一個帳號可以觸發另一個帳號的 webhook workflow；要分開就
       每個帳號接自己的 n8n，或在 webhook 節點加 header 驗證。
-    - workflow 版本歷史在容器的 `/tmp`（HAOS 的資料分割區），沒有大小上限：每次更新 workflow 存一版、每個 workflow 留 10 版。
-    - 預設帳號的版本歷史只在 add-on 重啟時清掉：把預設帳號換到另一個後端、交給別人用之前，重啟 add-on。
-    - webhook 的網址模式（`permissive`）要不要在開通後拒 loopback，等使用者定（契約 #90）；定了要改這一段與 CHANGELOG。
+    - workflow 版本歷史使用持久空間；換後端或 key 時舊資料庫仍保留，因此會增加備份與儲存空間。快照可能含敏感資料，備份須妥善保護。
+    - n8n 後端與 webhook、form、chat 採 strict SSRF 規則，私網、loopback 與雲端 metadata 位址不可使用；已有內網設定需要改為可公開存取的端點。此限制是候選變更，尚未發版。
+    - 發版時更新 `addons/n8n/README.md` 與 `DOCS.md`：子程序固定 `WEBHOOK_SECURITY_MODE=strict`；各帳號的 workflow 版本歷史與 catalog 保存在各自資料目錄、納入 cold backup，後端網址或 key 不同時使用獨立資料庫。此功能片不修改 `addons/`。
 
 ### 3.3 Hermes
 

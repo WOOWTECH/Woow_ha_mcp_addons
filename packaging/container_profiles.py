@@ -58,7 +58,7 @@ child_ports tells them apart without reading any environment (reading another us
 root takes CAP_SYS_PTRACE, which docker gives no container by default). n8n's default profile works in /data/mcp itself
 (its HOME and cwd, as before): tree_snapshot's names show that n8n-mcp leaves nothing of its own there, and an
 additional profile's child/ (its HOME) must still be empty. Step 2 also checks that each additional profile's child
-reads a catalog copy of its own (check_n8n_catalogs: /tmp/woow-n8n-mcp/profiles/<id>/nodes.db; DQ-04).
+reads a catalog copy of its own (check_n8n_catalogs: /data/mcp/profiles/<id>/n8n-mcp/<digest>.db).
 """
 import asyncio
 import hashlib
@@ -426,13 +426,11 @@ async def profiles_up(probe, process, ports, *, timeout=UP_SECONDS, proc=Path('/
         raise AssertionError(f'children up on {up} of {wanted}') from None
 
 
-N8N_CATALOGS = Path('/tmp/woow-n8n-mcp')  # apps/n8n/n8n_adapter.py CATALOG_DIR
+N8N_CATALOGS = Path('/data/mcp')
 
 
 def check_n8n_catalogs(created, root=N8N_CATALOGS, *, user=RUNTIME):
-    """HM-25 (DQ-04, UC-09): each additional n8n profile's child reads a catalog copy of its own, made before it
-    started: <root>/profiles/<id>/nodes.db, a single-link regular file of the runtime user, 0600, under directories of
-    the runtime user, 0700 (never a link), one per profile and none other than the created profiles'. Read only."""
+    """Each newly created n8n profile has one private persistent catalog under its own data directory."""
     profiles_dir = root / profiles.PROFILES_NAME
     for directory in (root, profiles_dir):
         info = os.lstat(directory)
@@ -442,10 +440,15 @@ def check_n8n_catalogs(created, root=N8N_CATALOGS, *, user=RUNTIME):
     assert names == sorted(profile_id for profile_id, _ in created), "n8n catalog copies not the profiles' own"
     copies = set()
     for profile_id, _ in created:
-        info = os.lstat(profiles_dir / profile_id)
-        assert stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == user and stat.S_IMODE(info.st_mode) == 0o700, \
-            'n8n catalog directory not private'
-        info = os.lstat(profiles_dir / profile_id / 'nodes.db')
+        profile = profiles_dir / profile_id
+        directory = profile / 'n8n-mcp'
+        for item in (profile, directory):
+            info = os.lstat(item)
+            assert stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == user and stat.S_IMODE(info.st_mode) == 0o700, \
+                'n8n catalog directory not private'
+        databases = list(directory.glob('*.db'))
+        assert len(databases) == 1 and re.fullmatch(r'[0-9a-f]{64}\.db', databases[0].name), 'n8n catalog missing'
+        info = os.lstat(databases[0])
         assert (stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and (info.st_uid, info.st_gid) == user
                 and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size > 0), 'n8n catalog copy not private'
         copies.add((info.st_dev, info.st_ino))

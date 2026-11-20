@@ -179,7 +179,7 @@ async def test_n8n_runs_run_products_runtime(tmp_path, log_scan, catalogs, switc
     (8081 its own MCP app), switched on the ProfileManager (8081 its token dispatcher) with n8n's tools, child spec and
     catalog hooks."""
     data = setup_profiles(tmp_path, extras=())
-    async with multi_profile_runtime(PRODUCT, data, switch=switch) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, switch=switch, sqlite_catalog=True) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
         if not switch:
@@ -189,7 +189,7 @@ async def test_n8n_runs_run_products_runtime(tmp_path, log_scan, catalogs, switc
             manager = runtime.manager
             assert isinstance(manager, profile_runtime.ProfileManager) and manager.product == PRODUCT
             assert manager.tools is n8n_adapter.TOOLS and manager.child_spec is n8n_adapter.child_spec
-            assert manager.prepare_child is n8n_adapter.prepare_child
+            assert callable(manager.prepare_child)
             assert manager.profile_removed is n8n_adapter.remove_profile_catalog
             assert runtime.limits() == {'admin': 64, 'mcp': 64 + 32 * 2}  # n8n: two additional profiles at most
 
@@ -222,7 +222,7 @@ def test_an_additional_profiles_child_works_in_its_own_directory(tmp_path, log_s
     assert (spec.env['N8N_API_URL'], spec.env['N8N_API_KEY']) == (state.backend_url, state.backend_key)
     assert spec.env['NODE_DB_PATH'] == str(own) == str(catalogs / 'profiles' / B / 'nodes.db')
     assert default.env['NODE_DB_PATH'] == str(default_copy) != str(own)
-    assert spec.env[products.DENY_LOOPBACK_ENV] == '1' and spec.env['WEBHOOK_SECURITY_MODE'] == 'permissive'
+    assert spec.env[products.DENY_LOOPBACK_ENV] == '1' and spec.env['WEBHOOK_SECURITY_MODE'] == 'strict'
     assert spec.env['N8N_MCP_MAX_SESSIONS'] == '20' and spec.env['SESSION_TIMEOUT_MINUTES'] == '10'
     # Another start keeps the directory (it stays empty) and gives the same spec.
     assert n8n_adapter.child_spec(state, directory, port=18000) == spec
@@ -377,66 +377,64 @@ def test_a_deleted_profiles_copy_is_removed_without_following_a_link(tmp_path, c
 
 
 async def test_a_profiles_copy_is_made_once_off_the_event_loop(tmp_path, log_scan, catalogs, monkeypatch, caplog):
-    """prepare_child: nothing without a backend; with one, the copy in a worker thread (asyncio.to_thread), once per
-    management process; again only when it is gone. A copy that cannot be made is one WARNING (the id's first 8
-    characters, never a path or a label)."""
+    """Preparation runs off the event loop, preserves history, and fails closed on a bad seed."""
+    import sqlite3
+    seed = catalogs.parent / 'source.db'
+    seed.unlink()
+    with sqlite3.connect(seed) as db:
+        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
+                         'CREATE TABLE workflow_versions(id INTEGER);')
     data = setup_profiles(tmp_path, configured=(C,), extras=(B, C))
     unconfigured, _ = state_of(data, B)
     configured, _ = state_of(data, C)
     threads = []
     original = asyncio.to_thread
-
     async def recorded(function, *args, **kwargs):
         threads.append(function.__name__)
         return await original(function, *args, **kwargs)
     monkeypatch.setattr(n8n_adapter.asyncio, 'to_thread', recorded)
-    await n8n_adapter.prepare_child(B, unconfigured)
+    await n8n_adapter.prepare_child(B, unconfigured, root=data)
     assert threads == [] and n8n_adapter.profile_catalog(B) is None
-    await n8n_adapter.prepare_child(C, configured)
-    assert threads == ['prepare_profile_catalog'] and n8n_adapter.profile_catalog(C) is not None
-    await n8n_adapter.prepare_child(C, configured)
-    assert threads == ['prepare_profile_catalog']  # kept across the child's restarts
-    n8n_adapter.remove_profile_catalog(C)
+    await n8n_adapter.prepare_child(C, configured, root=data)
+    path = n8n_adapter.profile_catalog(C)
+    with sqlite3.connect(path) as db:
+        db.execute('INSERT INTO workflow_versions VALUES(1)')
+    await n8n_adapter.prepare_child(C, configured, root=data)
+    with sqlite3.connect(n8n_adapter.profile_catalog(C)) as db:
+        assert db.execute('SELECT count(*) FROM workflow_versions').fetchone() == (1,)
+    assert threads == ['prepare', 'prepare']
     monkeypatch.setattr(n8n_adapter, 'PACKAGED_CATALOG', tmp_path / 'missing.db')
-    with caplog.at_level(logging.WARNING, logger='n8n_adapter'):
-        await n8n_adapter.prepare_child(C, configured)
-    assert threads == ['prepare_profile_catalog'] * 2 and n8n_adapter.profile_catalog(C) is None
-    assert [record.getMessage() for record in caplog.records if record.name == 'n8n_adapter'] == [
-        f'n8n: profile {C[:8]}: no catalog copy could be made; its child does not start']
+    with caplog.at_level(logging.WARNING, logger='n8n_adapter'), pytest.raises(RuntimeError):
+        await n8n_adapter.prepare_child(C, configured, root=data)
+    assert n8n_adapter.profile_catalog(C) is None
+    assert [r.getMessage() for r in caplog.records if r.name == 'n8n_adapter'] == [
+        f'n8n: profile {C[:8]}: persistent catalog unavailable; its child does not start']
 
 
-async def test_a_profiles_copy_belongs_to_the_backend_it_was_made_for(tmp_path, log_scan, catalogs, monkeypatch):
-    """HM-25 security review S-8: n8n_workflow_versions reads a snapshot by its number, whatever workflow and backend
-    it was taken from, so a profile handed to another backend's holder (another URL, or another key: another n8n user)
-    must not read the snapshots taken from the one before. The same backend keeps its copy and the history in it
-    across starts; another URL or another key gets a new copy before the child starts; without a backend nothing is
-    made (and the copy is left as it is)."""
+async def test_a_profiles_copy_belongs_to_the_backend_it_was_made_for(tmp_path, log_scan, catalogs):
+    """Different URLs and keys use separate histories; returning to an identity restores its history."""
+    import sqlite3
+    seed = catalogs.parent / 'source.db'
+    seed.unlink()
+    with sqlite3.connect(seed) as db:
+        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
+                         'CREATE TABLE workflow_versions(id INTEGER);')
     data = setup_profiles(tmp_path, configured=(C,), extras=(C,))
     state, _ = state_of(data, C)
-    log_scan.watch_state(state)
-    made = []
-    original = asyncio.to_thread
-
-    async def recorded(function, *args, **kwargs):
-        made.append(function.__name__)
-        return await original(function, *args, **kwargs)
-    monkeypatch.setattr(n8n_adapter.asyncio, 'to_thread', recorded)
-    history = b'version snapshots taken from this backend'
-    await n8n_adapter.prepare_child(C, state)
-    copy = n8n_adapter.profile_catalog(C)
-    copy.write_bytes(copy.read_bytes() + history)
-    await n8n_adapter.prepare_child(C, state)
-    assert made == ['prepare_profile_catalog'] and copy.read_bytes().endswith(history)
+    await n8n_adapter.prepare_child(C, state, root=data)
+    first = n8n_adapter.profile_catalog(C)
+    with sqlite3.connect(first) as db:
+        db.execute('INSERT INTO workflow_versions VALUES(42)')
     for changes in ({'backend_url': 'https://elsewhere.n8n.invalid'}, {'backend_key': 'DUMMY-another-workflow-key'}):
-        await n8n_adapter.prepare_child(C, state.model_copy(update=changes))
-        assert n8n_adapter.profile_catalog(C) == copy and copy.read_bytes() == CATALOG_STAND_IN, sorted(changes)
-        copy.write_bytes(copy.read_bytes() + history)
-        await n8n_adapter.prepare_child(C, state)  # the first backend again: not the copy the other one used
-        assert copy.read_bytes() == CATALOG_STAND_IN, sorted(changes)
-        copy.write_bytes(copy.read_bytes() + history)
-    assert made == ['prepare_profile_catalog'] * 5
-    await n8n_adapter.prepare_child(C, state.model_copy(update={'backend_url': None, 'backend_key': None}))
-    assert len(made) == 5 and copy.read_bytes().endswith(history)
+        await n8n_adapter.prepare_child(C, state.model_copy(update=changes), root=data)
+        other = n8n_adapter.profile_catalog(C)
+        assert other != first
+        with sqlite3.connect(other) as db:
+            assert db.execute('SELECT count(*) FROM workflow_versions').fetchone() == (0,)
+        await n8n_adapter.prepare_child(C, state, root=data)
+        assert n8n_adapter.profile_catalog(C) == first
+        with sqlite3.connect(first) as db:
+            assert db.execute('SELECT id FROM workflow_versions').fetchone() == (42,)
 
 
 def test_a_catalog_copy_is_never_written_through_a_directory_swapped_after_its_check(tmp_path, catalogs, monkeypatch):
@@ -645,15 +643,16 @@ async def test_each_profile_runs_on_its_own_catalog_and_its_copy_goes_with_it(tm
     monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)  # tests/owned_network.py: no test bind here
     data = setup_profiles(tmp_path)
     children = children_of(data)
-    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, children=children, sqlite_catalog=True) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
         manager = runtime.manager
-        copies = Path(n8n_adapter.CATALOG_DIR) / 'profiles'
         specs = {profile_id: manager.get(profile_id).runtime.supervisor.spec for profile_id in ('default', B, C)}
-        assert {profile_id: spec.env.get('NODE_DB_PATH') for profile_id, spec in specs.items()} == {
-            'default': None,  # the harness skips the default profile's 70 MB copy, as HM-01's does
-            B: str(copies / B / 'nodes.db'), C: str(copies / C / 'nodes.db')}
+        copies = {profile_id: Path(spec.env['NODE_DB_PATH']) for profile_id, spec in specs.items()}
+        assert len(set(copies.values())) == 3
+        assert copies['default'].parent == data / 'n8n-mcp'
+        assert copies[B].parent == profiles.Layout(data).profile(B) / 'n8n-mcp'
+        assert copies[C].parent == profiles.Layout(data).profile(C) / 'n8n-mcp'
         assert {profile_id: spec.env['HOME'] for profile_id, spec in specs.items()} == {
             'default': str(data), B: str(profiles.Layout(data).child(B)), C: str(profiles.Layout(data).child(C))}
         async with GENUINE_CLIENT(transport=httpx.ASGITransport(app=runtime.admin_app, client=INGRESS),
@@ -664,8 +663,8 @@ async def test_each_profile_runs_on_its_own_catalog_and_its_copy_goes_with_it(tm
                 **ADMIN, 'X-CSRF-Token': boot['csrf'], 'If-Match': listed.headers['etag'],
                 'Idempotency-Key': f'{int(time.time() * 1000) - 1000}.{secrets.token_hex(16)}'})
         assert deleted.status_code == 200 and deleted.json()['deleted'] == B
-        assert not (copies / B).exists() and not profiles.Layout(data).profile(B).exists()
-        assert (copies / C / 'nodes.db').read_bytes() == CATALOG_STAND_IN and n8n_adapter.profile_catalog(B) is None
+        assert not copies[B].exists() and not profiles.Layout(data).profile(B).exists()
+        assert copies[C].is_file() and n8n_adapter.profile_catalog(B) is None
 
 
 async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tmp_path, log_scan, monkeypatch):
@@ -682,8 +681,8 @@ async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tm
     original = asyncio.to_thread
 
     async def recorded(function, *args, **kwargs):
-        if getattr(function, '__name__', None) == 'prepare_profile_catalog':
-            copied.append(args[0])
+        if getattr(function, '__name__', None) == 'prepare':
+            copied.append(args[1])
         return await original(function, *args, **kwargs)
     monkeypatch.setattr(n8n_adapter.asyncio, 'to_thread', recorded)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -691,10 +690,9 @@ async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tm
         watch(log_scan, data)
         manager = runtime.manager
         supervisors = {profile_id: manager.get(profile_id).runtime.supervisor for profile_id in ('default', B, C)}
-        assert (supervisors[B].status, supervisors[B].spec) == ('unconfigured', None) and copied == [C]
+        assert (supervisors[B].status, supervisors[B].spec) == ('unconfigured', None) and copied == ['default', C]
         assert not profiles.Layout(data).child(B).exists() and n8n_adapter.profile_catalog(B) is None
         starts = {profile_id: supervisor.starts for profile_id, supervisor in supervisors.items()}
-        copy = Path(n8n_adapter.CATALOG_DIR) / 'profiles' / B / 'nodes.db'
         token = runtime.token(B)
 
         async def save(path, body):
@@ -712,20 +710,27 @@ async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tm
         log_scan.watch(first['key'], second['key'], kind='secret')
         await save('/api/backend', first)
         spec = supervisors[B].spec
-        assert copied == [C, B] and supervisors[B].status == 'running' and restarted(1)
+        copy = Path(spec.env['NODE_DB_PATH'])
+        assert copied == ['default', C, B] and supervisors[B].status == 'running' and restarted(1)
         assert spec.cwd == profiles.Layout(data).child(B) and spec.env['HOME'] == str(spec.cwd)
         assert spec.env['NODE_DB_PATH'] == str(copy) and spec.argv[-2:] == ('--port', '18000')
         assert (spec.env['N8N_API_URL'], spec.env['N8N_API_KEY']) == (first['url'], first['key'])
         async with runtime.mcp() as client:
             opened = await client.post('/mcp', headers=bearer(token), json=initialize_message())
         assert opened.status_code == 200 and opened.headers['mcp-session-id'].startswith('p' + B[:4] + '-session-')
-        history = b'version snapshots taken from the first backend'  # what n8n-mcp keeps in the copy
-        copy.write_bytes(copy.read_bytes() + history)
+        import sqlite3
+        with sqlite3.connect(copy) as db:
+            db.execute('INSERT INTO workflow_versions VALUES(42)')
         await save('/api/n8n/session', {'n8n_session': {'timeout_seconds': 900, 'max_sessions': 5}})
-        assert copied == [C, B] and restarted(2) and copy.read_bytes().endswith(history)
+        assert copied == ['default', C, B, B] and restarted(2)
+        with sqlite3.connect(copy) as db:
+            assert db.execute('SELECT id FROM workflow_versions').fetchone() == (42,)
         await save('/api/backend', second)
-        assert copied == [C, B, B] and restarted(3) and copy.read_bytes() == CATALOG_STAND_IN
-        assert supervisors[B].spec.env['NODE_DB_PATH'] == str(copy)
+        assert copied == ['default', C, B, B, B] and restarted(3)
+        new_copy = Path(supervisors[B].spec.env['NODE_DB_PATH'])
+        assert new_copy != copy and copy.exists()
+        with sqlite3.connect(new_copy) as db:
+            assert db.execute('SELECT count(*) FROM workflow_versions').fetchone() == (0,)
         assert supervisors[B].spec.env['N8N_API_URL'] == second['url']
         await save('/api/backend', {'url': None, 'key': None})
         assert (supervisors[B].status, supervisors[B].spec) == ('unconfigured', None) and restarted(3)
@@ -738,83 +743,65 @@ async def test_a_profiles_backend_saved_starts_its_child_and_cleared_stops_it(tm
                 refused = await client.post('/mcp', headers=session, json=call(10 + number, name, well_formed(name)))
                 assert refused.json()['error'] == {'code': -32603, 'message': 'Backend not configured',
                                                    'data': {'tool': name}}, name
-        assert len(children.by_port[18000].requests) == since and copied == [C, B, B]
+        assert len(children.by_port[18000].requests) == since and copied == ['default', C, B, B, B]
 
 
 async def test_a_cleanup_that_leaves_a_copy_is_one_warning_and_the_deletion_stands(tmp_path, log_scan, monkeypatch):
-    """HM-25 correctness review S-2, security review S-4 (plan 4.4: a cleanup that fails is one WARNING; PaaS #159
-    likewise for the K8s files it keeps in /tmp): the copies' profiles directory is no longer private, so B's copy
-    cannot be removed (remove_profile_catalog answers False). Deleting B through the panel still answers 200 and
-    removes B's directory; one WARNING names B by its first 8 characters, never a path; C keeps its copy and child."""
-    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)  # tests/owned_network.py: no test bind here
+    """A failed legacy temporary cleanup reports a warning; persistent data is removed with its profile."""
+    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)
+    monkeypatch.setattr(n8n_run, 'remove_profile_catalog', lambda profile_id: False)
     data = setup_profiles(tmp_path)
-    children = children_of(data)
-    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data)) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
-        copies = Path(n8n_adapter.CATALOG_DIR) / 'profiles'
-        starts = runtime.manager.get(C).runtime.supervisor.starts
-        os.chmod(copies, 0o755)
-        try:
-            deleted = await panel_write(runtime, 'DELETE', f'/api/profiles/{B}')
-        finally:
-            os.chmod(copies, 0o700)
-        assert deleted.status_code == 200 and deleted.json()['deleted'] == B
-        assert not profiles.Layout(data).profile(B).exists() and (copies / B / 'nodes.db').is_file()
-        assert n8n_adapter.profile_catalog(C) == copies / C / 'nodes.db'
-        assert runtime.manager.get(C).runtime.supervisor.starts == starts
+        b_copy = Path(runtime.manager.get(B).runtime.supervisor.spec.env['NODE_DB_PATH'])
+        c_copy = Path(runtime.manager.get(C).runtime.supervisor.spec.env['NODE_DB_PATH'])
+        assert b_copy.is_file() and c_copy.is_file()
+        deleted = await panel_write(runtime, 'DELETE', f'/api/profiles/{B}')
+        assert deleted.status_code == 200 and not b_copy.exists() and c_copy.exists()
     assert cleanup_warnings(log_scan) == [
         f'multi-profile: the cleanup after deleting profile {B[:8]} could not remove everything']
 
 
 async def test_an_orphans_deletion_removes_its_catalog_copy(tmp_path, log_scan, monkeypatch):
-    """HM-25 correctness review S-2, security review S-4: an orphan (a profile directory the index does not list, here
-    with a copy as if this management process had served it before) deleted through the panel goes with its copy too:
-    profile_admin's one delete() runs the product's cleanup after the directory; B is not touched."""
+    """Deleting an orphan removes its persistent directory without affecting another profile."""
+    from persistent_catalog import prepare
     monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)
     data = setup_profiles(tmp_path, extras=(B,))
-    log_scan.watch_state(create_profile(data, PRODUCT, O, label='Orphan Flows', port=18001, indexed=False))
+    orphan = create_profile(data, PRODUCT, O, label='Orphan Flows', port=18001, indexed=False)
+    log_scan.watch_state(orphan)
     children = children_of(data, (B,))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         await settle(runtime, 'configured')
-        watch(log_scan, data)
-        made = n8n_adapter.prepare_profile_catalog(O)
-        async with GENUINE_CLIENT(transport=httpx.ASGITransport(app=runtime.admin_app, client=INGRESS),
-                                  base_url='http://admin') as admin:
-            assert (await admin.get('/api/profiles', headers=ADMIN)).json()['orphans'] == [{'id': O}]
+        made = prepare(data, O, orphan, n8n_adapter.PACKAGED_CATALOG)
+        served = n8n_adapter.profile_catalog(B)
         deleted = await panel_write(runtime, 'DELETE', f'/api/profiles/{O}')
-        assert deleted.status_code == 200 and deleted.json()['deleted'] == O
-        assert not made.parent.exists() and not profiles.Layout(data).profile(O).exists()
-        assert n8n_adapter.profile_catalog(O) is None and n8n_adapter.profile_catalog(B) is not None
+        assert deleted.status_code == 200 and not made.exists()
+        assert served.is_file() and n8n_adapter.profile_catalog(B) == served
     assert cleanup_warnings(log_scan) == []
 
 
-async def test_a_quarantine_directorys_deletion_removes_the_copy_of_an_id_no_longer_served(tmp_path, log_scan,
-                                                                                        monkeypatch):
-    """HM-25 correctness review S-2, security review S-4 (profile_admin.delete_quarantined): D's quarantine directory
-    deleted through the panel goes with D's copy; a quarantine directory named with B's id while B is served leaves B's
-    copy and child alone (the cleanup runs only for an id that is no longer served)."""
+async def test_a_quarantine_directorys_deletion_removes_the_copy_of_an_id_no_longer_served(tmp_path, log_scan, monkeypatch):
+    """Quarantined persistent data follows its directory; a live profile's data remains."""
+    from persistent_catalog import prepare
     monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)
     data = setup_profiles(tmp_path, extras=(B,))
-    log_scan.watch_state(create_profile(data, PRODUCT, D, label='Delta Flows', port=18001, indexed=False))
+    state = create_profile(data, PRODUCT, D, label='Delta Flows', port=18001, indexed=False)
+    log_scan.watch_state(state)
     layout = profiles.Layout(data)
-    names = {D: f'{D}-20261116T093015Z', B: f'{B}-20261116T093016Z'}
-    os.rename(layout.profile(D), layout.profiles / (profiles.QUARANTINE_PREFIX + names[D]))
-    os.mkdir(layout.profiles / (profiles.QUARANTINE_PREFIX + names[B]), 0o700)
-    children = children_of(data, (B,))
-    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B,))) as runtime:
         await settle(runtime, 'configured')
-        watch(log_scan, data)
-        made = n8n_adapter.prepare_profile_catalog(D)  # as if this management process had served D before
+        made = prepare(data, D, state, n8n_adapter.PACKAGED_CATALOG)
+        names = {D: f'{D}-20261116T093015Z', B: f'{B}-20261116T093016Z'}
+        quarantined = layout.profiles / (profiles.QUARANTINE_PREFIX + names[D])
+        os.rename(layout.profile(D), quarantined)
+        os.mkdir(layout.profiles / (profiles.QUARANTINE_PREFIX + names[B]), 0o700)
         served = n8n_adapter.profile_catalog(B)
-        starts = runtime.manager.get(B).runtime.supervisor.starts
         for profile_id in (D, B):
             deleted = await panel_write(runtime, 'POST', f'/api/profiles/quarantine/{names[profile_id]}/delete')
-            assert deleted.status_code == 200 and deleted.json()['deleted'] == names[profile_id], profile_id
-        assert not made.parent.exists() and n8n_adapter.profile_catalog(D) is None
-        assert served is not None and n8n_adapter.profile_catalog(B) == served
-        assert served.read_bytes() == CATALOG_STAND_IN
-        assert runtime.manager.get(B).runtime.supervisor.starts == starts
+            assert deleted.status_code == 200
+        assert not quarantined.exists() and not made.exists()
+        assert served.is_file() and n8n_adapter.profile_catalog(B) == served
     assert cleanup_warnings(log_scan) == []
 
 
@@ -901,10 +888,25 @@ async def test_a_restore_revokes_every_n8n_profile_and_their_children_start_apar
     (the entrypoint's marker) revokes every profile's token, the default profile's included (DQ-03 (b) A2; HM-13b), and
     gives each a new child token; every child then starts again on its own new child token and, for an additional
     profile, its own catalog copy and HOME; no token from before the restore is served."""
+    import sqlite3
+    from persistent_catalog import prepare
     data = setup_profiles(tmp_path)
+    seed = tmp_path / 'restore-seed.db'
+    with sqlite3.connect(seed) as db:
+        db.executescript('CREATE TABLE nodes(id INTEGER); INSERT INTO nodes VALUES(1); '
+                         'CREATE TABLE workflow_versions(id INTEGER);')
+    for index, profile_id in enumerate(('default', B, C)):
+        state, _ = state_of(data, profile_id)
+        catalog = prepare(data, profile_id, state, seed)
+        with sqlite3.connect(catalog) as db:
+            db.execute('INSERT INTO workflow_versions VALUES(?)', (index + 1,))
     before = {profile_id: stored(data if profile_id == 'default' else profiles.Layout(data).profile(profile_id))
               for profile_id in ('default', B, C)}
     watch(log_scan, data)
+    backup = tmp_path / 'cold-backup'
+    shutil.copytree(data, backup)
+    shutil.rmtree(data)
+    shutil.copytree(backup, data)
     os.close(os.open(data / profiles.RESTORE_MARKER_NAME, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
     children = children_of(data)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -912,14 +914,16 @@ async def test_a_restore_revokes_every_n8n_profile_and_their_children_start_apar
         watch(log_scan, data)
         manager = runtime.manager
         homes, catalogs = set(), set()
-        for profile_id in ('default', B, C):
+        for index, profile_id in enumerate(('default', B, C)):
             now = stored(runtime.directory(profile_id))
             assert now['token'] is None and now['child_token'] != before[profile_id]['child_token'], profile_id
             spec = manager.get(profile_id).runtime.supervisor.spec
             assert spec.env['AUTH_TOKEN'] == now['child_token'], profile_id
             homes.add(spec.env['HOME'])
             catalogs.add(spec.env.get('NODE_DB_PATH'))
-        assert len(homes) == 3 and len(catalogs) == 3  # the default profile's catalog: None (the harness skips it)
+            with sqlite3.connect(spec.env['NODE_DB_PATH']) as db:
+                assert db.execute('SELECT id FROM workflow_versions').fetchone() == (index + 1,)
+        assert len(homes) == 3 and len(catalogs) == 3
         async with runtime.mcp() as client:
             for profile_id in ('default', B, C):
                 token = before[profile_id]['token']
@@ -968,7 +972,7 @@ async def test_the_real_child_of_an_additional_profile_leaves_its_home_empty(tmp
     finally:
         store.close()
     log_scan.watch_state(state)
-    await n8n_adapter.prepare_child(B, state)
+    await n8n_adapter.prepare_child(B, state, root=data)
     spec = n8n_adapter.child_spec(state, directory, port=18000)
     with reserve_port() as reservation:
         port = reservation.getsockname()[1]
@@ -1005,6 +1009,6 @@ async def test_the_real_child_of_an_additional_profile_leaves_its_home_empty(tmp
         await manager.stop()
         backend.close()
         await backend.wait_closed()
-    assert calls, 'the child never asked its backend'
+    assert not calls, 'strict mode must not contact a loopback backend'
     assert list(home.iterdir()) == [], sorted(path.name for path in home.rglob('*'))
-    assert sorted(path.name for path in directory.iterdir()) == ['.writer.lock', 'child', 'state.json']
+    assert sorted(path.name for path in directory.iterdir()) == ['.writer.lock', 'child', 'n8n-mcp', 'state.json']

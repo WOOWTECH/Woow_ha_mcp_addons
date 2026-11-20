@@ -1021,7 +1021,9 @@ async def run_until_listening(args, events, *, module=run_product):
         patch.setattr(run_product, 'Listener', Listener)
         patch.setattr(restore_lock, 'guard', guard)
         if module is not run_product:
-            patch.setattr(module, 'prepare_catalog', lambda: None)
+            async def prepare_child(*args, **kwargs):
+                events.append('catalog')
+            patch.setattr(module, 'prepare_child', prepare_child)
         task = asyncio.create_task(module.run(args))
         try:
             async with asyncio.timeout(15):

@@ -5,29 +5,11 @@ tools-n8n-manager.js are byte-identical). Of its new switches child_spec sets on
 (no npm registry query from n8n_health_check, as the PaaS); N8N_MCP_DISABLE_UI_APPS and the per-context
 instanceArgument are not set.
 
-HM-25 (multi-profile plan 9 n8n row, 12.3 HM-25; DQ-04, DQ-22, UC-01, UC-09; contract section 9 #28, #47 and HM-25's
-rows; unreleased, behind the product switch): an additional profile's child. Which profile a child spec is for is read
-from its directory (profile_of: profiles.Layout puts an additional profile at <data>/profiles/<id>); the default
-profile's spec is the one before, byte for byte (tests/contract/child_spec_default.json). An additional profile's child
-(only while n8n is switched on, features.enabled read at each call):
-- starts only with a backend (DQ-22): without one child_spec answers None, as the other products' do, and the gateway
-  refuses each of its tools as unconfigured (profiles.documentation_child);
-- works in <data>/profiles/<id>/child/ (its HOME and cwd: never the profile directory with its state.json), made 0700
-  when missing and required to be an empty directory, not a link, whenever its spec is built (a start, a save, the
-  panel's restart, a re-evaluation; the watchdog's automatic restarts reuse the spec, as for the Python children)
-  (UC-01: n8n-mcp 2.96.2 writes nothing there with N8N_MCP_TELEMETRY_DISABLED=true, its only HOME writer being the
-  telemetry config; tests/test_n8n_multi_profile.py runs the real child);
-- reads its own copy of the node catalog, <CATALOG_DIR>/profiles/<id>/nodes.db (DQ-04: outside /data, not in backups;
-  UC-09: with one shared file every profile would see, roll back and delete the others' workflow version backups, which
-  n8n-mcp scopes by instance_id '' in this single-tenant mode). prepare_child makes it in a worker thread before the
-  child's first start (run_product's ProfileManager awaits it), and again once the profile's backend changed (another
-  URL or key: the snapshots taken from one backend are never read by the holder of the next; HM-25 security review
-  S-8); remove_profile_catalog removes it with the profile. Without its own copy when its spec is built, the child does
-  not start (never the default profile's copy or the packaged file);
-- names its port on its command line as well (--port N after the entry, which n8n-mcp does not read: it listens on
-  PORT), so the P9 kit and the container probe tell the children apart without reading their environment (HM-16
-  review SF-2). The default profile's child keeps its argv (no --port: port 3000, as the Hermes and OpenDesign
-  launchers' default).
+Each profile uses a private persistent catalog under its own data directory. The catalog
+is selected by the configured backend URL and key, prepared before the child starts,
+and included in HA cold backups. A different backend gets a separate database. Additional
+profiles require a configured backend and have their own empty child working directory.
+
 """
 import asyncio
 import hashlib
@@ -36,6 +18,7 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import stat
 from typing import Literal, NamedTuple
 
@@ -104,16 +87,8 @@ from mcp_admin_core.surface import full_tools
 TOOLS = full_tools("n8n")
 CHILD_URL = child_url()  # HM-04: the default profile's child; child_url(port) is another profile's
 
-# Unreleased (0.4.12 line). n8n-mcp keeps its local workflow version history (table workflow_versions: the backups taken before
-# an update or autofix, n8n_workflow_versions) in the same SQLite file as its node catalog, nodes.db. In the image that file is
-# root-owned and the child runs as uid 10001. sql.js loaded it into memory, so writes worked (and were lost with the process; its
-# attempt to save them back failed unseen). Native better-sqlite3 opens an unwritable file read-only, and the first INSERT into
-# workflow_versions fails with "attempt to write a readonly database". So the child gets a private working copy, as the PaaS
-# image does (NODE_DB_PATH): made once when the management process starts (run.py), kept across child restarts, outside /data so
-# it is not part of backups, gone with the container like the in-memory history was, and always the catalog of the running image.
-# HM-25 (DQ-04): an additional profile's copy is <CATALOG_DIR>/profiles/<id>/nodes.db, made the same way before its child's
-# first start in this management process (prepare_child), again for another backend, and removed with the profile
-# (remove_profile_catalog).
+# The legacy temporary catalog helpers remain for compatibility with existing tests; the
+# runtime prepares persistent catalogs in persistent_catalog before each child start.
 CATALOG_DIR = Path("/tmp/woow-n8n-mcp")
 PACKAGED_CATALOG = Path(__file__).parent / "node_modules/n8n-mcp/data/nodes.db"
 PROFILE_CATALOGS = "profiles"
@@ -285,24 +260,31 @@ def profile_catalog(profile_id):
     return made.path
 
 
-async def prepare_child(profile_id, state):
-    """HM-25: before an additional profile's child spec is built (run_product's ProfileManager awaits it whenever it
-    builds one: a start, a save, the panel's restart, a re-evaluation): its catalog copy, made once in this management
-    process for the backend it serves (later starts keep it and its version history, as the default profile's), in a
-    worker thread so that the 67 MiB copy and its fsync never stall the event loop every profile shares. Made again
-    when the profile's backend changed (another URL or key; HM-25 security review S-8): the version snapshots taken from
-    one backend are never read through the next (a profile handed over to another backend's holder). Nothing without a
-    backend (no child starts, DQ-22). A copy that cannot be made is named once (the id's first 8 characters); the spec
-    then refuses to start the child."""
-    if not state.configured:
+async def prepare_child(profile_id, state, *, root=None):
+    """Prepare the profile's persistent database off the event loop before starting its child."""
+    global _catalog
+    if profile_id != profiles.DEFAULT_PROFILE and not state.configured:
         return
-    backend = backend_of(state)
-    made = _profile_catalogs.get(profile_id)
-    if made is not None and made.backend == backend and profile_catalog(profile_id) is not None:
-        return
-    if await asyncio.to_thread(prepare_profile_catalog, profile_id, backend=backend) is None:
-        logger.warning('n8n: profile %s: no catalog copy could be made; its child does not start',
+    if root is None:
+        raise ValueError('persistent catalog requires a data root')
+    from persistent_catalog import prepare
+    if profile_id == profiles.DEFAULT_PROFILE:
+        _catalog = None
+    else:
+        _profile_catalogs.pop(profile_id, None)
+    try:
+        path = await asyncio.to_thread(prepare, root, profile_id, state, PACKAGED_CATALOG)
+        identity = _identity(path)
+        if identity is None:
+            raise ValueError('catalog unavailable')
+    except (OSError, ValueError, sqlite3.Error):
+        logger.warning('n8n: profile %s: persistent catalog unavailable; its child does not start',
                        profiles.log_id(profile_id))
+        raise RuntimeError('persistent catalog unavailable') from None
+    if profile_id == profiles.DEFAULT_PROFILE:
+        _catalog = path
+    else:
+        _profile_catalogs[profile_id] = _Copy(path, backend_of(state), identity)
 
 
 def remove_profile_catalog(profile_id, *, root=None):
@@ -397,12 +379,8 @@ def child_spec(state: State, directory: Path, port: int = CHILD_PORT) -> ChildSp
         # every loopback answer for the configured instance (its API and its official MCP endpoint). Webhooks are not
         # the configured instance's clients: they keep the mode below.
         env[products.DENY_LOOPBACK_ENV] = "1"
-    # 0.2.1 (owner decision 2026-10-15): n8n-mcp's widest webhook/URL mode (dist/utils/ssrf-protection.js): any
-    # address, private and loopback included (only cloud metadata names stay blocked), so n8n_test_workflow can reach
-    # an n8n on the HA network. The configured API backend keeps its own DNS-pinned agents (backend_policy.cjs).
-    # Kept as it is by the owner on 2026-11-15 (DQ-10): whether to tighten it with additional profiles is decided by the
-    # independent security review before n8n is switched on (HM-25).
-    env["WEBHOOK_SECURITY_MODE"] = "permissive"
+    # Match PaaS's default strict upstream policy for webhook, form and chat triggers.
+    env["WEBHOOK_SECURITY_MODE"] = "strict"
     if catalog is not None:
         # the private writable copy made at start-up (prepare_catalog), or the additional profile's own (prepare_child)
         env["NODE_DB_PATH"] = str(catalog)

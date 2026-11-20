@@ -390,6 +390,9 @@ async def test_the_admin_api_refuses_a_loopback_url_once_switched_on(switchable_
             unchanged = store.path.read_bytes() == raw
             assert unchanged and not applied, (field, url)
         response = await _put(client, route, backend_body(product, route, field, 'http://10.1.2.3:8069', secrets=True))
+        if product == 'n8n':
+            assert response.status_code == 400 and store.path.read_bytes() == raw and not applied
+            continue  # n8n strict mode rejects private addresses too
         assert response.status_code == 200, response.text  # the LAN stays allowed (its secrets brought: HM-12)
         assert len(applied) == 1
         applied.clear()
@@ -397,8 +400,14 @@ async def test_the_admin_api_refuses_a_loopback_url_once_switched_on(switchable_
 
 
 @pytest.mark.parametrize('route', ['/api/backend', '/api/backend/patch'])
-async def test_switched_off_or_with_the_double_a_loopback_url_is_saved_as_before(switchable_admin, switch, route):
+async def test_switched_off_or_with_the_double_a_loopback_url_is_saved_as_before(switchable_admin, switch, route, monkeypatch):
     product, client, store, applied = switchable_admin
+    if product == 'n8n':
+        import asyncio
+        import socket
+        async def resolve(host, port, **kwargs):
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', port))]
+        monkeypatch.setattr(asyncio.get_running_loop(), 'getaddrinfo', resolve)
     for on in (False, True):
         switch(product) if on else switch()
         # Each URL differs from the stored one (an unchanged URL is never checked): https:// the second time.
@@ -407,11 +416,14 @@ async def test_switched_off_or_with_the_double_a_loopback_url_is_saved_as_before
                 # switched on, a URL moved to another origin brings its secrets (HM-12, DQ-40 ⑨)
                 response = await _put(client, route, backend_body(product, route, URL_NAMES[product][0], url,
                                                                   secrets=on))
+            if product == 'n8n':
+                assert response.status_code == 400, (on, url, response.text)
+                continue  # strict n8n policy is independent of the multi-profile switch
             assert response.status_code == 200, (on, url, response.text)
             stored = store.load()
             value = stored.backend_url if product == 'n8n' else getattr(stored.connection, URL_NAMES[product][0])
             assert value == url
-    assert len(applied) == 2 * len(API_LOOPBACK)
+    assert len(applied) == (0 if product == 'n8n' else 2 * len(API_LOOPBACK))
 
 
 def _whatwg_hosts(hosts):

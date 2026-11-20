@@ -66,3 +66,23 @@ async def test_a_test_run_error_keeps_n8ns_own_message(tmp_path, status, hint):
         assert value['error'].endswith(f' n8n: {PRIVATE}:[REDACTED]'), value
         assert KEY not in json.dumps(reply)
         assert any(path.endswith('/test-runs') for _, path, _ in state['calls']), state['calls']
+
+
+async def test_pinned_workflow_list_defaults_reach_owned_backend(tmp_path):
+    from urllib.parse import parse_qs, urlsplit
+    async with asyncio.timeout(50), runtime(tmp_path) as (store, state, client, headers, wire, dispatches):
+        state['case'] = 'success'
+        for arguments, expected in [
+            ({}, {'limit': ['100'], 'excludePinnedData': ['true']}),
+            ({'active': False}, {'limit': ['100'], 'active': ['false'], 'excludePinnedData': ['true']}),
+            ({'active': True, 'limit': 7}, {'limit': ['7'], 'active': ['true'], 'excludePinnedData': ['true']}),
+        ]:
+            before = len(state['queries'])
+            reply = await rpc(client, '/mcp', headers, call('n8n_list_workflows', arguments))
+            value = json.loads(next(c['text'] for c in reply['content'] if c['type'] == 'text'))
+            assert value['success'] is True
+            assert expected in [parse_qs(urlsplit(path).query) for path in state['queries'][before:]]
+        for arguments in ({'active': None}, {'limit': None}):
+            before = len(state['queries'])
+            await rpc(client, '/mcp', headers, call('n8n_list_workflows', arguments))
+            assert len(state['queries']) == before

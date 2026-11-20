@@ -283,7 +283,9 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
         patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
         patch.setattr(run_product, 'Listener', CapturedListener)
         if product == 'n8n':
-            patch.setattr(module, 'prepare_catalog', lambda: None)  # a 70 MB copy outside /data, not under test
+            async def prepare_child(*args, **kwargs):
+                pass  # persistence is exercised separately with real SQLite
+            patch.setattr(module, 'prepare_child', prepare_child)
         args = SimpleNamespace(data=Path(data), product=product, host='127.0.0.1',
                                admin_port=0 if sockets else 8099, mcp_port=0 if sockets else 8081)
         task = asyncio.create_task(module.run(args))

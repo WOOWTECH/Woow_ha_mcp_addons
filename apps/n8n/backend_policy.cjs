@@ -1,10 +1,7 @@
 "use strict";
 // New local adapter code, not copied upstream. Loaded only by our fixed launcher.
-// The pinned API client's base backend is trusted configuration, NOT a webhook.
-// 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
-// the global SSRFProtection validators are not patched here. HM-20: with WOOW_MCP_DENY_LOOPBACK=1 (n8n switched on),
-// SSRFProtection.createPinnedFetch, which only the official MCP client of the configured instance calls, refuses this
-// add-on's own addresses (below); the validators and createPinnedAgents are still not patched.
+// The configured API client pins validated DNS answers. The launcher sets upstream
+// strict webhook mode; the configured API client also applies strict validation.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");
@@ -92,8 +89,7 @@ function allowedAddress(address) {
 // instance's <origin>/mcp-server/http with N8N_MCP_ACCESS_TOKEN, after the webhook validation; it is the only caller of
 // createPinnedFetch, tests/test_backend_loopback.py). Who sets it: n8n_adapter.child_spec, only once n8n is switched on,
 // in the environment it builds (never inherited). Read once, when this file loads, before n8n-mcp's own code runs;
-// unset, nothing changes; any other value refuses to start. WEBHOOK_SECURITY_MODE=permissive and the webhook, chat and
-// form clients (createPinnedAgents) stay as they are (owner decision 2026-10-15, kept 2026-11-15; HM-25 reviews it).
+// unset, nothing changes; any other value refuses to start. Webhook, chat and form URL validation uses strict mode.
 const denyLoopback = (() => {
     const value = process.env.WOOW_MCP_DENY_LOOPBACK;
     if (value === undefined) return false;
@@ -125,6 +121,7 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     const addresses = net.isIP(host) ? [{address: host, family: net.isIP(host)}] :
         await dns.promises.lookup(host, {all: true});
     if (!addresses.length || addresses.some(a => !allowedAddress(a.address) || net.isIP(a.address) !== a.family ||
+        !SSRFProtection.validateResolvedAddress(host, a.address, "strict").valid ||
         (denyLoopback && thisHost(a.address)))) denied();
     // Re-resolve on each API request; check EVERY answer, then pin precisely those
     // answers through the socket connect. No TOCTOU second lookup or DNS cache.

@@ -46,8 +46,8 @@ def test_a_0_2_0_state_gets_the_field_without_other_changes(tmp_path, product):
         assert json.loads(store.path.read_text())['mcp_access_token'] is None  # written once
 
 
-def test_child_gets_the_token_and_the_permissive_webhook_mode(tmp_path):
-    state = ProductState(product='n8n', token='a' * 43, child_token='b' * 43, backend_url='http://172.30.33.10:5678',
+def test_child_gets_the_token_and_the_strict_webhook_mode(tmp_path):
+    state = ProductState(product='n8n', token='a' * 43, child_token='b' * 43, backend_url='http://8.8.8.8:5678',
                          backend_key='api-key-0815', mcp_access_token='mcp-token-0815')
     env = child_spec(state, tmp_path).env
     assert env['N8N_MCP_ACCESS_TOKEN'] == 'mcp-token-0815' and env['N8N_API_KEY'] == 'api-key-0815'
@@ -71,8 +71,10 @@ async def test_admin_api_saves_reports_and_clears_the_token(tmp_path):
                     return await client.put('/api/backend', headers=reviewed_headers(boot, IDENTITY), json=value)
 
                 assert (await client.get('/api/bootstrap', headers=IDENTITY)).json()['mcp_access_token_set'] is False
-                response = await put({'url': 'http://172.30.33.10:5678', 'key': 'api-key-0815', 'mcp_access_token': 'mcp-token-0815'})
+                response = await put({'url': 'http://8.8.8.8:5678', 'key': 'api-key-0815', 'mcp_access_token': 'mcp-token-0815'})
                 assert response.status_code == 200, response.text
+                denied = await put({'url': 'http://172.30.33.10:5678', 'key': 'api-key-0815'})
+                assert denied.status_code == 400 and store.load().backend_url == 'http://8.8.8.8:5678'
                 bootstrap = (await client.get('/api/bootstrap', headers=IDENTITY))
                 assert bootstrap.json()['mcp_access_token_set'] is True and 'mcp-token-0815' not in bootstrap.text
                 assert store.load().mcp_access_token == 'mcp-token-0815'
@@ -80,8 +82,8 @@ async def test_admin_api_saves_reports_and_clears_the_token(tmp_path):
                             {'url': 'http://n8n.test', 'key': 'k', 'other': 'x'}):
                     assert (await put(bad)).status_code == 400
                 assert store.load().mcp_access_token == 'mcp-token-0815'
-                assert (await put({'url': 'http://172.30.33.10:5678', 'key': 'api-key-0815'})).status_code == 200
+                assert (await put({'url': 'http://8.8.8.8:5678', 'key': 'api-key-0815'})).status_code == 200
                 assert store.load().mcp_access_token is None  # the whole set is replaced
-                await put({'url': 'http://172.30.33.10:5678', 'key': 'api-key-0815', 'mcp_access_token': 'mcp-token-0815'})
+                await put({'url': 'http://8.8.8.8:5678', 'key': 'api-key-0815', 'mcp_access_token': 'mcp-token-0815'})
                 assert (await put({'url': None, 'key': None})).status_code == 200
                 assert store.load().mcp_access_token is None and store.load().backend_url is None
