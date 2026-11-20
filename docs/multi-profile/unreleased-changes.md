@@ -124,6 +124,9 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 發版時另外驗：第 5 節。HM-33 筆記交發版片定的兩件，0.4.14 這樣處理：`addons/hermes/README.md`、`DOCS.md` 沒補「Hermes Agent v0.17.0
   or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的
   CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
+- 開通那一版（Hermes 的升版 PR，把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Hermes 自己的 CHANGELOG 句子在 HM-24 筆記第 9 節
+  （`docs/provenance/ha-multiprofile-HM-24-20261119.md`；HM-24 審查 S-7）。HM-24 受開關管（檔頭第 2 點），還沒開通的版本不寫、也不刪這一行；
+  開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.4 EMQX
 
@@ -192,6 +195,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
 | HM-13c（A9 以外） | #112 | `e108a12` | 全部撤銷、還原紀錄、核對、刪除隔離目錄的路由與面板的核對卡；8081 擋全部撤銷沒撤銷成功的權杖 | 沒有這些路由（`/api/profiles*` 照舊 404），面板不畫核對卡；只有 A9 的還原提示（2026-11-19 HM-18 補列） |
 | HM-27 | #116 | `fcd0b22` | 密鑰網址的服務層級 Origin 清單（預設 report-only）、`/api/origin-policy`、面板「瀏覽器來源檢查」卡片；還原時封存政策旁的收據 | 不讀不寫 `origin-policy.json`、`/api/origin-policy` 照舊 404、密鑰網址照舊不看 Origin、面板不畫卡片（2026-11-19 HM-18 補列） |
+| HM-24 | 合併後補 | 合併後補 | Hermes 與 PaaS 一致：換後端身分不換 token；仍保留來源變更重填秘密及帳號隔離 | 換身分不換 token，回應、面板與子程式照舊；Odoo 的說明文字逐字不變 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 

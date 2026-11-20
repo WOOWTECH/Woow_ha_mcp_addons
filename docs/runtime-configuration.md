@@ -90,6 +90,8 @@ owned local fixtures, not evidence of HA Ingress or a live third-party backend.
   回 200 `{"saved":true,"token_rotated":true,…}`（不含權杖，新權杖照舊經 `token/reveal`）。只換密碼、第一次設定、權杖已撤銷時照上面，不換權杖。寫入失敗一律
   503 `{"error":"state unavailable"}`，結果不明時重啟後照磁碟上的設定（權杖可能已換）；新子程式起不來時是上面那種 HTTP 503（`saved:true`、`detail.code="config_apply_failed"`）另帶
   `token_rotated:true`（權杖已換；契約第 3.1 節 `backend` 列）。
+- **Hermes 換身分換權杖**（HM-24）：同上一點的順序、回應與失敗處理；身分欄位是 `gateway_url`、`dashboard_url`、`dashboard_username`，Dashboard 三欄
+  一起補上或清空也算（三欄只給一部分照舊 400）。只換 `gateway_api_key`、`dashboard_password`、第一次設定、權杖已撤銷時不換權杖。
 - **新來源要重填秘密**（DQ-40 ⑨，全部產品）：`backend/patch` 把網址改到另一個來源（scheme、host、port）卻沒帶那條網址會送去的已存秘密，回 422
   `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN`，什麼都不寫。`backend` 整份取代本來就帶全部秘密，不受影響。
 - **後端網址拒絕 loopback**（HM-20）：存檔改到的後端網址是 127.0.0.0/8、::1 或 `localhost` 時回 400 `{"error":"request denied"}`；子程式連線時也擋。
