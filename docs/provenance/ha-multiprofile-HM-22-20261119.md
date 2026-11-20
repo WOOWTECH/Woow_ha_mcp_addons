@@ -1,5 +1,7 @@
 # HA 多帳號 HM-22 provenance：Nextcloud 開通的功能片（換 url／username 換 token、存政策只重啟該帳號、探測退避）（2026-11-19）
 
+> 2026-11-20 parity 候選更新：本文是 HM-22 當時的歷史紀錄；其中「貼上的頁面路徑換 token」及「每次存政策都重啟」已由 `docs/multi-profile/nextcloud-paas-parity-20261120.md` 取代。單帳號也受正規化與政策行為變更影響，發版交接見 `unreleased-changes.md` NC1。
+
 ## 結論
 
 - **本片是 Nextcloud 的功能 PR，不開通**。`MULTI_PROFILE_PRODUCTS` 在 repo 裡維持空集合，`addons/` 一個檔都沒動；測試裡用 monkeypatch

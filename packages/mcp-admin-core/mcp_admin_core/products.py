@@ -124,8 +124,8 @@ class LiteLLMConnection(Connection):
 
 class NextcloudConnection(Connection):
     url: URL  # the Nextcloud root URL (NEXTCLOUD_MCP_BASE_URL)
-    username: Name
-    app_password: Credential = Field(repr=False)
+    username: Annotated[str, Field(min_length=1, max_length=256)]
+    app_password: Annotated[str, Field(min_length=1, max_length=8192)] = Field(repr=False)
 
     @field_validator('url')
     @classmethod
@@ -137,8 +137,16 @@ class NextcloudConnection(Connection):
     @classmethod
     def no_outer_whitespace(cls, value):
         # The child strips both and refuses an empty result (exit 2): refuse blank and padded values when saved.
-        if not value.strip() or value != value.strip():
-            raise ValueError('leading/trailing whitespace or blank')
+        if (not value.strip() or value != value.strip()
+                or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+            raise ValueError('invalid credential')
+        return value
+
+    @field_validator('username')
+    @classmethod
+    def basic_username(cls, value):
+        if ':' in value:
+            raise ValueError('invalid username')
         return value
 
 
@@ -321,21 +329,36 @@ def check_saved_destinations(state, previous=None):
 IDENTITY_BOUND = frozenset({'odoo', 'nextcloud'})
 
 
+_NEXTCLOUD_PAGE = re.compile(r"/(index\.php|remote\.php|ocs|apps|login|settings)(/.*)?$", re.IGNORECASE)
+
+
+def normalize_nextcloud_url(value):
+    """Normalize a submitted root URL after validating the entire original destination."""
+    value = value.strip()
+    value = backend_destination(http_url(value))
+    parts = urlsplit(value)
+    host = parts.hostname
+    if ':' in host:
+        host = f'[{host}]'
+    if parts.port is not None and (parts.scheme, parts.port) not in (('http', 80), ('https', 443)):
+        host += f':{parts.port}'
+    return urlunsplit((parts.scheme, host, _NEXTCLOUD_PAGE.sub('', parts.path).rstrip('/'), '', ''))
+
+
 def same_identity(product, name, before, after) -> bool:
-    """HM-22: whether a token-rotating field (identity_fields.rotating_fields) of product names the same backend
-    identity before and after a save: the same value, or, for a URL compared as the server it names
-    (identity_fields.SAME_SERVER_URLS: Nextcloud's url, as PaaS #154 normalize_base_url compares it), the same server
-    (backend_edit.origin: the scheme and the host in any letter case, the scheme's own port written out or not) and the
-    same path as saved (http_url has dropped trailing slashes; the letter case counts). Any other path is another URL,
-    a page path pasted from the browser included: the child uses the saved URL as its root (PaaS cuts such a path off
-    when saving; contract section 9, HM-22's row on the URL)."""
+    """Compare Nextcloud URLs after PaaS root normalization; other identity fields compare as stored.
+
+    Path case remains significant and invalid legacy URLs never compare equal to a different value.
+    """
     if before == after:
         return True
     if (name not in identity_fields.SAME_SERVER_URLS.get(product, ()) or not isinstance(before, str)
             or not isinstance(after, str)):
         return False
-    from .backend_edit import origin  # only a switched-on identity-bound save compares URLs (identity_rebound)
-    return origin(before) == origin(after) and urlsplit(before).path == urlsplit(after).path
+    try:
+        return normalize_nextcloud_url(before) == normalize_nextcloud_url(after)
+    except ValueError:
+        return False
 
 
 def identity_rebound(previous, candidate) -> bool:

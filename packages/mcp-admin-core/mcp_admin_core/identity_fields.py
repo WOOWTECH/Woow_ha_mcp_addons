@@ -43,8 +43,8 @@ TOKEN_ROTATING = {
 
 # HM-22 (PaaS #154, woow-mcp-server 0f94aa4 apps/nextcloud/nextcloud_mcp_admin/routers/config.py normalize_base_url):
 # the token-rotating URL fields compared as the server and the path they name, not as typed (products.same_identity):
-# the scheme and the host in any letter case and the scheme's own port written out or not are one server; the path
-# counts as saved, its letter case included. Odoo's URL is compared as typed, as PaaS #131 compares it.
+# the scheme and host are case-insensitive, default ports and browser page suffixes are removed, and path case
+# remains significant. Odoo's URL is compared as typed, as PaaS #131 compares it.
 SAME_SERVER_URLS = {
     'nextcloud': ('url',),
 }

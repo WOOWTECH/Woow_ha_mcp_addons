@@ -64,7 +64,7 @@
 | FM-44 | 「分原因」屬 #148（DQ-06） | §8.8 #93、#100；`tests/test_gateway_stream_endings.py`（HM-14） | DQ-06 採 (a)，#148 已在 pin 內；`-32004` 依原因；log 與子程式停止後的文字見 #93、#100（HM-14） |
 | FM-45 | HA 對小主機有利；工具清單一致、錯誤文字不同（已知差異） | §8.8 #28 | — |
 | FM-46 | HA manifest 停止上限 30 秒 | §8.8 #53；`tests/test_profile_lifecycle.py`（HM-09） | — |
-| FM-47 | HA 收緊政策也重啟（PaaS Nextcloud 收緊不重啟），不影響隔離 | §8.8 #54 | — |
+| FM-47 | Nextcloud 收緊政策不重啟，與 PaaS 對齊；其他帳號隔離 | §8.8 #54 | — |
 | FM-48 | Odoo 修補檔是否改動 restrict_*：未確認（UC-13） | `tests/test_product_boundary.py`（既有） | 同 uid 信任邊界和 PaaS 相同（threat-model.md）；Odoo 本機檔案工具的選項維持關閉；UC-13 仍未確認 |
 | FM-49 | HA 沒有 cgroup 上限（最壞 64×16 MiB≈1 GiB） | §8.8 #15 | — |
 | FM-51 | #148 已合併進 pin（`69ac425`） | §8.8 #15、#91、#98；`tests/test_gateway_queue_ha.py`（HM-14） | #148 已合併進 pin；保留名額載的東西與排隊中換 token 見 #91、#98（HM-14） |

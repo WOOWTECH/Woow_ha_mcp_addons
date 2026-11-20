@@ -17,8 +17,8 @@
 |---|---|---|---|---|---|
 | `packages/mcp-admin-core/mcp_admin_core/features.py` | HM-07 | 每個產品的升版片（加產品；受發版鎖）。HM-17 沒改它：HM-17 先合併，那時這個檔還不存在 | 列管（HM-07 起） | — | 產品開關 `MULTI_PROFILE_PRODUCTS`；`enabled(product)` 呼叫時讀 |
 | `packages/mcp-admin-core/mcp_admin_core/profiles.py` | HM-07 | HM-13a（還原標記的檔名常數；#97）→ HM-09 → HM-10 → HM-31（只改註解）→ HM-13b（隔離名稱不覆蓋、守門的移開名稱）→ HM-13c（還原提示的檔名、隔離目錄在管理 API 上的名稱與刪除）→ HM-27（Origin 政策與它的收據的檔名、收據封存加進守門的名稱；合併 HM-13c 時）→ HM-25 | 列管（HM-07 起） | — | 索引、簽章、布局、一致性、容量常數、名稱規則、port 配發 |
-| `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b、HM-22（照伺服器比的網址表 `SAME_SERVER_URLS`）→ HM-24 | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |
-| `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-13c（還原提示、核對關卡、全部撤銷的 503 名單）→ HM-30 → HM-31 → HM-25 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
+| `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b、HM-22（照伺服器比的網址表 `SAME_SERVER_URLS`）→ HM-24；2026-11-20 Nextcloud parity 更新註解與摘要 | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |
+| `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-13c（還原提示、核對關卡、全部撤銷的 503 名單）→ HM-30 → HM-31 → HM-25；2026-11-20 Nextcloud parity 加政策套用 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
 | `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-31 → HM-13c（核對、全部撤銷、還原紀錄、刪隔離目錄的全域路由；8081 擋全部撤銷沒撤銷成功的權杖）→ HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_admin.py` | HM-10 | HM-13c → HM-27 | 列管 | — | 帳號增刪改查、索引隔離、全部撤銷、還原核對 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_detect.py` | HM-13a | HM-13b | 列管 | — | sentinel 與 record 的建立、比對、重建 |
