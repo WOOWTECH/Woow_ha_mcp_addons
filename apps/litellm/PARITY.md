@@ -86,3 +86,28 @@ automatic migration is part of this patch.
   snapshots, shared UI and versions are deliberately outside this lane.
 - Include these behavior changes/rollback steps in the integrated upgrade notes.
   Source tests with MockTransport are not runtime, image or HAOS acceptance.
+
+## Backend concurrency and health
+
+PaaS origin/main `5ef1046` gives each LiteLLM child a 50-connection HTTPX pool,
+retains no idle connections, and runs the admin's authenticated `/v1/models`
+health check with a separate client. HA now gives LiteLLM the same tool-pool
+limit and a fresh private health-probe client. The probe is absent from the
+public tool allowlist and remains available when public tools are disabled.
+Other products retain their existing limits and resolver admission behavior.
+
+All HA connections still use the checked, DNS-pinned transport: no environment
+proxy, redirects or idle reuse, and TLS verification and destination checks
+remain in force. DNS execution is shared and limited to four workers per child;
+LiteLLM waits for an available worker within the connection deadline. A hung
+lookup retains its worker until it actually finishes. Consequently DNS
+saturation, backend failure or the probe's five-second deadline can still make
+health fail, even though tool-pool saturation alone cannot. Neither calls nor
+writes are retried.
+
+The tool pool permits up to 50 concurrent sockets per profile; with the maximum
+four profiles this is 200, plus short-lived health-probe connections. Tests use
+local fake backends and do not establish resource usage on HAOS. Before release,
+measure file descriptors, memory and TLS/CPU under saturation on representative
+small HAOS hardware, including four profiles and slow DNS; validate the existing
+memory and file-descriptor admission assumptions against those measurements.

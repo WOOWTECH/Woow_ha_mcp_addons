@@ -25,6 +25,9 @@ from test_expansion_policy import call
 from test_expansion_runtime import WRITES, payload
 from test_real_products import connection, rpc
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 
 @contextmanager
@@ -179,13 +182,14 @@ async def test_policy_disable_keeps_private_probe_and_public_denial(tmp_path, pr
                     direct = {**headers, 'Authorization': 'Bearer ' + store.load().child_token}
                     raw = await rpc(child, endpoint.url, direct,
                                     {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/list'})
-                    assert {t['name'] for t in raw['tools']} == public_names | {probe}
+                    child_probe = 'woow_backend_probe' if product == 'litellm' else probe
+                    assert {t['name'] for t in raw['tools']} == public_names | {child_probe}
                     if disable_all:
                         assert not public_names
                     await denied(set(NAMES[product]) - public_names)
                     # Native registration itself denies every other blocked tool.
                     before = len(events)
-                    for name in set(NAMES[product]) - public_names - {probe}:
+                    for name in set(NAMES[product]) - public_names - {child_probe}:
                         result = await rpc(child, endpoint.url, direct,
                                            call(name, dict(WRITES[product]).get(name, {})))
                         assert result.get('isError'), name

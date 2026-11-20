@@ -27,6 +27,9 @@ from mcp_admin_core.products import PROBES, ProductStore, TOOLS, child_spec, pro
 from owned_runtime import Endpoint
 from test_active_token_leases import listen
 from test_real_products import backend, connection, rpc
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('odoo', 'emqx')

@@ -206,6 +206,32 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
   2026-11-19 HM-18 補寫 UC-10 與 sentinel）。其餘項目寫回之前，不得宣稱成立，也不得把容器或本機的模擬、或發版前預驗當成這一版的 HA 證據；
   寫回的項目也只對記下的版本成立，每次升版照上面重驗。
 
+### LiteLLM 開通（HM-21；升版 PR 建好候選映像之後才做）
+
+LiteLLM 沒有產品專屬程式（計畫 §9）：帳號能做什麼完全看存進去的 key。HAOS 上要證明的是「同一台 LiteLLM、兩把只限一個模型的
+virtual key，各自的帳號只看得到自己的模型」。每一步照上面的規定先取得使用者批准；本機已涵蓋的項目見
+`tests/test_litellm_multi_profile.py`（LOCAL）。
+
+- **在測試副本上做**：升版 PR 的分支暫時加成商店 repo、裝 LiteLLM 的測試副本（同 0.4.14 的做法，[ha-test-0.4.14.md](ha-test-0.4.14.md)），
+  不動已在用的 LiteLLM MCP app：T-04 會把預設帳號的後端換成 key A。負責人若決定在在用的 app 上做，動手前記下預設帳號原本的後端
+  （只記哪一台 LiteLLM、哪種 key，不記秘密），清理時由負責人還原。
+- **後端身分（負責人建立、刪除；證據只記不含秘密的摘要）**：同一台 LiteLLM 上兩把 virtual key，A 只允許模型 a、B 只允許模型 b；
+  不用 master key（面板也這樣建議）。key 只經面板或 P9 的 `--backend-file`（0600）填入，不印、不貼進紀錄。模型名稱不是秘密，可以記。
+- **T-02**：LiteLLM 的額外帳號上限是 3：第 4 個額外帳號 409 `profile_limit_reached`、`limit` 3。
+- **T-04（N×N）**：預設帳號存 key A；面板建帳號 B、存 key B（同一個網址）。兩個帳號各用自己的 token、兩種接法呼叫
+  `litellm_list_models`：預設帳號只列出模型 a、B 只列出模型 b。
+- **T-05**：P9 `--cross`（兩種接法、跨帳號 session 404、隨機 token、`X-MCP-Profile` 不換帳號）與 `--temp-profile`（刪除後舊 token
+  被拒：Bearer 401、密鑰網址 404）。
+- **T-07**：在 B 收回全部寫入授權並停用一支讀取工具，存檔後只有 B 的子程式重起（容器裡兩個子程式的 PID 存檔前後對照，或 add-on
+  log 生命週期那幾行帶的 id 前 8 碼），B 的 tools/list 沒有寫入工具與那支工具；預設帳號的工具清單與 PID 不變。
+- **T-13、T-14、T-17**：同其他開通的產品（P9 `--profile … --modes childkill`、`restart`；每個 LiteLLM 子程式的 RSS 對契約第 5 節
+  暫定的 160 MiB）。
+- **只在 LOCAL 驗**：每個子程式最多 4 條後端連線、一個帳號占滿不影響別的帳號；占滿時健康檢查也拿不到連線，超過 5 秒又碰上檢查
+  （開通後連兩次）就把這個帳號判成 unreachable，新的 tools/call 回 `-32603`「Backend unreachable」直到下一次檢查通過（契約第 9 節
+  #129；要不要放寬或改健康檢查由負責人決定）。要在 HAOS 驗，用 T-04 那台 LiteLLM，負責人決定。
+- **清理（T-29）**：刪掉帳號 B 與 T-02 建的帳號（舊 token 立刻失效）、刪掉測試副本（在在用的 app 上做的，由負責人還原預設帳號的後端）、
+  負責人撤銷兩把 key，合成憑證掃描 0 命中。
+
 ## 故障處置界線
 
 缺少／失效角色（非 owner／系統管理員）的 MANAGEMENT 403 屬預期封鎖，不是要求提高 HA 權限。readiness503 要分

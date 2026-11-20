@@ -73,7 +73,8 @@ class HeadscaleBackendTests(unittest.TestCase):
             with self.subTest(address=address), patch.object(probe.socket, 'gethostbyname', return_value=address):
                 with self.assertRaises(AssertionError):
                     probe.mock_bind_host('headscale')
-        self.assertEqual(probe.mock_bind_host('emqx'), '127.0.0.1')
+        with switched():  # HM-23: a product not switched on, whatever the repository switches on
+            self.assertEqual(probe.mock_bind_host('emqx'), '127.0.0.1')
 
 
 def switched(*products):
