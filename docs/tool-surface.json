@@ -149,6 +149,7 @@
     "apps/runtime/backend_policy.py": "2f4a33a2d4e898fd3d821f6ba297712f05ba4829af88a27db572e497426e34f0",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
     "apps/runtime/bounded_tools.py": "33d87837b6e60c820f1ce53442606fa519182505a9a27f6c4c7f5262a4b8d745",
+    "apps/runtime/emqx_child_policy.py": "004d3254a96fb16e0621b2ad6dca60dc98188239098483634be568be5bbc7bd0",
     "apps/runtime/odoo_read_errors.py": "fe295494f3b01e59880a56f59dd829e351062fffd1cbeca1daabea713635b9e3",
     "apps/runtime/odoo_read_exists.py": "01a4c0e81a28e50c09e43238d612113fe4e76a0250402a21e4489da59ddfd4bf",
     "apps/runtime/odoo_result_limits.py": "69b273aac479d7326f6901063c233aa1dbc5928e8bf80775d46f214533cb445b",
