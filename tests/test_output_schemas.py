@@ -23,6 +23,9 @@ ENTRIES = DATA['entries']
 # output_schemas.json records source-commit bytes. Later source edits get
 # separate current-byte pins so the historical source commit remains verifiable.
 CURRENT_POST_SOURCE_BYTES = {
+    # Private LiteLLM health probe; the reviewed public output schemas remain unchanged.
+    'apps/litellm/vendor/woow_litellm_mcp_server/server.py': (
+        'litellm', 'ed70f02ccdcd76395f1253a5cc7cb70fcf4dc676f5f3ddb73193e5d4dd7cd4f2'),
     # HA EMQX child middleware registration; output schemas are unchanged.
     'apps/emqx/vendor/emqx_mcp_server/server.py': ('emqx', 'f6cf87c5fd8806809fd711848e98feb9a64ace4443753958d6b10a101565c93b'),
     'packaging/unit.sh': ('n8n', '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'),
