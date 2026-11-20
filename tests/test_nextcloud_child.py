@@ -20,10 +20,14 @@ from mcp_admin_core.products import (INSTRUCTIONS, ODOO_HEALTH_PROBE, PROBES, RO
 from owned_runtime import Endpoint
 import nextcloud_fixtures
 from nextcloud_fixtures import NextcloudFake, OCS_PATH, respond
+from nextcloud_fixtures import switched_off  # noqa: F401  (fixture: HM-22, the switch these tests pin)
 from test_real_products import connection, rpc
 from test_six_hardening import Quiet, call, runtime, serve
 from test_expansion_runtime import payload
 
+# HM-22: the add-on as it is today, Nextcloud not switched on, whatever the repository switches on
+# (nextcloud_fixtures.switched_off); tests/test_nextcloud_multi_profile.py tests it switched on.
+pytestmark = pytest.mark.usefixtures('switched_off')
 CANARY = 'DUMMY-NEXTCLOUD-BACKEND-TEXT'
 WRITERS = {name for name, tool in TOOLS['nextcloud'].items() if tool.write}
 READERS = set(TOOLS['nextcloud']) - WRITERS

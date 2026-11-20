@@ -96,10 +96,10 @@
 | 10 | 135 | `test_seed_defaults_keep_custom_prefix` | 不適用：PaaS 範本 seed；HA 新安裝全開與 owner-defaults 由既有 `tests/test_writes_default_on.py`、`tests/test_owner_defaults.py` 管 |
 | 11 | 140 | `test_lifespan_applies_seed_defaults_before_core` | 不適用：PaaS 範本 seed；HA 新安裝全開與 owner-defaults 由既有 `tests/test_writes_default_on.py`、`tests/test_owner_defaults.py` 管 |
 | 12 | 151 | `test_fresh_tools_page_shows_all_enabled` | 不適用：PaaS 範本 seed；HA 新安裝全開與 owner-defaults 由既有 `tests/test_writes_default_on.py`、`tests/test_owner_defaults.py` 管 |
-| 13 | 185 | `test_enabling_write_tool_restarts_child` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），存政策只重啟該帳號 |
-| 14 | 193 | `test_disabling_more_tools_does_not_restart` | §8.8 #54 |
-| 15 | 199 | `test_unchanged_policy_does_not_restart` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名） |
-| 16 | 205 | `test_widening_while_stopped_does_not_start` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名） |
+| 13 | 185 | `test_enabling_write_tool_restarts_child` | HA：`tests/test_nextcloud_multi_profile.py`：放寬時只重啟選定的在跑子程式 |
+| 14 | 193 | `test_disabling_more_tools_does_not_restart` | HA：`tests/test_nextcloud_multi_profile.py`：收緊不重啟，現有 session 由閘道即時限制；§8.8 #54 |
+| 15 | 199 | `test_unchanged_policy_does_not_restart` | HA：`tests/test_nextcloud_multi_profile.py`：不變不重啟 |
+| 16 | 205 | `test_widening_while_stopped_does_not_start` | HA：`tests/test_nextcloud_multi_profile.py`：stopped、blocked、failed、backoff 均不啟動，下次啟動使用新政策 |
 | 17 | 212 | `test_unauthenticated_put_does_not_restart` | HA：`tests/test_admin_pipeline_matrix.py`（HM-10），非管理員 403、子程式不動 |
 | 18 | 220 | `test_stale_policy_update_does_not_restart` | HA：`tests/test_profile_admin_api.py`（HM-10），過期 If-Match 回 409、子程式不動 |
 | 19 | 227 | `test_unknown_profile_does_not_restart` | HA：`tests/test_profile_admin_api.py`（HM-10），未知帳號 404 `profile_not_found`、絕不退回預設帳號 |
@@ -1021,7 +1021,7 @@
 | 4 | 349 | `test_changing_only_the_app_password_keeps_the_token` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
 | 5 | 383 | `test_a_different_spelling_of_the_same_url_is_not_an_identity_change` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
 | 6 | 402 | `test_a_really_different_url_is_an_identity_change` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
-| 7 | 411 | `test_a_legacy_unnormalized_stored_url_is_not_rotated_by_resaving_the_form` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
+| 7 | 411 | `test_a_legacy_unnormalized_stored_url_is_not_rotated_by_resaving_the_form` | HA：`tests/test_nextcloud_multi_profile.py::test_normalized_credentials_and_legacy_url_on_save`：兩條路由沿用等價舊網址與 token |
 | 8 | 434 | `test_first_time_setup_keeps_the_issued_url` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
 | 9 | 449 | `test_a_revoked_or_missing_token_is_not_replaced_by_an_identity_change` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154） |
 | 10 | 463 | `test_clearing_the_identity_rotates_and_filling_it_back_does_not` | HA：`tests/test_nextcloud_multi_profile.py`（HM-22，暫定名），Nextcloud 換 url／username 換 token（DQ-05，對照 PaaS #154）；HA：`tests/test_odoo_identity_rotation.py`（HM-12），Odoo 同一套規則：先停再提交、含清空、額外帳號只換自己的 |
