@@ -342,7 +342,11 @@ def child_spec(state: State, directory: Path, port: int = CHILD_PORT) -> ChildSp
     node = shutil.which("node")
     if node is None or not entry.is_file():
         raise RuntimeError("pinned n8n runtime not installed")
-    home, catalog = directory, (_catalog if _catalog is not None and _catalog.is_file() else None)
+    # A prepared catalog that has disappeared is an error, never a signal to
+    # omit NODE_DB_PATH and silently serve a different packaged database.
+    if not additional and _catalog is not None and _identity(_catalog) is None:
+        raise RuntimeError("persistent catalog unavailable")
+    home, catalog = directory, _catalog
     if additional:
         # Its own empty working directory (HOME and cwd), never the profile directory with its state.json (C2-SF-8).
         # Checked here, when the spec is built; the watchdog's automatic restarts reuse the spec (as the Python

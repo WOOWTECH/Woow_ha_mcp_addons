@@ -38,9 +38,9 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
     # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend); its review: the
     # copy made through directory descriptors and again for another backend. No tool, schema or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', 'c2736c339d4417062c46a69859dda57fc9ff91d8427ecb1ce40e0566bfb23386'),
+    'apps/n8n/n8n_adapter.py': ('n8n', 'e3a1ebd2c8a3c0110f73ac1ad79c8860fbed8a39723bf5f5465b490cb534193c'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
-    'apps/n8n/backend_policy.cjs': ('n8n', '40058a7b0124a91f7e920dc4c4b7aee562554b3d350504a84448c7e2f69f2706'),
+    'apps/n8n/backend_policy.cjs': ('n8n', 'a9d75db8f4455e0fd9be0ecfec44c230d272873a7085acf2ca5feeca2f788f5a'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
     # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
     # run_product's (the n8n adapter); no tool, schema or handler change.

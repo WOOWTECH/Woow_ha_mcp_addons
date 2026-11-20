@@ -93,13 +93,18 @@ def test_patch_is_exact_idempotent_wired_and_runtime_guarded(tmp_path):
     current = ADAPTER.read_bytes()
     assert patch.digest(current) == patch.PATCHED
     assert current.count(patch.NEW.encode()) == 2
-    original = current.replace(patch.FALLBACK_NEW.encode(), patch.FALLBACK_OLD.encode()).replace(
+    native = current.replace(patch.PATH_NEW.encode(), patch.PATH_OLD.encode()).replace(
+        patch.OPEN_NEW.encode(), patch.OPEN_OLD.encode())
+    assert patch.digest(native) == patch.PREVIOUS_NATIVE
+    assert native == (ROOT / 'apps/n8n/patches/tests/database-adapter-native-2.96.2.js').read_bytes()
+    original = native.replace(patch.FALLBACK_NEW.encode(), patch.FALLBACK_OLD.encode()).replace(
         patch.NEW.encode(), patch.OLD.encode())
     assert patch.digest(original) == patch.PINNED
     assert original == (ROOT / 'apps/n8n/patches/tests/database-adapter-2.96.2.js').read_bytes()
     assert patch.patched(original) == current
     previous = (ROOT / 'apps/n8n/patches/tests/database-adapter-fts-2.96.2.js').read_bytes()
     assert patch.digest(previous) == patch.PREVIOUS and patch.patched(previous) == current
+    assert patch.patched(native) == current
     target = tmp_path / 'adapter.js'
     target.write_bytes(original)
     def apply():
@@ -107,6 +112,8 @@ def test_patch_is_exact_idempotent_wired_and_runtime_guarded(tmp_path):
     assert apply().returncode == 0 and target.read_bytes() == current
     assert 'already patched' in apply().stdout
     target.write_bytes(previous)
+    assert apply().returncode == 0 and target.read_bytes() == current
+    target.write_bytes(native)
     assert apply().returncode == 0 and target.read_bytes() == current
     target.write_bytes(original + b'\n// unexpected\n')
     result = apply()
@@ -135,7 +142,11 @@ def test_child_guard_refuses_unpatched_adapter_before_loading_it(tmp_path):
     shutil.copyfile(ROOT / 'apps/n8n/node_modules/n8n-mcp/dist/services/n8n-api-client.js',
                     runtime / 'services/n8n-api-client.js')
     current = ADAPTER.read_bytes()
-    original = current.replace(patch.FALLBACK_NEW.encode(), patch.FALLBACK_OLD.encode()).replace(
+    native = current.replace(patch.PATH_NEW.encode(), patch.PATH_OLD.encode()).replace(
+        patch.OPEN_NEW.encode(), patch.OPEN_OLD.encode())
+    assert patch.digest(native) == patch.PREVIOUS_NATIVE
+    assert native == (ROOT / 'apps/n8n/patches/tests/database-adapter-native-2.96.2.js').read_bytes()
+    original = native.replace(patch.FALLBACK_NEW.encode(), patch.FALLBACK_OLD.encode()).replace(
         patch.NEW.encode(), patch.OLD.encode())
     assert patch.digest(original) == patch.PINNED
     (runtime / 'database/database-adapter.js').write_bytes(original)

@@ -144,7 +144,7 @@
     "apps/n8n/node_modules/n8n-mcp/dist/services/post-update-validator.js": "c8ad45a7e3a7bec8edc95ddf8d26a00b5a28dcce07af1db8e6ad928dc08235f5",
     "apps/n8n/node_modules/n8n-mcp/dist/services/universal-expression-validator.js": "49f86c40a9f26286c363eee3ed1dc779fc517458ec2388aaf5ea8f2d421085cd",
     "apps/n8n/node_modules/n8n-mcp/dist/services/workflow-validator.js": "375cdf41a73ec0978b99b8a33a68ec964fb4693b59a5643072095ea5a69f3009",
-    "apps/n8n/backend_policy.cjs": "40058a7b0124a91f7e920dc4c4b7aee562554b3d350504a84448c7e2f69f2706",
+    "apps/n8n/backend_policy.cjs": "a9d75db8f4455e0fd9be0ecfec44c230d272873a7085acf2ca5feeca2f788f5a",
     "apps/n8n/node_modules/n8n-mcp/dist/utils/npm-version-checker.js": "8ffe192878574d0c4a7a6453205be7916858344e889b8b681998b4f22451a426",
     "apps/runtime/backend_policy.py": "50888cee4f251f322ea4d3c8178ae513757ba6922ec6de37f2af9e962613ba95",
     "apps/runtime/batch2_outputs.py": "239add1fbbad29eecbfec82e33553b33b4ed7b0e5d3acdad01a33d83f2090352",
