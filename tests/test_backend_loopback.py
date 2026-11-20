@@ -579,6 +579,16 @@ async def pinned_agents(spec, urls, **extra):
     return json.loads(out.splitlines()[-1])
 
 
+async def test_n8n_container_benchmark_address_obeys_the_actual_strict_node_policy(tmp_path, switch):
+    """The acceptance mock can connect; private, loopback and link-local remain denied."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    urls = [f'http://{address}:5678' for address in
+            ('198.18.31.2', '10.0.0.2', '127.0.0.1', '169.254.169.254')]
+    assert await pinned_agents(spec, urls) == {
+        urls[0]: True, urls[1]: NODE_DENIED, urls[2]: NODE_DENIED, urls[3]: NODE_DENIED}
+
+
 async def test_n8n_refuses_a_loopback_backend_once_switched_on(tmp_path, switch):
     switch('n8n')
     spec = n8n_spec(tmp_path)

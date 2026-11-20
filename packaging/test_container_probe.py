@@ -132,30 +132,6 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
                             probe.mock_bind_host('n8n')
 
 
-    def test_n8n_benchmark_address_passes_the_actual_pinned_node_policy(self):
-        dist = ROOT / 'apps/n8n/node_modules/n8n-mcp/dist'
-        client = dist / 'services/n8n-api-client.js'
-        policy = ROOT / 'apps/n8n/backend_policy.cjs'
-        script = f"""
-const {{N8nApiClient}} = require({json.dumps(str(client))});
-(async () => {{
-    const result = {{}};
-    for (const address of ['198.18.31.2', '10.0.0.2', '127.0.0.1', '169.254.169.254']) {{
-        const url = `http://${{address}}:5678`;
-        process.env.N8N_API_URL = url;
-        try {{
-            await new N8nApiClient({{baseUrl: url, apiKey: 'DUMMY', maxRetries: 0, timeout: 1000}}).getPinnedAgents();
-            result[address] = true;
-        }} catch (error) {{ result[address] = false; }}
-    }}
-    console.log(JSON.stringify(result));
-}})().catch(error => {{ console.error(error); process.exitCode = 1; }});
-"""
-        env = {**os.environ, 'WEBHOOK_SECURITY_MODE': 'strict', 'WOOW_MCP_DENY_LOOPBACK': '1'}
-        result = subprocess.run(['node', '--require', str(policy), '-e', script], cwd=ROOT / 'apps/n8n',
-                                env=env, capture_output=True, text=True, timeout=60, check=True)
-        self.assertEqual(json.loads(result.stdout.splitlines()[-1]), {
-            '198.18.31.2': True, '10.0.0.2': False, '127.0.0.1': False, '169.254.169.254': False})
 
 
 # The single-profile probe as reviewed: d922d3c is HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore

@@ -74,3 +74,17 @@ follow-up changes only the acceptance harness, its tests and documentation; no
 runtime or tool-surface pinned source changed. Ledger precheck: zero drift among
 checked files; 102 runtime-patch and 49 tool-surface installed-only sources still
 require CI installations.
+
+CI job 136215141117 exposed that packaging unittest discovery runs before
+`packaging/unit.sh` installs the n8n npm dependencies. The benchmark-address
+check against the actual pinned Node client now lives in
+`tests/test_backend_loopback.py`, which unit.sh runs after installation and
+patching; packaging's dependency-free address and bridge checks remain in place.
+The Node test is mandatory and checks the accepted fixture address and the
+specific policy denial for private, loopback and link-local addresses.
+
+Local CI-order follow-up: complete packaging unittest discovery ran with the
+n8n `node_modules` directory absent and present: each run reported 378 tests,
+OK with five existing skips. With installed dependencies and Node 26.12.1,
+the moved Node check and the switched-on/off strict loopback checks reported
+3 passed. This is not a full CI or root restore run.

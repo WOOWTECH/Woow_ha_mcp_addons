@@ -148,6 +148,6 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 ### n8n parity candidate: container fixture inventory (2026-11-20)
 
 - `packaging/test_container_acceptance.py`: n8n uses a disposable, inspected internal bridge in `198.18.0.0/15`, with cleanup on failure, whether its profile switch is on or off. Actual Docker acceptance remains pending.
-- `packaging/test_container_probe.py`: the synthetic address is checked against strict validators and the pinned Node client; private, loopback and link-local addresses remain denied. Default-profile snapshots use the catalog layout with either switch state.
+- `packaging/test_container_probe.py`: the synthetic address is checked against strict validators; default-profile snapshots use the catalog layout with either switch state. After npm installation, `tests/test_backend_loopback.py` checks the actual pinned Node client accepts the fixture address and denies private, loopback and link-local addresses.
 - `packaging/test_container_profiles.py`: bounded, private digest-named SQLite catalogs in default and profile directories are included in stopped snapshots before and after the restore stage; unknown, linked, oversized and invalid-header entries are refused. Existing bounds remain for other files and products.
 - Five root restore cases and real image/HAOS acceptance remain CI or release-environment gates; see `docs/provenance/ha-n8n-paas-parity-candidate-20261120.md`.
