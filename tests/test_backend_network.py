@@ -1,4 +1,4 @@
-"""Installed Node API client plus loopback fake backend, never production n8n."""
+"""Installed Node API client with a local transport double, never production n8n."""
 import asyncio
 import json
 from pathlib import Path
@@ -30,8 +30,8 @@ def store(tmp_path):
     value.close()
 
 
-@pytest.mark.parametrize("hostname", ["127.0.0.1", "backend.test"])
-async def test_installed_client_private_backend_pins_dns_and_denies_redirect(store, hostname):
+@pytest.mark.parametrize("rebind", [False, True])
+async def test_installed_client_pins_dns_and_denies_redirect(store, rebind):
     calls = []
     handlers = set()
     async def backend(reader, writer):
@@ -51,38 +51,42 @@ async def test_installed_client_private_backend_pins_dns_and_denies_redirect(sto
             handlers.discard(asyncio.current_task())
     server = await asyncio.start_server(backend, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
-    store.update(backend_url=f"http://{hostname}:{port}/n8n", backend_key="DUMMY")
-    # The resolver would return metadata on a second lookup for the SAME request.
-    # An agent doing another DNS lookup during connect would never reach the fake.
-    code = IMPORT + '''
+    store.update(backend_url=f"http://backend.test:{port}/n8n", backend_key="DUMMY")
+    # The production agent still validates the public DNS answer and supplies its
+    # pinned lookup. Only the final socket is redirected to our loopback fake.
+    code = IMPORT + f"const fakePort = {port}; const rebind = {str(rebind).lower()};" + '''
 const dns = require('node:dns');
-let lookups = 0;
-if (new URL(process.env.N8N_API_URL).hostname === 'backend.test') {
-    dns.promises.lookup = async () => {
-        lookups++;
-        return [{address: lookups === 1 ? '127.0.0.1' : '169.254.169.254', family: 4}];
-    };
-    dns.lookup = () => { throw Error('unpinned connection lookup'); };
-}
+const http = require('node:http');
+const net = require('node:net');
+let lookups = 0, pinned = [];
+dns.promises.lookup = async () => {
+    lookups++;
+    return [{address: rebind && lookups > 1 ? '169.254.169.254' : '8.8.8.8', family: 4}];
+};
+dns.lookup = () => { throw Error('unpinned connection lookup'); };
+http.Agent.prototype.createConnection = function(options, callback) {
+    if (typeof options.lookup !== 'function') throw Error('missing pinned lookup');
+    options.lookup(options.host, {all: true}, (err, addresses) => {
+        if (err || addresses.length !== 1 || addresses[0].address !== '8.8.8.8') throw Error('wrong pinned address');
+        pinned.push(addresses[0].address);
+    });
+    return net.createConnection({host: '127.0.0.1', port: fakePort}, callback);
+};
 ''' + f"const client = {CLIENT};" + '''
 (async () => {
-    let ok = false, redirectDenied = false, reboundDenied = false;
+    let ok = false, denied = false;
     try { ok = (await client.listWorkflows({limit: 1})).data.length === 0; } catch {}
-    if (lookups) {
-        try { await client.listWorkflows({limit: 1}); } catch { reboundDenied = true; }
-    } else {
-        try { await client.listWorkflows({limit: 1}); } catch { redirectDenied = true; }
-    }
-    console.log(JSON.stringify({ok, redirectDenied, reboundDenied}));
+    try { await client.listWorkflows({limit: 1}); } catch { denied = true; }
+    console.log(JSON.stringify({ok, denied, lookups, pinned}));
 })();
 '''
     try:
         result = await node(store, code)
         assert result["ok"] is True
-        if hostname == "backend.test":
-            assert result["reboundDenied"] is True and len(calls) == 1
-        else:
-            assert result["redirectDenied"] is True and len(calls) == 2
+        assert result["denied"] is True
+        assert result["lookups"] == 2
+        assert result["pinned"] == ["8.8.8.8"] * (1 if rebind else 2)
+        assert len(calls) == (1 if rebind else 2)
         assert all(b"GET /n8n/api/v1/workflows?limit=1 " in call for call in calls)
     finally:
         server.close()
@@ -92,8 +96,8 @@ if (new URL(process.env.N8N_API_URL).hostname === 'backend.test') {
 
 
 @pytest.mark.parametrize("address,allowed", [
-    ("192.168.1.50", True), ("10.1.2.3", True), ("172.30.32.1", True),
-    ("[fd12:3456::1]", True), ("[::1]", True), ("8.8.8.8", True),
+    ("192.168.1.50", False), ("10.1.2.3", False), ("172.30.32.1", False),
+    ("[fd12:3456::1]", False), ("[::1]", False), ("8.8.8.8", True),
     ("169.254.169.254", False), ("169.254.170.2", False), ("100.100.100.200", False),
     ("192.0.0.192", False), ("0.0.0.0", False), ("224.0.0.1", False),
     ("[fd00:ec2::254]", False), ("[::ffff:169.254.169.254]", False),
@@ -116,7 +120,7 @@ async def test_destination_policy_validation_only_no_connect(store, address, all
 @pytest.mark.parametrize("mixed", [False, True])
 async def test_backend_origin_and_all_dns_answers_restricted(store, mixed):
     store.update(backend_url="http://backend.test:5678/n8n", backend_key="DUMMY")
-    answers = [{"address": "127.0.0.1", "family": 4}]
+    answers = [{"address": "8.8.8.8", "family": 4}]
     if mixed:
         answers.append({"address": "169.254.169.254", "family": 4})
     result = await node(store, IMPORT + "const answers = " + json.dumps(answers) + ''';
@@ -135,22 +139,21 @@ dns.promises.lookup = async () => answers;
     assert result["allowed"] == [not mixed, False, False, False]
 
 
-async def test_webhook_ssrf_is_permissive_and_socket_origin_guard_stays(store):
-    # 0.2.1 (owner decision 2026-10-15): the child runs with WEBHOOK_SECURITY_MODE=permissive, so a private webhook
-    # address is valid; the configured backend's pinned agents still refuse every other host, port and scheme.
-    store.update(backend_url="http://127.0.0.1:5678", backend_key="DUMMY")
+async def test_webhook_ssrf_is_strict_and_socket_origin_guard_stays(store):
+    # Strict webhook validation and the configured backend origin guard both apply.
+    store.update(backend_url="http://8.8.8.8:5678", backend_key="DUMMY")
     result = await node(store, IMPORT + f"const client = {CLIENT};" + f'''
 const {{SSRFProtection}} = require({str(ROOT / 'dist/utils/ssrf-protection.js')!r});
 (async () => {{
     const validation = await SSRFProtection.validateWebhookUrl('http://192.168.1.50:5678');
     const agents = await client.getPinnedAgents();
     let denied = 0;
-    for (const options of [{{host: '127.0.0.2', port: 5678}}, {{host: '127.0.0.1', port: 5679}},
-                            {{host: '127.0.0.1', port: 5678, protocol: 'https:'}}]) {{
+    for (const options of [{{host: '8.8.8.9', port: 5678}}, {{host: '8.8.8.8', port: 5679}},
+                            {{host: '8.8.8.8', port: 5678, protocol: 'https:'}}]) {{
         try {{ agents.httpAgent.createConnection(options); }}
         catch (error) {{ if (error.message === 'configured backend network policy denied') denied++; }}
     }}
     console.log(JSON.stringify({{strict: !validation.valid, denied}}));
 }})();
 ''')
-    assert result == {"strict": False, "denied": 3}
+    assert result == {"strict": True, "denied": 3}
