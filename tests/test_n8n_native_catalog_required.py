@@ -3,10 +3,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import shutil
 import socket
 import sqlite3
 import subprocess
+import tempfile
 import time
 
 import httpx
@@ -178,19 +180,41 @@ console.log(db.constructor.name); db.close(); })().catch(e => { console.error(e)
     assert 'sqljs' in trace.read_text()
 
 
+@pytest.fixture
+def preflight_case_dir(tmp_path, request):
+    if request.node.callspec.params['kind'] != 'readonly' or os.geteuid() != 0:
+        yield tmp_path
+        return
+    # The unprivileged child must traverse the directory even when pytest's
+    # root-owned tmp_path ancestors are private.
+    with tempfile.TemporaryDirectory(prefix='n8n-readonly-', dir='/tmp') as directory:
+        path = Path(directory)
+        path.chmod(0o755)
+        yield path
+
+
 @pytest.mark.parametrize('kind', ['missing', 'empty', 'corrupt', 'readonly'])
-def test_preflight_refuses_invalid_persistent_path_without_creating_or_replacing_it(tmp_path, kind):
-    path, trace, inject = tmp_path/'nodes.db', tmp_path/'trace', tmp_path/'inject.cjs'
+def test_preflight_refuses_invalid_persistent_path_without_creating_or_replacing_it(preflight_case_dir, kind):
+    path, trace, inject = preflight_case_dir/'nodes.db', preflight_case_dir/'trace', preflight_case_dir/'inject.cjs'
     inject.write_text(INJECTOR)
     if kind == 'corrupt': path.write_bytes(b'synthetic corrupt catalog')
+    child_identity = {}
     if kind == 'readonly':
-        if os.geteuid() == 0: pytest.skip('root can write read-only files')
         catalog(path)
-        path.chmod(0o400)
+        path.chmod(0o444)
+        if os.geteuid() == 0:
+            nobody = pwd.getpwnam('nobody')
+            child_identity = {'user': nobody.pw_uid, 'group': nobody.pw_gid, 'extra_groups': ()}
+            trace.touch(mode=0o666)
+            trace.chmod(0o666)
+        # Confirm the exact child identity can read but cannot write the catalog.
+        probe = subprocess.run(['node', '-e', "const fs=require('node:fs'); fs.accessSync(process.argv[1], fs.constants.R_OK); try { fs.accessSync(process.argv[1], fs.constants.W_OK); process.exit(1); } catch {}", str(path)],
+                               capture_output=True, text=True, timeout=10, **child_identity)
+        assert probe.returncode == 0, (probe.stdout, probe.stderr)
     original = path.read_bytes() if path.exists() else None
     env = env_for('' if kind == 'empty' else path, trace, 'native', 0)
     result = subprocess.run(['node', '--require', str(inject), '--require', str(POLICY), '-e', "console.log('started')"],
-                            env=env, capture_output=True, text=True, timeout=10)
+                            env=env, capture_output=True, text=True, timeout=10, **child_identity)
     assert result.returncode != 0 and 'persistent catalog requires native SQLite' in result.stderr
     assert str(path) not in result.stderr
     assert (path.read_bytes() if path.exists() else None) == original
