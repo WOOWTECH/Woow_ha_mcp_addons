@@ -199,23 +199,37 @@ def test_preflight_refuses_invalid_persistent_path_without_creating_or_replacing
     inject.write_text(INJECTOR)
     if kind == 'corrupt': path.write_bytes(b'synthetic corrupt catalog')
     child_identity = {}
+    policy = POLICY
     if kind == 'readonly':
         catalog(path)
         path.chmod(0o444)
         if os.geteuid() == 0:
             nobody = pwd.getpwnam('nobody')
             child_identity = {'user': nobody.pw_uid, 'group': nobody.pw_gid, 'extra_groups': ()}
+            inject.chmod(0o644)
             trace.touch(mode=0o666)
             trace.chmod(0o666)
-        # Confirm the exact child identity can read but cannot write the catalog.
-        probe = subprocess.run(['node', '-e', "const fs=require('node:fs'); fs.accessSync(process.argv[1], fs.constants.R_OK); try { fs.accessSync(process.argv[1], fs.constants.W_OK); process.exit(1); } catch {}", str(path)],
-                               capture_output=True, text=True, timeout=10, **child_identity)
+            # The checkout (including its ancestors) may be inaccessible to nobody.
+            # Give the child its own readable copy of the real policy and dependencies.
+            app = preflight_case_dir/'app'
+            app.mkdir()
+            policy = app/'backend_policy.cjs'
+            shutil.copyfile(POLICY, policy)
+            shutil.copytree(APP/'node_modules', app/'node_modules')
+            for directory, dirs, files in os.walk(app):
+                Path(directory).chmod(0o755)
+                for name in files:
+                    file = Path(directory)/name
+                    file.chmod(file.stat().st_mode | 0o444)
+        # Verify the same identity can load native SQLite and read, but not write, the catalog.
+        probe = subprocess.run(['node', '-e', "const fs=require('node:fs'); const D=require('node:module').createRequire(process.argv[2])('better-sqlite3'); new D(':memory:').close(); fs.accessSync(process.argv[1], fs.constants.R_OK); try { fs.accessSync(process.argv[1], fs.constants.W_OK); process.exit(1); } catch {}", str(path), str(policy)],
+                               cwd=preflight_case_dir, capture_output=True, text=True, timeout=10, **child_identity)
         assert probe.returncode == 0, (probe.stdout, probe.stderr)
     original = path.read_bytes() if path.exists() else None
     env = env_for('' if kind == 'empty' else path, trace, 'native', 0)
-    result = subprocess.run(['node', '--require', str(inject), '--require', str(POLICY), '-e', "console.log('started')"],
-                            env=env, capture_output=True, text=True, timeout=10, **child_identity)
-    assert result.returncode != 0 and 'persistent catalog requires native SQLite' in result.stderr
+    result = subprocess.run(['node', '--require', str(inject), '--require', str(policy), '-e', "console.log('started')"],
+                            cwd=preflight_case_dir, env=env, capture_output=True, text=True, timeout=10, **child_identity)
+    assert result.returncode != 0 and 'persistent catalog requires native SQLite' in result.stderr, (result.stdout, result.stderr)
     assert str(path) not in result.stderr
     assert (path.read_bytes() if path.exists() else None) == original
     assert not trace.exists() or 'sqljs' not in trace.read_text()
