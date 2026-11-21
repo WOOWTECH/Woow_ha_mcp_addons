@@ -21,6 +21,20 @@ def catalog(tmp_path):
     return root, seed, path
 
 
+def test_packaged_seed_history_is_not_exposed_and_source_is_unchanged(tmp_path):
+    root = tmp_path / 'data'
+    root.mkdir(mode=0o700)
+    seed = tmp_path / 'seed.db'
+    shutil.copyfile(n8n_adapter.PACKAGED_CATALOG, seed)
+    with sqlite3.connect(seed) as db:
+        db.execute("INSERT INTO workflow_versions(instance_id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES('', 'seed-only', 1, 'name', '{}', 'full_update')")
+    before = seed.read_bytes()
+    target = persistent_catalog.prepare(root, 'default', STATE, seed)
+    with sqlite3.connect(target) as db:
+        assert db.execute('SELECT count(*) FROM workflow_versions').fetchone() == (0,)
+    assert seed.read_bytes() == before
+
+
 def add_history(db):
     for scope in ('', 'instance-X'):
         db.execute('INSERT INTO workflow_versions(instance_id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES(?,?,?,?,?,?)',
@@ -35,6 +49,7 @@ def test_seed_upgrade_preserves_every_history_field_scope_and_sequence(catalog):
         rows = db.execute('SELECT * FROM workflow_versions ORDER BY id').fetchall()
     with sqlite3.connect(seed) as db:
         db.execute("UPDATE nodes SET description='UPDATED-TEST-SEED' WHERE node_type=(SELECT node_type FROM nodes LIMIT 1)")
+        db.execute("INSERT INTO workflow_versions(instance_id,workflow_id,version_number,workflow_name,workflow_snapshot,trigger) VALUES('', 'seed-only', 1, 'name', '{}', 'full_update')")
     result = persistent_catalog.prepare(root, 'default', STATE, seed)
     with sqlite3.connect(result) as db:
         assert db.execute('SELECT * FROM workflow_versions ORDER BY id').fetchall() == rows

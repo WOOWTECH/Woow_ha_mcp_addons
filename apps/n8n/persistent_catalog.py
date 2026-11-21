@@ -112,8 +112,11 @@ def _refresh(source, old, temporary, digest):
             seed.backup(copy)
     _validate(temporary, reference=source)
     with closing(sqlite3.connect(temporary.as_uri() + '?mode=rw', uri=True)) as db:
-        if db.execute('SELECT 1 FROM workflow_versions LIMIT 1').fetchone():
-            raise ValueError('seed contains workflow history')
+        # Upstream's packaged catalog contains workflow history. Never
+        # expose it to a profile: erase it only from this disposable seed copy.
+        # Existing profile history is imported separately below.
+        db.execute('PRAGMA secure_delete=ON')
+        db.execute('DELETE FROM workflow_versions')
         if old is not None:
             db.execute('ATTACH DATABASE ? AS prior', (old.as_uri() + '?mode=ro',))
             columns = ','.join('"' + name + '"' for name in HISTORY_NAMES)
