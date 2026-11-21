@@ -17,8 +17,8 @@ what that needs plus 25% when it is lower (never above the hard limit, no privil
 read or raised enough, the add-on degrades instead of guessing: no additional profile is served, the outer bound stays
 64, and one WARNING says so (HM-03a confirms the HAOS values).
 
-n8n keeps its own runtime (apps/n8n/run.py) until HM-25; OpenDesign and Odoo Manage have no additional profiles
-(DQ-28) and are never switched on.
+HM-25: n8n's runtime is run_product's too (apps/n8n/run.py runs it with the n8n adapter), so every test here runs for
+n8n as well; OpenDesign and Odoo Manage have no additional profiles (DQ-28) and are never switched on.
 """
 import hashlib
 import hmac
@@ -33,12 +33,13 @@ import test_single_profile_golden as golden
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import (SWITCHABLE, Children, create_profile, multi_profile_runtime, stored, switched_on)
 from mcp_admin_core import profile_runtime, profiles
+from mcp_admin_core.products import ProductState
 from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, GENUINE_CLIENT, INGRESS, NOT_FOUND, answer, configure,
                                         initialize_message, production_runtime, settle)
-from test_upgrade_zero_rewrite import tree_facts
+from test_upgrade_zero_rewrite import n8n_catalog_entries, tree_facts
 
 pytestmark = pytest.mark.usefixtures('log_scan')
-RUN_PRODUCTS = [product for product in golden.PRODUCTS if product != 'n8n']
+RUN_PRODUCTS = list(golden.PRODUCTS)  # HM-25: n8n's runtime is run_product's too
 B = 'a' * 24
 
 
@@ -152,8 +153,9 @@ async def test_switched_off_profile_data_on_disk_is_revoked_and_nothing_else_cha
     """Profile data on disk (an index and a profile directory) while the product is switched off: its token is an
     unknown token on both paths, and HM-13b's boot guard revoked it before anything was served (dormant profiles, plan
     3.3: the token None, a new child token, the restore record's dormant part); every other entry under /data/mcp stays
-    as it was, the index included (ctime aside: the default state is re-chmod'ed at every read,
-    test_upgrade_zero_rewrite.start_facts)."""
+    as it was, the index included; n8n additionally prepares its persistent catalog (contract #47).
+    Ctime aside: the default state is re-chmod'ed at every read,
+    test_upgrade_zero_rewrite.start_facts."""
     data = tmp_path / 'data'
     configure(data, product)
     create_profile(data, product, B, label='Beta Ops', port=18000)
@@ -174,7 +176,10 @@ async def test_switched_off_profile_data_on_disk_is_revoked_and_nothing_else_cha
     revoked = ('.', f'profiles/{B}', f'profiles/{B}/state.json')
     assert {name: after[name] for name in before if name not in revoked} == {
         name: facts for name, facts in before.items() if name not in revoked}
-    assert set(after) - set(before) == {profiles.RESTORE_RECORD_NAME}
+    expected_new = {profiles.RESTORE_RECORD_NAME}
+    if product == 'n8n':
+        expected_new |= n8n_catalog_entries(data, ProductState.model_validate_json((data / 'state.json').read_bytes()))
+    assert set(after) - set(before) == expected_new
     state = stored(profiles.Layout(data).profile(B))
     assert state['token'] is None and state['child_token'] != child
 

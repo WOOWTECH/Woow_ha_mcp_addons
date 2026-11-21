@@ -579,23 +579,33 @@ async def pinned_agents(spec, urls, **extra):
     return json.loads(out.splitlines()[-1])
 
 
+async def test_n8n_container_benchmark_address_obeys_the_actual_strict_node_policy(tmp_path, switch):
+    """The acceptance mock can connect; private, loopback and link-local remain denied."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    urls = [f'http://{address}:5678' for address in
+            ('198.18.31.2', '10.0.0.2', '127.0.0.1', '169.254.169.254')]
+    assert await pinned_agents(spec, urls) == {
+        urls[0]: True, urls[1]: NODE_DENIED, urls[2]: NODE_DENIED, urls[3]: NODE_DENIED}
+
+
 async def test_n8n_refuses_a_loopback_backend_once_switched_on(tmp_path, switch):
     switch('n8n')
     spec = n8n_spec(tmp_path)
     variables = spec.env.get(ENV), spec.env.get('WEBHOOK_SECURITY_MODE')  # never spec.env itself in an assertion
-    assert variables == ('1', 'permissive'), variables
+    assert variables == ('1', 'strict'), variables
     result = await pinned_agents(spec, LOOPBACK_URLS + LAN_URLS, **LOOKALIKES)
     assert {url: result[url] for url in LOOPBACK_URLS} == {url: NODE_DENIED for url in LOOPBACK_URLS}
-    assert {url: result[url] for url in LAN_URLS} == {url: True for url in LAN_URLS}
+    assert {url: result[url] for url in LAN_URLS} == {url: NODE_DENIED for url in LAN_URLS}
 
 
-async def test_n8n_switched_off_connects_to_loopback_as_before(tmp_path, switch):
+async def test_n8n_switched_off_also_rejects_loopback_in_strict_mode(tmp_path, switch):
     switch()
     spec = n8n_spec(tmp_path)
     variable = spec.env.get(ENV)  # never spec.env itself in an assertion
     assert variable is None, variable
     urls = ['http://127.0.0.1:5678', 'http://[::1]:5678', 'http://localhost:5678', 'http://rebind.invalid:5678']
-    assert await pinned_agents(spec, urls) == {url: True for url in urls}
+    assert await pinned_agents(spec, urls) == {url: NODE_DENIED for url in urls}
 
 
 FAKE_N8N = '''
@@ -611,7 +621,7 @@ const fake = http.createServer((request, response) => {
 
 
 @pytest.mark.parametrize('on', [True, False])
-async def test_the_api_and_the_official_mcp_client_reach_a_loopback_n8n_only_when_switched_off(tmp_path, switch, on):
+async def test_the_api_and_the_official_mcp_client_reject_loopback_in_strict_mode(tmp_path, switch, on):
     """Both clients of the configured instance: the API (pinned agents) and the official MCP endpoint
     (<origin>/mcp-server/http with the instance-level MCP access token, pinned fetch)."""
     switch('n8n') if on else switch()
@@ -635,17 +645,12 @@ fake.listen(0, '127.0.0.1', async () => {
     status, out, err = await node(spec, code)
     assert status == 0, err[-3000:]
     result = json.loads(out.splitlines()[-1])
-    if on:
-        assert result['api_requests'] == 0 and result['official_requests'] == 0, result
-        assert NODE_DENIED in result['api'] and result['official'] == NODE_DENIED, result
-    else:
-        assert result['api_requests'] >= 1 and result['official_requests'] >= 1, result
+    assert result['api_requests'] == 0 and result['official_requests'] == 0, result
+    assert NODE_DENIED in result['api'] and result['official'] != 'connected', result
 
 
-async def test_n8n_webhooks_stay_permissive_with_the_variable(tmp_path, switch):
-    """WEBHOOK_SECURITY_MODE=permissive is kept (owner decision 2026-10-15, kept 2026-11-15; HM-25 reviews it before
-    n8n is switched on): a loopback webhook URL is still valid and its pinned agents are still made. Only the
-    configured instance's own clients refuse loopback."""
+async def test_n8n_webhooks_are_strict_with_the_variable(tmp_path, switch):
+    """Strict validation rejects a loopback webhook before pinned agents are used."""
     switch('n8n')
     spec = n8n_spec(tmp_path)
     code = IMPORT + '''
@@ -666,7 +671,7 @@ async def test_n8n_webhooks_stay_permissive_with_the_variable(tmp_path, switch):
     status, out, err = await node(spec, code)
     assert status == 0, err[-3000:]
     result = json.loads(out.splitlines()[-1])
-    assert result['webhook'] is True and result['agents'] == 'object'
+    assert result['webhook'] is False and result['agents'] == 'object'
     assert result['fetches'] == {'10.0.0.2': True, 'fd12::1': True, '127.0.0.1': NODE_DENIED, '127.9.9.9': NODE_DENIED,
                                  '::1': NODE_DENIED, '0.0.0.0': NODE_DENIED, '::': NODE_DENIED,
                                  '::ffff:127.0.0.1': NODE_DENIED, '::ffff:0.0.0.0': NODE_DENIED}

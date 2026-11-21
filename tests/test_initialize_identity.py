@@ -185,4 +185,6 @@ def test_reviewed_instructions_are_fixed_and_nextcloud_matches_its_vendored_serv
 def test_entry_points_name_their_product():
     run_product = (ROOT / "packages/mcp-admin-core/mcp_admin_core/run_product.py").read_text()
     assert "server_name='woow-mcp-' + args.product, instructions=INSTRUCTIONS.get(args.product)" in run_product
-    assert 'server_name="woow-mcp-n8n"' in (ROOT / "apps/n8n/run.py").read_text()
+    # HM-25: apps/n8n/run.py runs run_product's runtime as product n8n: 'woow-mcp-n8n' by the rule above.
+    n8n = (ROOT / "apps/n8n/run.py").read_text()
+    assert "'product': 'n8n'" in n8n and "run_product.run(" in n8n and "server_name" not in n8n

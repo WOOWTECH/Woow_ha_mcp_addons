@@ -6,6 +6,7 @@ canonicalizes IPv6 first; permissive still admits private, ULA and loopback). Th
 unchanged.
 """
 import json
+import shutil
 from pathlib import Path
 import subprocess
 
@@ -17,11 +18,11 @@ from n8n_adapter import child_spec
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_child_runs_in_permissive_webhook_mode(tmp_path):
+def test_child_runs_in_strict_webhook_mode(tmp_path):
     state = ProductState(product='n8n', token='a' * 43, child_token='b' * 43)
-    assert child_spec(state, tmp_path).env['WEBHOOK_SECURITY_MODE'] == 'permissive'
+    assert child_spec(state, tmp_path).env['WEBHOOK_SECURITY_MODE'] == 'strict'
     configured = state.model_copy(update={'backend_url': 'http://172.30.33.10:5678', 'backend_key': 'api-key-0815'})
-    assert child_spec(configured, tmp_path).env['WEBHOOK_SECURITY_MODE'] == 'permissive'
+    assert child_spec(configured, tmp_path).env['WEBHOOK_SECURITY_MODE'] == 'strict'
 
 
 @pytest.mark.parametrize('url,permissive', [
@@ -34,7 +35,7 @@ def test_pinned_n8n_mcp_permissive_mode_reaches_private_addresses_only_metadata_
             "  out[mode] = [await SSRFProtection.validateWebhookUrl(process.argv[2]), SSRFProtection.validateUrlSync(process.argv[2])]; }"
             " console.log(JSON.stringify(out)); })();")
     module = ROOT / 'apps/n8n/node_modules/n8n-mcp/dist/utils/ssrf-protection.js'
-    result = subprocess.run(['node', '-e', code, str(module), url], capture_output=True, text=True, timeout=20,
+    result = subprocess.run([shutil.which('node'), '-e', code, str(module), url], capture_output=True, text=True, timeout=20,
                             env={'PATH': '/usr/local/bin:/usr/bin:/bin'}, cwd=ROOT)
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout.strip().splitlines()[-1])

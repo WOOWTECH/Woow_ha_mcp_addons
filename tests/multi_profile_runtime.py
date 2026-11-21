@@ -22,6 +22,12 @@ only the outside replaced), except that:
 
 No socket is opened on 3000 or 18000-18099 (tests/owned_network.py): MockTransport opens none, and real children listen
 on ephemeral ports.
+
+HM-25: n8n's runtime is run_product's (apps/n8n/run.py runs it with the n8n adapter), so n8n runs here too, through
+apps/n8n/run.py's run. Its node catalog copies are made from a small stand-in file under the data directory's parent
+(n8n_adapter.PACKAGED_CATALOG and CATALOG_DIR), never the 70 MB package file and never /tmp/woow-n8n-mcp: the default
+profile's is skipped as HM-01's harness skips it (prepare_catalog), each additional profile's is made as production
+makes it (prepare_child, in a worker thread).
 """
 from __future__ import annotations
 
@@ -39,6 +45,8 @@ import httpx
 import pytest
 import uvicorn
 
+import n8n_adapter
+import run as n8n_run
 from mcp_admin_core import features, profile_runtime, profiles, restore_detect, run_product
 from mcp_admin_core.products import ProductStore, profile_initial_state
 from test_profile_runtime import ProfileChild, connection_of
@@ -46,9 +54,10 @@ from test_single_profile_golden import (ADMIN, GENUINE_CLIENT, INGRESS, PROBE_AN
                                         NoProcessSupervisor, probe_name)
 
 EXTRA_PORTS = range(18000, 18006)  # additional profiles' index ports behind MockTransport (never connected)
-# Every product whose runtime is run_product and that has additional profiles (n8n: apps/n8n/run.py until HM-25;
-# OpenDesign and Odoo Manage: none, DQ-28).
-SWITCHABLE = ('odoo', 'hermes', 'emqx', 'litellm', 'nextcloud', 'headscale')
+# Every product whose runtime is run_product and that has additional profiles (n8n through apps/n8n/run.py since
+# HM-25; OpenDesign and Odoo Manage: none, DQ-28).
+SWITCHABLE = ('odoo', 'hermes', 'emqx', 'litellm', 'nextcloud', 'headscale', 'n8n')
+CATALOG_STAND_IN = b'SQLite format 3\x00' + b'stand-in node catalog' * 64  # HM-25: what n8n's catalog copies copy here
 
 
 def ids(count):
@@ -200,7 +209,7 @@ CLOSE_SECONDS = 30
 @asynccontextmanager
 async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None, real_children=False,
                                 default_port=None, launch_extras=True, switch=True, children=None, resources=None,
-                                stagger=None, verifier=None, may_stop=False):
+                                stagger=None, verifier=None, may_stop=False, sqlite_catalog=True):
     """run_product.run of *product* on *data* with the switch on (switch=False: off), the outside replaced as
     production_runtime replaces it. children: a Children for MockTransport (left out: the default profile's golden
     MockChild on 3000, nobody else's); real_children:
@@ -250,10 +259,30 @@ async def multi_profile_runtime(product, data, *, sockets=False, supervisor=None
         if resources is not None:
             patch.setattr(profile_runtime, 'resource', resources)
         patch.setattr(profile_runtime, 'STAGGER_SECONDS', 0.05 if stagger is None else stagger)
+        runner = run_product.run
+        if product == 'n8n':  # HM-25: apps/n8n/run.py runs run_product's runtime with the n8n adapter
+            from mcp_admin_core import n8n_ssrf
+            from urllib.parse import urlsplit
+            original_check = n8n_ssrf.check_url
+            async def fixture_check(url, mode=None):
+                if (urlsplit(url).hostname or '').endswith('.invalid'):
+                    return n8n_ssrf.SsrfCheck(True, addresses=['8.8.8.8'])
+                return await original_check(url, mode)
+            patch.setattr(n8n_ssrf, 'check_url', fixture_check)
+            runner = n8n_run.run
+            catalogs = Path(data).parent / 'n8n-catalogs'
+            catalogs.mkdir(mode=0o700, exist_ok=True)
+            (catalogs / 'source.db').write_bytes(CATALOG_STAND_IN)
+            if sqlite_catalog:
+                import shutil
+                (catalogs / 'source.db').unlink()
+                shutil.copyfile(Path(n8n_adapter.__file__).parent / 'node_modules/n8n-mcp/data/nodes.db', catalogs / 'source.db')
+            patch.setattr(n8n_adapter, 'PACKAGED_CATALOG', catalogs / 'source.db')
+            patch.setattr(n8n_adapter, 'CATALOG_DIR', catalogs / 'copies')
+            patch.setattr(n8n_adapter, '_profile_catalogs', {})
         args = SimpleNamespace(data=Path(data), product=product, host='127.0.0.1',
                                admin_port=0 if sockets else 8099, mcp_port=0 if sockets else 8081)
-        task = asyncio.create_task(run_product.run(args, **({} if default_port is None
-                                                            else {'child_port': default_port})))
+        task = asyncio.create_task(runner(args, **({} if default_port is None else {'child_port': default_port})))
         try:
             async with asyncio.timeout(15):
                 while not (len(listeners) == 2 and all(listener.started for listener in listeners)):

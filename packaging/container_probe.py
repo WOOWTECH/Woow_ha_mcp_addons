@@ -1,6 +1,6 @@
-"""Executed ONLY in a disposable network-none image with tmpfs /data.
+"""Executed ONLY in a disposable container with tmpfs /data and no external network.
 
-Actual packaged entrypoint and real child; owned loopback mock backend. Fixture
+Actual packaged entrypoint and real child; owned synthetic backend. Fixture
 state edits occur ONLY while stopped. No production administrator trust bypass.
 Do not run this against a real /data; host harness always supplies an empty tmpfs.
 """
@@ -181,6 +181,8 @@ async def ready_listener(client, process):
 
 
 def fixture_snapshot():
+    if APP == 'n8n':
+        return container_profiles.tree_snapshot(DATA, n8n=True)
     if features.enabled(APP):
         # Multi-profile HM-16 (C4-SF-5): only a switched-on product's /data/mcp may hold the multi-profile layout
         # (profiles/, the index, the restore files), within the restore repair's rules and budget.
@@ -297,6 +299,14 @@ async def restored_start(client):
 
 
 def mock_bind_host(app):
+    if app == 'n8n':
+        from mcp_admin_core.n8n_ssrf import address_block_reason
+        host = socket.gethostbyname(socket.gethostname())
+        address = ipaddress.ip_address(host)
+        assert (address.version == 4 and address in ipaddress.ip_network('198.18.0.0/15')
+                and allowed_address(host) and address_block_reason(host, 'strict') is None), \
+            'n8n mock needs isolated benchmarking address'
+        return host
     if app != 'headscale' and features.enabled(app):
         # Multi-profile HM-16 (HM-20 review MF-2): every child of a switched-on product refuses a loopback backend, as
         # Headscale's child does: container_acceptance gives it the same one-use internal bridge, and its mock listens

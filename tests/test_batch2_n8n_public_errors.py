@@ -3,6 +3,8 @@ import asyncio
 import json
 import threading
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import replace
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
@@ -50,7 +52,7 @@ BRANCHES = [
 
 @contextmanager
 def backend():
-    state = {'case': 404, 'calls': [], 'keys': [], 'failures': []}
+    state = {'case': 404, 'calls': [], 'keys': [], 'failures': [], 'queries': []}
 
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
@@ -67,6 +69,7 @@ def backend():
                 key = self.headers['X-N8N-API-KEY']
                 state['keys'].append(key)
                 state['calls'].append((self.command, self.path.split('?')[0], raw))
+                state['queries'].append(self.path)
                 case = state['case']
                 private = PRIVATE + ':' + key
                 status = case if type(case) is int else 400
@@ -147,6 +150,10 @@ async def runtime(tmp_path):
             wire.append(await response.aread())
         try:
             process.spec = private_spec(spec, 'n8n', port)
+            # Only this owned synthetic backend gets a test-local policy replacement.
+            argv = process.spec.argv
+            hook = str(Path(__file__).with_name('n8n_owned_backend.cjs'))
+            process.spec = replace(process.spec, argv=(*argv[:-1], '--require', hook, argv[-1]))
             reservation.close()
             await process.start()
             proof = await wait_owned_listener(process, port)

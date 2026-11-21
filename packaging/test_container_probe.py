@@ -90,6 +90,8 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
 
     def test_a_switched_on_product_s_mock_listens_on_the_container_s_private_address(self):
         for app in sorted(features.KNOWN_PRODUCTS):
+            if app == 'n8n':
+                continue  # n8n's strict policy uses the isolated benchmarking bridge
             with self.subTest(app=app), switched(app), patch.object(probe.socket, 'gethostname', return_value='candidate'), \
                     patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
                 self.assertEqual(probe.mock_bind_host(app), '172.18.0.2')
@@ -104,6 +106,8 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
                 patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
             for app in sorted(features.KNOWN_PRODUCTS):
                 with self.subTest(app=app):
+                    if app == 'n8n':
+                        continue
                     self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if app == 'headscale' else '127.0.0.1')
 
     def test_the_repository_switch_decides_it(self):
@@ -112,8 +116,22 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
                 patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
             for app in sorted(features.KNOWN_PRODUCTS):
                 with self.subTest(app=app):
+                    if app == 'n8n':
+                        continue
                     private = app == 'headscale' or app in features.MULTI_PROFILE_PRODUCTS
                     self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if private else '127.0.0.1')
+
+    def test_n8n_always_requires_benchmarking_space(self):
+        for enabled in (False, True):
+            with switched(*(['n8n'] if enabled else [])):
+                with patch.object(probe.socket, 'gethostbyname', return_value='198.18.31.2'):
+                    self.assertEqual(probe.mock_bind_host('n8n'), '198.18.31.2')
+                for address in ('127.0.0.1', '10.0.0.2', '198.20.0.2', '8.8.8.8'):
+                    with patch.object(probe.socket, 'gethostbyname', return_value=address):
+                        with self.assertRaises(AssertionError):
+                            probe.mock_bind_host('n8n')
+
+
 
 
 # The single-profile probe as reviewed: d922d3c is HM-13c's c5dd7d3 (claude-delivery 53ffe61 with HM-13b's restore
@@ -144,11 +162,28 @@ class WithoutSwitchedOnAdditions(ast.NodeTransformer):
 
     def __init__(self):
         self.removed = []
+        self.function = None
+
+    def visit_FunctionDef(self, node):
+        previous, self.function = self.function, node.name
+        self.generic_visit(node)
+        self.function = previous
+        return node
 
     def drop(self, kind, node):
         self.removed.append((kind, node))
 
     def visit_If(self, node):
+        # The n8n candidate intentionally changes only these two single-profile
+        # branches; dedicated tests below check their behavior and isolation.
+        if (self.function in ('fixture_snapshot', 'mock_bind_host')
+                and isinstance(node.test, ast.Compare) and isinstance(node.test.left, ast.Name)
+                and node.test.left.id in ('APP', 'app') and len(node.test.ops) == 1
+                and isinstance(node.test.ops[0], ast.Eq) and len(node.test.comparators) == 1
+                and isinstance(node.test.comparators[0], ast.Constant)
+                and node.test.comparators[0].value == 'n8n'
+                and not node.orelse):
+            return None
         if is_switched_on_branch(node):
             return self.drop('branch', node)
         return self.generic_visit(node)
@@ -167,6 +202,9 @@ class WithoutSwitchedOnAdditions(ast.NodeTransformer):
 def without_switched_on_parts(source):
     """(the module's AST without its switched-on parts, {ast.dump of a removed part: (kind, node, how many)})."""
     tree = ast.parse(source)
+    # The module description now documents the n8n bridge; compare executable statements.
+    if ast.get_docstring(tree) is not None:
+        tree.body.pop(0)
     stripping = WithoutSwitchedOnAdditions()
     stripping.visit(tree)
     parts = {}
@@ -262,6 +300,15 @@ class FixtureSnapshotTests(unittest.TestCase):
         with switched(probe.APP), patch.object(probe.container_profiles, 'tree_snapshot', return_value={'x': 1}) as tree:
             self.assertEqual(probe.fixture_snapshot(), {'x': 1})
         tree.assert_called_once_with(self.data)
+
+
+    def test_n8n_uses_catalog_snapshot_with_switch_on_and_off(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled), patch.object(probe, 'APP', 'n8n'), \
+                    switched(*(['n8n'] if enabled else [])), \
+                    patch.object(probe.container_profiles, 'tree_snapshot', return_value={'catalog': 1}) as tree:
+                self.assertEqual(probe.fixture_snapshot(), {'catalog': 1})
+                tree.assert_called_once_with(self.data, n8n=True)
 
 
 CHILD_TOKEN = 'C' * 43  # tests/fixtures/owner_defaults/README.md: a child token in test data

@@ -26,6 +26,9 @@
   HM-18（2026-11-19）把已知限制與事故處理寫進 `docs/operations/guide.md`（產品的 DOCS 在 `addons/<產品>/`，交開通那一版的升版片），第 3 節
   暫時性錯誤那一條寫明 HM-18 不改程式、Origin 的兩條寫明已寫進哪些文件；依 HM-18 的獨立審查改第 4 節第 5 步（沒有帳號資料的還原不撤銷
   預設帳號、還原帶回舊憑證）、第 3 節偵測那一條補區塊層級的回滾（同日，審查 MF-2、S-9）。
+  HM-25 在第 3 節加 n8n 的兩條（webhook 網址照舊 `permissive`、每帳號的 catalog 副本不是安全邊界；2026-11-19），交 HM-25 之後的獨立安全審查；
+  依那次審查（S-2、S-7、S-8）改寫 webhook 那條（只有 DNS rebinding 打得到 loopback）並補三件、副本那條補換後端時重做、加版本歷史沒有上限一條（同日）；
+  合併 `claude-delivery` `95b7e9d`（HM-18）之後照原樣接在 HM-18 的 Bearer 那條後面（同日）。
 - 來源：計畫 §8.1、§8.2、§8.9、§8.10（repo 外）；決策見 `decisions.md`（DQ-37 採 (a)：接受同 uid 信任邊界並寫明）。
 - 契約與差異表：`contract.md`；不變式對應的測試檔：`acceptance-matrix.md` 的測試檔登記表。
 
@@ -243,6 +246,9 @@
   `docs/operations/update-backup-rollback.md`）。備份裡的政策檔不能用或是目錄時，還原後密鑰網址一律 503（目錄只能再還原別份備份）。
   收據檔照索引旁的封存，還原前的存檔重送一律 410，不會把備份之後的設定再寫一次。
 - Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14；HM-03b 沒做，交 HM-19b）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
+- n8n 的 webhook、chat、form 與設定的 API 後端採 `strict` SSRF 規則（2026-11-20 使用者要求與 PaaS 對齊）：拒絕 loopback、私網與 metadata，並驗證 DNS 全部答案後 pin。相同 n8n instance 的 webhook/form 仍是共用資源；若需隔離，請使用不同 instance 或設定 webhook 驗證。
+- 每個 n8n 帳號與後端身分有自己的持久 SQLite 檔，保存於帳號資料目錄並進入 cold backup。這避免工具經另一個帳號或後端讀到版本快照，但同 uid 的子程式仍能讀取所有檔案，不是安全邊界。換網址或 key 後的舊資料庫仍保留，刪除帳號時隨帳號目錄刪除。
+- 歷史快照可能包含敏感資訊，備份需要保護；歷史與不同後端的保留資料庫沒有總大小上限，可能佔滿資料磁碟並增加備份大小。
 
 ## 4. 事故處理：懷疑某個子程式或帳號被攻破（計畫 §8.10；HM-18 已寫進 `docs/operations/guide.md`）
 

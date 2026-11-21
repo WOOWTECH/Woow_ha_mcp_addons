@@ -22,7 +22,19 @@ CONNECTIONS = {
 
 
 @pytest.mark.parametrize('product', ['n8n', *CONNECTIONS])
-async def test_partial_url_update_preserves_secrets_and_requires_revision(tmp_path, product):
+async def test_partial_url_update_preserves_secrets_and_requires_revision(tmp_path, product, monkeypatch):
+    # Reserved test names have no real DNS records. Exercise the actual strict
+    # address policy with a deterministic public answer, without changing it.
+    import asyncio
+    import socket
+    original = asyncio.BaseEventLoop.getaddrinfo
+
+    async def resolve(loop, host, port, *args, **kwargs):
+        if host == 'new.test':
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', port))]
+        return await original(loop, host, port, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio.BaseEventLoop, 'getaddrinfo', resolve)
     restarts = []
     role = {'allowed': True}
     async def verify(_): return role['allowed']

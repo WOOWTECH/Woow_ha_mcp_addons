@@ -12,14 +12,16 @@ step, make_apps, HealthMonitor, ConfigurationState, child_spec and log redaction
 - the HA administrator check answers yes for the golden administrator (ADMIN), no for anyone else (n8n: the node
   catalog copy is skipped).
 
-These are the only injection points, all in production_runtime (module = run_product, or apps/n8n/run.py for n8n;
-profile = where that runtime makes its profile's child: mcp_admin_core.profile_runtime for run_product since HM-05,
-apps/n8n/run.py for n8n): profile.Supervisor (NoProcessSupervisor, or the subclass a test passes),
-profile.httpx.AsyncClient (every client built while the runtime runs gets MockTransport(MockChild) unless it names a
-transport; the tests' own clients are
-GENUINE_CLIENT), module.make_ha_admin_verifier, module.Listener (CapturedListener) and, for n8n, module.prepare_catalog.
-tests/test_admin_contract_freeze.py also replaces HealthMonitor.test_saved for one answer shape. HM-05 (the per-profile
-runtime extraction) may move these lines when the names they patch move, and nothing else here.
+These are the only injection points, all in production_runtime (module = the runtime's entry: run_product, or
+apps/n8n/run.py for n8n, which runs run_product's runtime since HM-25; profile = where that runtime makes its profile's
+child: mcp_admin_core.profile_runtime since HM-05, n8n's too since HM-25): profile.Supervisor (NoProcessSupervisor, or
+the subclass a test passes), profile.httpx.AsyncClient (every client built while the runtime runs gets
+MockTransport(MockChild) unless it names a transport; the tests' own clients are
+GENUINE_CLIENT), run_product.make_ha_admin_verifier, run_product.Listener (CapturedListener) and, for n8n,
+module.prepare_catalog. tests/test_admin_contract_freeze.py also replaces HealthMonitor.test_saved for one answer shape.
+HM-05 (the per-profile runtime extraction) may move these lines when the names they patch move, and nothing else here;
+HM-25 moved n8n's to run_product and profile_runtime (n8n's runtime is run_product's), and n8n's expected serverInfo
+version reads version_for_product as every other product's (the same bytes: n8n has no version override).
 
 Two states per product: "fresh" (a new installation, no backend) and "configured" (a backend saved, the child up and
 its readiness check passed). Fixed values below were read in gateway.py, access.py, config.py, health.py and
@@ -53,7 +55,7 @@ import pytest
 
 import run as n8n_run
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import VERSION, features, profile_runtime, profiles, run_product, version_for_product
+from mcp_admin_core import features, profile_runtime, profiles, run_product, version_for_product
 from mcp_admin_core.lifecycle import Supervisor
 from mcp_admin_core.products import INSTRUCTIONS, PROBES, ProductStore, health_probe
 from mcp_admin_core.surface import listing
@@ -253,7 +255,7 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
     sockets=True keeps the real listeners (uvicorn, h11) on ephemeral loopback ports; mcp_port is the MCP one.
     supervisor: a NoProcessSupervisor subclass to use instead (tests/test_admin_contract_freeze.py: a failing start)."""
     module = n8n_run if product == 'n8n' else run_product
-    profile = n8n_run if product == 'n8n' else profile_runtime  # HM-05: run_product's profile is made there
+    profile = profile_runtime  # HM-05: run_product's profile is made there (HM-25: n8n's too)
     child = MockChild(product, data)
     listeners = []
 
@@ -261,7 +263,7 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
         kwargs.setdefault('transport', httpx.MockTransport(child))
         return GENUINE_CLIENT(*args, **kwargs)
 
-    class CapturedListener(module.Listener):
+    class CapturedListener(run_product.Listener):
         def __init__(self, config):
             super().__init__(config)
             listeners.append(self)
@@ -278,10 +280,12 @@ async def production_runtime(product, data, *, sockets=False, supervisor=None):
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(profile, 'Supervisor', supervisor or NoProcessSupervisor)
         patch.setattr(profile.httpx, 'AsyncClient', child_client)
-        patch.setattr(module, 'make_ha_admin_verifier', lambda: administrator)
-        patch.setattr(module, 'Listener', CapturedListener)
+        patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
+        patch.setattr(run_product, 'Listener', CapturedListener)
         if product == 'n8n':
-            patch.setattr(module, 'prepare_catalog', lambda: None)  # a 70 MB copy outside /data, not under test
+            async def prepare_child(*args, **kwargs):
+                pass  # persistence is exercised separately with real SQLite
+            patch.setattr(module, 'prepare_child', prepare_child)
         args = SimpleNamespace(data=Path(data), product=product, host='127.0.0.1',
                                admin_port=0 if sockets else 8099, mcp_port=0 if sockets else 8081)
         task = asyncio.create_task(module.run(args))
@@ -334,8 +338,7 @@ def initialize_message(ident=1):
 def initialize_body(product, ident=1):
     """The gateway's own initialize result (gateway.py: local_initialize and the rebuilt child answer)."""
     result = {'protocolVersion': PROTOCOL, 'capabilities': {'tools': {}},
-              'serverInfo': {'name': 'woow-mcp-' + product,
-                             'version': VERSION if product == 'n8n' else version_for_product(product)}}
+              'serverInfo': {'name': 'woow-mcp-' + product, 'version': version_for_product(product)}}
     if product in INSTRUCTIONS:
         result['instructions'] = INSTRUCTIONS[product]
     return json.dumps({'jsonrpc': '2.0', 'id': ident, 'result': result}, separators=(',', ':')).encode()

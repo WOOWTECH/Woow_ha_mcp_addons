@@ -31,7 +31,7 @@ def probe_run(app, network):
 
 
 class CandidateInvocationTests(unittest.TestCase):
-    def invoke(self, app, *, internal=True, run_fails=False):
+    def invoke(self, app, *, internal=True, run_fails=False, subnet='198.18.31.0/24'):
         version = acceptance.version_for(app)
         image = f'local/mcp-{app}:{version}'
         metadata = {'Architecture': 'amd64', 'Os': 'linux', 'Id': IMAGE_ID,
@@ -50,7 +50,8 @@ class CandidateInvocationTests(unittest.TestCase):
                 return NETWORK_ID + '\n'
             if command[:3] == ['docker', 'network', 'inspect']:
                 return json.dumps([{'Id': NETWORK_ID, 'Internal': internal,
-                                    'Driver': 'bridge', 'Containers': {}}]).encode()
+                                    'Driver': 'bridge', 'Containers': {},
+                                    'IPAM': {'Config': [{'Subnet': subnet}]}}]).encode()
             raise AssertionError(command)
 
         def run(command, **kwargs):
@@ -64,12 +65,13 @@ class CandidateInvocationTests(unittest.TestCase):
         with patch.object(acceptance.subprocess, 'check_output', side_effect=output), \
              patch.object(acceptance.subprocess, 'run', side_effect=run), \
              patch.object(acceptance.secrets, 'token_hex', return_value='c' * 16), \
+             patch.object(acceptance.secrets, 'randbelow', return_value=31), \
              patch('builtins.print'):
             if run_fails:
                 with self.assertRaises(subprocess.CalledProcessError):
                     acceptance.main(app, image, expected_id=IMAGE_ID)
-            elif not internal:
-                with self.assertRaisesRegex(AssertionError, 'mock network not isolated'):
+            elif not internal or (app == 'n8n' and subnet != '198.18.31.0/24'):
+                with self.assertRaisesRegex(AssertionError, 'mock network (not isolated|subnet mismatch)'):
                     acceptance.main(app, image, expected_id=IMAGE_ID)
             else:
                 acceptance.main(app, image, expected_id=IMAGE_ID)
@@ -91,6 +93,12 @@ class CandidateInvocationTests(unittest.TestCase):
                 commands = self.invoke('headscale', **options)
                 self.assertEqual(commands[-1], ['docker', 'network', 'rm', NETWORK_ID])
 
+    def test_n8n_removes_network_on_wrong_subnet_or_noninternal_bridge(self):
+        for options in ({'internal': False}, {'subnet': '10.0.0.0/24'}, {'run_fails': True}):
+            with self.subTest(options=options):
+                commands = self.invoke('n8n', **options)
+                self.assertEqual(commands[-1], ['docker', 'network', 'rm', NETWORK_ID])
+
     def test_existing_candidate_keeps_network_none(self):
         commands = self.invoke('emqx')
         self.assertEqual(len(commands), 2)
@@ -108,6 +116,12 @@ class CandidateInvocationTests(unittest.TestCase):
                             ['docker', 'network', 'create', '--internal', '--driver', 'bridge',
                              'woow-headscale-candidate-' + 'c' * 16], ['docker', 'network', 'inspect', NETWORK_ID],
                             probe_run(app, NETWORK_ID), ['docker', 'network', 'rm', NETWORK_ID]])
+                    elif app == 'n8n':
+                        self.assertEqual(commands[1:], [
+                            ['docker', 'network', 'create', '--internal', '--driver', 'bridge', '--subnet',
+                             '198.18.31.0/24', 'woow-n8n-candidate-' + 'c' * 16],
+                            ['docker', 'network', 'inspect', NETWORK_ID], probe_run(app, NETWORK_ID),
+                            ['docker', 'network', 'rm', NETWORK_ID]])
                     else:
                         self.assertEqual(commands[1:], [probe_run(app, 'none')])
                     self.assertEqual(self.limits, [180])
@@ -121,9 +135,10 @@ class CandidateInvocationTests(unittest.TestCase):
         for app in acceptance.PRODUCTS:
             with self.subTest(app=app), switched(app):
                 commands = self.invoke(app)
+                network_options = ['--subnet', '198.18.31.0/24'] if app == 'n8n' else []
                 self.assertEqual(commands[1:], [
                     ['docker', 'network', 'create', '--internal', '--driver', 'bridge',
-                     f'woow-{app}-candidate-' + 'c' * 16], ['docker', 'network', 'inspect', NETWORK_ID],
+                     *network_options, f'woow-{app}-candidate-' + 'c' * 16], ['docker', 'network', 'inspect', NETWORK_ID],
                     probe_run(app, NETWORK_ID), ['docker', 'network', 'rm', NETWORK_ID]])
                 self.assertEqual(self.limits, [acceptance.MULTI_PROFILE_PROBE_SECONDS])
                 self.assertEqual(acceptance.MULTI_PROFILE_PROBE_SECONDS, 360)
@@ -135,7 +150,7 @@ class CandidateInvocationTests(unittest.TestCase):
         for app in acceptance.PRODUCTS:
             with self.subTest(app=app):
                 commands = self.invoke(app)
-                bridged = app == 'headscale' or app in features.MULTI_PROFILE_PRODUCTS
+                bridged = app in ('headscale', 'n8n') or app in features.MULTI_PROFILE_PRODUCTS
                 self.assertEqual(commands[1][:4] == ['docker', 'network', 'create', '--internal'], bridged)
 
 

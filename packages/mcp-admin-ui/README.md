@@ -143,9 +143,10 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   的後端存檔（開通、會換 token 的產品）另加「存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址」
   （HM-12 審查 S-7：結果不明時重啟後 token 可能已換，這次的回應不會說）。
 - fixture 在開通模式照 HM-12 的回應表回答（`profiles.rebindFault` 布置三種失敗）；`tests/profile-api-cases.json` 的
-  `identity` 等 4 個情境錄自真後端。「沒存過的秘密不用帶」只有 n8n 碰得到（其他產品網址有值時秘密一定有值），而 n8n 要到
-  HM-25 才上帳號 runtime，真後端形狀比對跑不了：fixture 這邊由 `backend-identity.spec.mjs` 守，add-on 這邊由
-  `tests/test_new_origin_secret.py` 守（HM-12 面板審查 S-6）。
+  `identity` 等 4 個情境錄自真後端。「沒存過的秘密不用帶」只有 n8n 碰得到（其他產品網址有值時秘密一定有值）：fixture 這邊由
+  `backend-identity.spec.mjs` 守，add-on 這邊由 `tests/test_new_origin_secret.py` 守（HM-12 面板審查 S-6）。HM-25 讓 n8n
+  上了帳號 runtime 之後，情境 `new-origin-unset-secret` 也加進 `profile-api-cases.json`（在程序內對真的 8099 app 與替身子程式
+  錄的，標 `rerecord_on_real_backend`：n8n 的 HAOS 驗收時在真後端重錄，回應不同就改這裡）。
 
 ## 瀏覽器來源檢查（HM-27；還沒有產品開通）
 

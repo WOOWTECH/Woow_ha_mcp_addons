@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import socket
 import sys
 import time
@@ -16,7 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
-from mcp_admin_core import VERSION
+from mcp_admin_core import version_for_product
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.health import protocol_reply
 
@@ -69,7 +70,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     token = store.load().token
     store.close()
     admin_port, mcp_port = draw_public_ports(2)
-    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + ":" + str(ROOT / "apps/n8n")}
+    node_dir = str(Path(shutil.which('node')).parent)
+    env = {"PATH": node_dir + ":/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + ":" + str(ROOT / "apps/n8n")}
     runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
     code = 'import run; ' + runner.code('run') + 'run.main()'
     runner.release()
@@ -98,7 +100,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                         pass
                     await asyncio.sleep(0.2)
             # 0.1.8 (F6): the add-on's identity, not n8n-mcp's ("n8n-documentation-mcp" 2.96.2); no instructions.
-            assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": VERSION} and "instructions" not in result
+            # HM-25: n8n's runtime is run_product's, which gives the add-on's release version (version_for_product).
+            assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": version_for_product("n8n")} and "instructions" not in result
             assert result["capabilities"] == {"tools": {}}
             assert session
             headers["Mcp-Session-Id"] = session
@@ -121,48 +124,16 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                 schema = tool["inputSchema"]
                 assert schema.get("type") == "object" and not TOP_LEVEL_REFUSED & schema.keys(), tool["name"]
             if configured_backend:
-                # Forged instance headers must not redirect the real Node API path.
+                # A saved legacy loopback endpoint remains configured, but strict mode
+                # must prevent the backend request even with forged instance headers.
                 async with client.stream("POST", url, headers={**headers,
                     "x-n8n-url": "http://127.0.0.1:1", "x-n8n-key": "WRONG"}, json={
                         "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {
                             "name": "n8n_list_workflows", "arguments": {"limit": 1}}}) as response:
-                    backend_result = await protocol_reply(response, 9)
-                assert json.loads(backend_result["content"][0]["text"])["success"] is True
-                assert fake_backend[1]
-                assert all(b"X-N8N-API-KEY: DUMMY-local-only" in call for call in fake_backend[1])
-                assert all(b"WRONG" not in call for call in fake_backend[1])
-                async def workflow_call(arguments):
-                    return await client.post(url, headers=headers, json={
-                        "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": {
-                            "name": "n8n_list_workflows", "arguments": arguments}})
-
-                def workflow_queries():
-                    return [parse_qs(urlsplit(call.split(b" ")[1].decode()).query)
-                            for call in fake_backend[1]]
-
-                if check_defaults == "omission":
-                    # The health monitor uses limit=1; assert the *actual* Node API
-                    # query for each client call, not the advertised/local model.
-                    # 0.2.0: the published handler's own default (limit 100; the 0.1.x model sent 20).
-                    for arguments, expected in [({}, {"limit": ["100"], "excludePinnedData": ["true"]}),
-                            ({"active": False}, {"limit": ["100"], "active": ["false"], "excludePinnedData": ["true"]}),
-                            ({"active": True, "limit": 7}, {"limit": ["7"], "active": ["true"], "excludePinnedData": ["true"]})]:
-                        before = len(fake_backend[1])
-                        response = await workflow_call(arguments)
-                        assert response.status_code == 200
-                        result = await protocol_reply(response, 10)
-                        assert json.loads(result["content"][0]["text"])["success"] is True
-                        queries = workflow_queries()[before:]
-                        assert expected in queries, queries
-                else:
-                    # 0.2.0: the arguments reach the child unchanged; the child validates them (a null is its error,
-                    # never a backend query with it).
-                    for arguments in ({"active": None}, {"limit": None}):
-                        before = len(fake_backend[1])
-                        response = await workflow_call(arguments)
-                        assert response.status_code == 200
-                        assert all("null" not in json.dumps(query) for query in workflow_queries()[before:])
-                assert all(call.startswith(b"GET /api/v1/workflows?") for call in fake_backend[1])
+                    payload = await response.aread()
+                assert response.status_code == 200
+                assert b'"error"' in payload or b'"isError"' in payload, payload[:500]
+                assert not fake_backend[1]
             latencies = []
             for name, args in [("tools_documentation", {}), ("search_nodes", {"query": "webhook", "limit": 1})]:
                 now = time.monotonic()
@@ -206,12 +177,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
             await asyncio.sleep(.3)
             assert (await client.delete(url, headers=headers)).status_code == 204
             assert (await client.get(f"http://127.0.0.1:{admin_port}/api/bootstrap", headers={"X-Remote-User-Id": "forged", "X-Forwarded-For": "172.30.32.2"})).status_code == 403
-            if configured_backend:
-                async with asyncio.timeout(20):
-                    while (await client.get(url.replace("/mcp", "/health/ready"))).status_code != 200:
-                        await asyncio.sleep(.1)
-            else:
-                assert (await client.get(url.replace("/mcp", "/health/ready"))).status_code == 503
+            # No backend, or a configured loopback backend refused by strict policy.
+            assert (await client.get(url.replace("/mcp", "/health/ready"))).status_code == 503
             children = [int(v) for v in Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().split()]
             assert len(children) == 1
             rss = next(line.split()[1] for line in Path(f"/proc/{children[0]}/status").read_text().splitlines() if line.startswith("VmRSS:"))

@@ -21,6 +21,7 @@ from test_real_products import connection, rpc
 from test_expansion_policy import call
 from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
 import nextcloud_fixtures
+import n8n_owned_backend
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
 
 PID = '12345678-1234-1234-1234-123456789abc'
@@ -231,13 +232,15 @@ async def test_real_expanded_reads_and_explicit_writes(tmp_path, product):
         store = ProductStore(tmp_path / 'state', product)
         tools = N8N_TOOLS if product == 'n8n' else TOOLS[product]
         grants = sorted({g for name, tool in tools.items() for g in tool.grants(name)})
-        if product == 'n8n': store.update(backend_url=url, backend_key='DUMMY', enabled_write_tools=grants)
+        if product == 'n8n': store.update(backend_url=n8n_owned_backend.origin(url), backend_key='DUMMY', enabled_write_tools=grants)
         else:
             conn = connection(product, url)
             if product == 'odoo-manage': conn['mode'] = 'module'
             store.update(connection=conn, enabled_write_tools=grants)
         endpoint = Endpoint(product)
-        process = endpoint.supervisor((n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory))
+        spec = (n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory)
+        if product == 'n8n': spec = n8n_owned_backend.route(spec, url)
+        process = endpoint.supervisor(spec)
         try:
             await process.start()
             async with endpoint.client() as child:

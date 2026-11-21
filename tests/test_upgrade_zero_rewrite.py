@@ -17,11 +17,10 @@
   on a single-profile installation every read of the data layer leaves /data/mcp exactly as it was; creating profiles
   never writes the default profile's state.json (SHA-256, inode, mtime, mode, ctime).
 - The restore check (HM-13a) on the same bytes: nothing changes while the product is switched off; once it is on, the
-  first check adds the instance sentinel and its record and nothing else. HM-13b runs it at every start (the boot
-  guard): the production runtime's start of these bytes switched on adds only those two besides the child's directory.
+  first check adds the instance sentinel and its record and nothing else. The production runtime may also create
+  the child directory and, for n8n, its persistent catalog (contract #47).
 """
 import ast
-import contextlib
 import hashlib
 import json
 import os
@@ -217,6 +216,17 @@ def tree_facts(root):
     return facts
 
 
+def n8n_catalog_entries(data, state):
+    """The persistent default catalog mandated by contract #47; no other new paths are allowed."""
+    digest = hashlib.sha256(json.dumps([state.backend_url, state.backend_key]).encode()).hexdigest()
+    directory = data / 'n8n-mcp'
+    lock, database = directory / '.seed.lock', directory / f'{digest}.db'
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert stat.S_IMODE(lock.stat().st_mode) == 0o600
+    assert stat.S_IMODE(database.stat().st_mode) == 0o600
+    return {'n8n-mcp', 'n8n-mcp/.seed.lock', f'n8n-mcp/{digest}.db'}
+
+
 def start_facts(root):
     """tree_facts without the ctime: ProductStore.load() fchmods state.json to 0600 at every read (config.py), so its
     ctime changes on every start; bytes, inode, links, size, mode and mtime do not."""
@@ -254,8 +264,10 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     # replaced (tests/test_single_profile_golden.py: production_runtime; switched on, tests/multi_profile_runtime.py:
     # the same with the product's switch on). HM-13b runs the restore check at every start (the boot guard): switched
     # off nothing new appears; switched on, the only new entries are the sentinel and its record (HM-13a pins the check
-    # itself: test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel). n8n has no profiles until HM-25,
-    # but its guard reads the switch as well. Every slice keeps it passing.
+    # itself: test_the_restore_check_on_a_state_bb48449_wrote_adds_only_the_sentinel); n8n also prepares its persistent
+    # catalog (contract #47). HM-25: n8n's runtime is
+    # run_product's, switched on its ProfileManager (multi_profile_runtime) as every other product's. Every slice keeps
+    # it passing.
     raw = (ZERO_REWRITE / f'{product}.json').read_bytes()
     state = ProductState.model_validate_json(raw)
     assert state.product == product and state.configured and state.token_history
@@ -264,8 +276,6 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     before = start_facts(data)
     if not switched_on:
         running = production_runtime(product, data)
-    elif product == 'n8n':
-        running = n8n_switched_on(data)
     else:
         running = multi_profile_runtime(product, data)
     async with running as runtime:
@@ -274,20 +284,14 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     assert (data / 'state.json').read_bytes() == raw
     assert {name: after[name] for name in before if name != '.'} == {n: f for n, f in before.items() if n != '.'}
     # The child's own working directory, as today (products.child_spec; n8n works in /data/mcp); switched on, the
-    # instance sentinel and its record.
+    # instance sentinel and its record. Contract #47 also requires n8n's persistent catalog.
     expected = (set() if product == 'n8n' else {'child'})
     if switched_on:
         expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
+        if product == 'n8n':
+            expected |= n8n_catalog_entries(data, state)
     assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
-
-
-@contextlib.asynccontextmanager
-async def n8n_switched_on(data):
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({'n8n'}))
-        async with production_runtime('n8n', data) as runtime:
-            yield runtime
 
 
 @pytest.mark.parametrize('product', GOLDEN_PRODUCTS)

@@ -989,7 +989,7 @@ async def run_until_listening(args, events, *, module=run_product):
             events.append('child')
             super()._start_child()
 
-    class Listener(module.Listener):
+    class Listener(run_product.Listener):  # HM-25: n8n's runtime is run_product's too
         def __init__(self, config):
             events.append('listener')
             super().__init__(config)
@@ -1014,14 +1014,16 @@ async def run_until_listening(args, events, *, module=run_product):
         k.setdefault('transport', httpx.MockTransport(MockChild(args.product, args.data)))
         return GENUINE_CLIENT(*a, **k)
     with pytest.MonkeyPatch.context() as patch:
-        owner = profile_runtime if module is run_product else module
+        owner = profile_runtime  # HM-05: run_product's profile is made there (HM-25: n8n's too)
         patch.setattr(owner, 'Supervisor', Recorded)
         patch.setattr(owner.httpx, 'AsyncClient', client)
-        patch.setattr(module, 'make_ha_admin_verifier', lambda: administrator)
-        patch.setattr(module, 'Listener', Listener)
+        patch.setattr(run_product, 'make_ha_admin_verifier', lambda: administrator)
+        patch.setattr(run_product, 'Listener', Listener)
         patch.setattr(restore_lock, 'guard', guard)
         if module is not run_product:
-            patch.setattr(module, 'prepare_catalog', lambda: None)
+            async def prepare_child(*args, **kwargs):
+                events.append('catalog')
+            patch.setattr(module, 'prepare_child', prepare_child)
         task = asyncio.create_task(module.run(args))
         try:
             async with asyncio.timeout(15):

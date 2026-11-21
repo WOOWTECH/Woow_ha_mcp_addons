@@ -1,10 +1,7 @@
 "use strict";
 // New local adapter code, not copied upstream. Loaded only by our fixed launcher.
-// The pinned API client's base backend is trusted configuration, NOT a webhook.
-// 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
-// the global SSRFProtection validators are not patched here. HM-20: with WOOW_MCP_DENY_LOOPBACK=1 (n8n switched on),
-// SSRFProtection.createPinnedFetch, which only the official MCP client of the configured instance calls, refuses this
-// add-on's own addresses (below); the validators and createPinnedAgents are still not patched.
+// The configured API client pins validated DNS answers. The launcher sets upstream
+// strict webhook mode; the configured API client also applies strict validation.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");
@@ -37,6 +34,7 @@ if (crypto.createHash("sha256").update(fs.readFileSync(apiPath)).digest("hex") !
 // Unreleased (0.4.12 line): tools-n8n-manager.js must carry fix_delete_workflow_description.py (the n8n_delete_workflow
 // description names how to delete a published workflow, as the PaaS server's description does); nothing else in it changes.
 for (const [relative, digest] of [
+    ["database/database-adapter.js", "9f1e1e3740689ba4472b0421d1ca1714137afc3eb92554f21535672da952a318"],
     ["utils/n8n-errors.js", "efd5783846cf1eb61dbf9387de260e5a1d336ec609bc4c4d5601c369b5d2f20a"],
     ["mcp/handlers-n8n-manager.js", "fe3181292ec5d1ad07195f55a7ab73569b15d990f687f620ecaf633742fb24aa"],
     ["mcp/server.js", "638b148f91c18d484b8bcede838be1032f82ddd1b3aa53b24cf005325ae3d9f7"],
@@ -47,6 +45,29 @@ for (const [relative, digest] of [
 ]) {
     if (crypto.createHash("sha256").update(fs.readFileSync(path.join(runtime, relative))).digest("hex") !== digest) {
         throw new Error("public API error boundary requires source review");
+    }
+}
+// Persistent catalogs must be usable by the native engine before the HTTP
+// listener starts; upstream opens its database lazily on the first session.
+// The adapter also refuses sql.js after any later native failure. No database
+// is created here, and the fixed failure never includes a path or exception.
+if (process.env.NODE_DB_PATH !== undefined && process.env.NODE_DB_PATH !== ':memory:') {
+    let db;
+    try {
+        if (!process.env.NODE_DB_PATH) throw new Error('invalid catalog');
+        const Database = require('better-sqlite3');
+        db = new Database(process.env.NODE_DB_PATH, {fileMustExist: true});
+        db.prepare('SELECT count(*) AS n FROM sqlite_schema').get();
+        // Verify this connection can acquire a write transaction without
+        // changing catalog rows or schema; never claim a read-only DB is usable.
+        db.exec('BEGIN IMMEDIATE');
+        db.prepare('UPDATE workflow_versions SET workflow_id = workflow_id WHERE 0').run();
+        db.exec('ROLLBACK');
+        db.close();
+        db = null;
+    } catch (_) {
+        if (db) { try { db.close(); } catch (_) {} }
+        throw new Error('n8n persistent catalog requires native SQLite');
     }
 }
 const { N8nApiClient } = require(apiPath);
@@ -92,8 +113,7 @@ function allowedAddress(address) {
 // instance's <origin>/mcp-server/http with N8N_MCP_ACCESS_TOKEN, after the webhook validation; it is the only caller of
 // createPinnedFetch, tests/test_backend_loopback.py). Who sets it: n8n_adapter.child_spec, only once n8n is switched on,
 // in the environment it builds (never inherited). Read once, when this file loads, before n8n-mcp's own code runs;
-// unset, nothing changes; any other value refuses to start. WEBHOOK_SECURITY_MODE=permissive and the webhook, chat and
-// form clients (createPinnedAgents) stay as they are (owner decision 2026-10-15, kept 2026-11-15; HM-25 reviews it).
+// unset, nothing changes; any other value refuses to start. Webhook, chat and form URL validation uses strict mode.
 const denyLoopback = (() => {
     const value = process.env.WOOW_MCP_DENY_LOOPBACK;
     if (value === undefined) return false;
@@ -125,6 +145,7 @@ N8nApiClient.prototype.getPinnedAgents = async function () {
     const addresses = net.isIP(host) ? [{address: host, family: net.isIP(host)}] :
         await dns.promises.lookup(host, {all: true});
     if (!addresses.length || addresses.some(a => !allowedAddress(a.address) || net.isIP(a.address) !== a.family ||
+        !SSRFProtection.validateResolvedAddress(host, a.address, "strict").valid ||
         (denyLoopback && thisHost(a.address)))) denied();
     // Re-resolve on each API request; check EVERY answer, then pin precisely those
     // answers through the socket connect. No TOCTOU second lookup or DNS cache.

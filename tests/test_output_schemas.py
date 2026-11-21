@@ -23,7 +23,8 @@ ENTRIES = DATA['entries']
 # output_schemas.json records source-commit bytes. Later source edits get
 # separate current-byte pins so the historical source commit remains verifiable.
 CURRENT_POST_SOURCE_BYTES = {
-    'packaging/unit.sh': ('n8n', '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'),
+    # CI applies the FTS temp-schema patch; public output contracts are unchanged.
+    'packaging/unit.sh': ('n8n', 'fbe7e442dd57a08156ce2750f9d5b9fb936ea692f012519236d2edd5798d0a3e'),
     # The SQL-test tool's public write hint changed; its output pin did not.
     'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': (
         'emqx', '89c6f167d6b9487a2ae6373ab498dd9eef9911895effe9e6d7c0c61c9ac4841d'),
@@ -34,18 +35,19 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-32: the EMQX client asks for no idle backend connection (PaaS #135); no tool, schema or handler change.
     'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
         'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
-    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
-    # No tool, schema or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),
+    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
+    # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend); its review: the
+    # copy made through directory descriptors and again for another backend. No tool, schema or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', 'e3a1ebd2c8a3c0110f73ac1ad79c8860fbed8a39723bf5f5465b490cb534193c'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
-    'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
+    'apps/n8n/backend_policy.cjs': ('n8n', 'a9d75db8f4455e0fd9be0ecfec44c230d272873a7085acf2ca5feeca2f788f5a'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
-    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; no tool, schema or
-    # handler change.
-    'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
+    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
+    # run_product's (the n8n adapter); no tool, schema or handler change.
+    'apps/n8n/run.py': ('n8n', 'd99edcb59922f4c090d89ebb368900ebf1b442c770cfa1e01443769c351aff92'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
-    # 0.4.14 release: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14); no tool, schema or handler change.
-    'apps/n8n/Dockerfile': ('n8n', '0a4959708cc10750f654a17c328e646928df71f16bcfc612ec1bf23c30b75b12'),
+    # The build also applies the FTS temp-schema patch; public output contracts are unchanged.
+    'apps/n8n/Dockerfile': ('n8n', 'b8823f026685b488212e0a9537aeefa1351829f94bf8bed0ee91d3e13c174984'),
     # 0.4.14 and Headscale 0.4.19 releases: only dnspython 2.9.0 -> 2.9.2 in the child's lock (GHSA-vvf4-9x63-8xvv, a fixable
     # High the release scanner blocks; email-validator's dependency). No tool, schema or handler change.
     'apps/emqx/uv.lock': ('emqx', '297392a4f80abe5723b9518b1f7379ad64a1b638931e328577caf1e9f4fce16a'),

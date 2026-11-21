@@ -51,11 +51,14 @@ loopback rule):
 Fixed messages only: no token, child token, label, state or backend value is ever printed; a profile is named by its
 log id (profiles.log_id).
 
-Not for n8n yet (HM-25, review SF-2): its child names its port only in its environment (PORT, beside its tokens), never
-on its command line, so the children cannot be told apart by their command lines; stage() refuses n8n before it
-changes anything. Reading another user's /proc/<pid>/fd links as root takes CAP_SYS_PTRACE, which docker gives no
-container by default (not measured here). n8n's switch-on slice gives its child a port the probe can read without its
-environment, and checks tree_snapshot's names against what n8n-mcp leaves in its directory (its HOME).
+n8n too since HM-25 (review SF-2's handoff). Its child listens on PORT (in its environment, beside its tokens); an
+additional profile's child also names that port on its command line, after its entry (--port N, which n8n-mcp does not
+read), and the default profile's names none (CHILD_PORT, as the Hermes and OpenDesign launchers' default), so
+child_ports tells them apart without reading any environment (reading another user's /proc/<pid>/environ or fd links as
+root takes CAP_SYS_PTRACE, which docker gives no container by default). n8n's default profile works in /data/mcp itself
+(its HOME and cwd, as before): tree_snapshot's names show that n8n-mcp leaves nothing of its own there, and an
+additional profile's child/ (its HOME) must still be empty. Step 2 also checks that each additional profile's child
+reads a catalog copy of its own (check_n8n_catalogs: /data/mcp/profiles/<id>/n8n-mcp/<digest>.db).
 """
 import asyncio
 import hashlib
@@ -118,6 +121,8 @@ REVOKED_FIELDS = ('token', 'child_token', 'token_history')
 DIRECTORIES = frozenset({'child', profiles.PROFILES_NAME})
 INDEX_QUARANTINE = re.compile(re.escape(profiles.INDEX_NAME) + r'\.quarantine-[0-9]{8}T[0-9]{6}Z(?:-[0-9]{1,3})?')
 MAX_FILE_BYTES = 1024 * 1024  # as the single-profile fixture_snapshot
+MAX_N8N_CATALOG_BYTES = 256 * 1024 * 1024  # bounded synthetic catalog/history, not a production quota
+N8N_CATALOG_NAME = re.compile(r'[0-9a-f]{64}\.db')
 
 DETECT = '''import json, sys
 from pathlib import Path
@@ -140,9 +145,23 @@ def private_mock_host():
 
 # ---- /data/mcp as a switched-on product leaves it ----
 
-def _designed(parts, directory):
+def _n8n_catalog_entry(parts):
+    return ((len(parts) == 2 and parts[0] == 'n8n-mcp') or
+            (len(parts) == 4 and parts[0] == profiles.PROFILES_NAME and
+             (profiles.is_profile_id(parts[1]) or profiles.parse_quarantine_name(parts[1]) is not None) and
+             parts[2] == 'n8n-mcp'))
+
+
+def _designed(parts, directory, *, n8n=False):
     """Whether a name at this place of the tree is the layout's (plan 4.1), as the kind of entry it is."""
     name = parts[-1]
+    if n8n:
+        if parts == ('n8n-mcp',) or (len(parts) == 3 and parts[0] == profiles.PROFILES_NAME and
+                                     (profiles.is_profile_id(parts[1]) or profiles.parse_quarantine_name(parts[1]) is not None)
+                                     and name == 'n8n-mcp'):
+            return directory
+        if _n8n_catalog_entry(parts):
+            return not directory and (name == '.seed.lock' or bool(N8N_CATALOG_NAME.fullmatch(name)))
     if len(parts) == 1:
         if INDEX_QUARANTINE.fullmatch(name):
             return not directory
@@ -156,12 +175,12 @@ def _designed(parts, directory):
     return False
 
 
-def tree_snapshot(data):
+def tree_snapshot(data, *, n8n=False):
     """fixture_snapshot for a switched-on product (C4-SF-5; FM-16, FM-101): the single-profile rule (a bounded, private
     synthetic fixture of regular files) widened to the multi-profile layout, and nothing more.
 
-    Every entry is a plain directory or a single-link regular file (at most 1 MiB) on /data/mcp's filesystem, the
-    runtime user's and private (0700, 0600), at a name the layout gives it; every child working directory is empty (a
+    Every entry is a plain directory or a single-link regular file (at most 1 MiB, except bounded n8n catalogs) on
+    /data/mcp's filesystem, owned by the runtime user and private (0700, 0600), at a name the layout gives it; every child working directory is empty (a
     child that leaves a file there does not start again: products.child_spec); the whole tree is within the restore
     repair's entry and depth limits (packaging/entrypoint.py: a backup of it restores). Returns {relative path: (inode,
     uid, gid, mode, size, mtime_ns, ctime_ns, sha256 of a file's bytes or None)}. Never log its contents or hashes."""
@@ -185,7 +204,7 @@ def tree_snapshot(data):
             assert directory or (stat.S_ISREG(info.st_mode) and info.st_nlink == 1), 'not a plain entry'
             assert (info.st_uid, info.st_gid) == RUNTIME, "not the runtime user's"
             assert stat.S_IMODE(info.st_mode) == (0o700 if directory else 0o600), 'not private'
-            assert _designed(path, directory), 'not a name of the layout'
+            assert _designed(path, directory, n8n=n8n), 'not a name of the layout'
             if directory:
                 if name == 'child':
                     with os.scandir(data.joinpath(*path)) as inside:
@@ -193,8 +212,13 @@ def tree_snapshot(data):
                 walk.append((path, depth + 1))
                 digest = None
             else:
-                assert info.st_size <= MAX_FILE_BYTES, 'oversize entry'
-                digest = hashlib.sha256(data.joinpath(*path).read_bytes()).hexdigest()
+                catalog = n8n and _n8n_catalog_entry(path) and bool(N8N_CATALOG_NAME.fullmatch(name))
+                assert info.st_size <= (MAX_N8N_CATALOG_BYTES if catalog else MAX_FILE_BYTES), 'oversize entry'
+                with data.joinpath(*path).open('rb') as stream:
+                    if catalog:
+                        assert stream.read(16) == b'SQLite format 3\0', 'invalid n8n catalog'
+                        stream.seek(0)
+                    digest = hashlib.file_digest(stream, 'sha256').hexdigest()
             found['/'.join(path)] = (info.st_ino, info.st_uid, info.st_gid, info.st_mode, info.st_size,
                                      info.st_mtime_ns, info.st_ctime_ns, digest)
     return found
@@ -357,8 +381,8 @@ def check_revoked_restore(data, restored, before, created):
 def child_port(argv):
     """The port a child's command line names (--port N or --port=N), or None (the default child of Hermes and
     OpenDesign runs on its launcher's own default, CHILD_PORT; an additional child's exec wrapper carries the real
-    command line, so it names the port too). n8n's child names none (its port is in its environment: module
-    docstring)."""
+    command line, so it names the port too). n8n's default child names none either; an additional n8n child names it
+    after its entry (HM-25: module docstring)."""
     for index, value in enumerate(argv):
         if value == '--port' and index + 1 < len(argv) and argv[index + 1].isdigit():
             return int(argv[index + 1])
@@ -421,6 +445,35 @@ async def profiles_up(probe, process, ports, *, timeout=UP_SECONDS, proc=Path('/
         # child that refuses its backend). The runtime's own lines are not shown: the probe never prints them.
         up = [port for port in wanted if found.get(port) and listening.get(port) == ['0100007F']]
         raise AssertionError(f'children up on {up} of {wanted}') from None
+
+
+N8N_CATALOGS = Path('/data/mcp')
+
+
+def check_n8n_catalogs(created, root=N8N_CATALOGS, *, user=RUNTIME):
+    """Each newly created n8n profile has one private persistent catalog under its own data directory."""
+    profiles_dir = root / profiles.PROFILES_NAME
+    for directory in (root, profiles_dir):
+        info = os.lstat(directory)
+        assert stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == user and stat.S_IMODE(info.st_mode) == 0o700, \
+            'n8n catalog directory not private'
+    names = sorted(entry.name for entry in os.scandir(profiles_dir))
+    assert names == sorted(profile_id for profile_id, _ in created), "n8n catalog copies not the profiles' own"
+    copies = set()
+    for profile_id, _ in created:
+        profile = profiles_dir / profile_id
+        directory = profile / 'n8n-mcp'
+        for item in (profile, directory):
+            info = os.lstat(item)
+            assert stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == user and stat.S_IMODE(info.st_mode) == 0o700, \
+                'n8n catalog directory not private'
+        databases = list(directory.glob('*.db'))
+        assert len(databases) == 1 and re.fullmatch(r'[0-9a-f]{64}\.db', databases[0].name), 'n8n catalog missing'
+        info = os.lstat(databases[0])
+        assert (stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and (info.st_uid, info.st_gid) == user
+                and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size > 0), 'n8n catalog copy not private'
+        copies.add((info.st_dev, info.st_ino))
+    assert len(copies) == len(created), 'n8n catalog copies shared'
 
 
 def stat_fields(pid, proc=Path('/proc')):
@@ -622,7 +675,6 @@ async def check_refused(client, found, message, base=MCP):
 
 async def stage(probe, client):
     """The multi-profile stage (the module docstring's steps 1 to 9); prints one line of numbers, no secret."""
-    assert probe.APP != 'n8n', "n8n's children name their port in their environment only (HM-25)"
     data = Path(probe.DATA)
     message = initialize_message()
     check_marker_ended(data)
@@ -636,6 +688,8 @@ async def stage(probe, client):
         began = time.monotonic()
         pids = await profiles_up(probe, process, ports)
         up = time.monotonic() - began
+        if probe.APP == 'n8n':
+            check_n8n_catalogs(created)  # HM-25: each additional profile's own catalog copy
         await check_routing(client, found, message)
         await check_child_bearers(probe, client, [(label, port, child) for label, port, _, child in found], message)
         check_resources(process, pids)
@@ -651,7 +705,8 @@ async def stage(probe, client):
         if process is not None and process.poll() is None:
             probe.stop(process)
     assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), 'sentinel touched by the runtime'
-    entries = len(tree_snapshot(data))
+    snapshot_options = {'n8n': True} if probe.APP == 'n8n' else {}
+    entries = len(tree_snapshot(data, **snapshot_options))
     before = restore_picture(data, created)
     restored, _ = probe.restore_as_supervisor()
     with tempfile.TemporaryFile() as log:  # the start's stderr: unnamed, gone once closed, never shown
@@ -669,7 +724,7 @@ async def stage(probe, client):
         probe.check_restore_log(log, len(restored) + 1, revoked=[label for label, _, _, _ in found])
     assert detect_as_runtime(data) == detected(False, restore_detect.CONSISTENT), \
         'restore not finished by the boot guard'
-    tree_snapshot(data)  # what the guard left (the record, new journals, archived receipts) still restores
+    tree_snapshot(data, **snapshot_options)  # the guard's result still fits the restore layout
     print(f'PASS multi-profile: default + {len(created)} profiles up in {up:.1f} s; routing, child bearer, resources, '
           f'SIGKILL, stop in {stopped:.1f} s; {entries} entries; restore tree: every profile revoked and its old '
           f'credentials refused, sentinel rebuilt')
