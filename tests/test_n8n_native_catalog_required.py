@@ -194,7 +194,7 @@ def preflight_case_dir(tmp_path, request):
 
 
 @pytest.mark.parametrize('kind', ['missing', 'empty', 'corrupt', 'readonly'])
-def test_preflight_refuses_invalid_persistent_path_without_creating_or_replacing_it(preflight_case_dir, kind):
+def test_preflight_refuses_invalid_persistent_path_without_creating_or_replacing_it(preflight_case_dir, kind, monkeypatch):
     path, trace, inject = preflight_case_dir/'nodes.db', preflight_case_dir/'trace', preflight_case_dir/'inject.cjs'
     inject.write_text(INJECTOR)
     if kind == 'corrupt': path.write_bytes(b'synthetic corrupt catalog')
@@ -216,6 +216,16 @@ def test_preflight_refuses_invalid_persistent_path_without_creating_or_replacing
             policy = app/'backend_policy.cjs'
             shutil.copyfile(POLICY, policy)
             shutil.copytree(APP/'node_modules', app/'node_modules')
+            # The test subprocess sentinel is injected through NODE_OPTIONS;
+            # retain it at a path the dropped identity can actually traverse.
+            import owned_network
+            guard = preflight_case_dir/'guard'
+            guard.mkdir()
+            shutil.copyfile(owned_network.HERE/'owned_network.cjs', guard/'owned_network.cjs')
+            shutil.copytree(owned_network.HERE/'owned_bootstrap', guard/'owned_bootstrap')
+            guard.chmod(0o755)
+            (guard/'owned_network.cjs').chmod(0o644)
+            monkeypatch.setattr(owned_network, 'HERE', guard)
             for directory, dirs, files in os.walk(app):
                 Path(directory).chmod(0o755)
                 for name in files:
