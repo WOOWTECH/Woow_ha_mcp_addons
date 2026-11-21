@@ -115,6 +115,12 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
     monkeypatch.setattr(profile, 'make_apps', apps)
     monkeypatch.setattr(run_product, 'Listener', Listener)
     monkeypatch.setattr(profile, 'HealthMonitor', Monitor)
+    if product == 'n8n':
+        # The owned dummy does not open a catalog. Keep this cancellation test
+        # independent of the real catalog copy and validation (tested separately).
+        async def prepare_dummy(profile_id, state, *, root):
+            assert profile_id == 'default' and root == tmp_path / 'state'
+        monkeypatch.setattr(n8n_run, 'prepare_child', prepare_dummy)
     args = SimpleNamespace(data=tmp_path / 'state', product=product,
                            host='127.0.0.1', admin_port=0, mcp_port=0)
     runtime = asyncio.create_task(module.run(args))
@@ -132,7 +138,7 @@ async def test_committed_runtime_backend_transition_is_joined(tmp_path, monkeypa
             response = await client.get('/api/bootstrap', headers=headers)
             assert response.status_code == 200
             headers = reviewed_headers(response.json(), headers)
-            payload = ({'url': 'http://127.0.0.1:1', 'key': 'DUMMY-backend'} if product == 'n8n'
+            payload = ({'url': 'http://8.8.8.8:1', 'key': 'DUMMY-backend'} if product == 'n8n'
                        else {'connection': connection(product, 'http://127.0.0.1:1')})
             events, output = asyncio.Queue(), []
             events.put_nowait({'type': 'http.request', 'body': json.dumps(payload).encode(), 'more_body': False})

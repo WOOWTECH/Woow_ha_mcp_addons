@@ -14,6 +14,7 @@ from test_expansion_policy import call
 from test_expansion_runtime import fake_api, payload
 from test_real_products import connection, rpc
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+import n8n_owned_backend
 
 PURE = {'build_domain', 'generate_json2_payload', 'diagnose_odoo_call', 'validate_node', 'validate_workflow'}
 
@@ -24,12 +25,13 @@ async def test_batch2_real_handlers(tmp_path, product, major, allow_write):
     with fake_api(major=major, allow_write=allow_write) as (url, events, mutations, failures):
         store = ProductStore(tmp_path / 'state', product)
         tools = N8N_TOOLS if product == 'n8n' else TOOLS[product]
-        if product == 'n8n': store.update(backend_url=url, backend_key='DUMMY')
+        if product == 'n8n': store.update(backend_url=n8n_owned_backend.origin(url), backend_key='DUMMY')
         else:
             conn = connection(product, url)
             if product == 'odoo-manage': conn['mode'] = 'module'
             store.update(connection=conn)
         production_spec = (n8n_spec if product == 'n8n' else child_spec)(store.load(), store.directory)
+        if product == 'n8n': production_spec = n8n_owned_backend.route(production_spec, url)
         process = Supervisor(production_spec, retries=0)
         reservation = reserve_port()
         port = reservation.getsockname()[1]
