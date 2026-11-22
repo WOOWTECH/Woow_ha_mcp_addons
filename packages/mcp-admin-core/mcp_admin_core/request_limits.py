@@ -65,6 +65,24 @@ def _scan_structure(data: bytes, max_depth: int, max_elements: int) -> str | Non
     # string. Stop at its opening quote, but retain any earlier violation.
     outside_strings = outside_strings.split(b'"', 1)[0]
     structural = outside_strings.translate(_STRUCTURE_BYTES).replace(b'\x00', b'')
+    # Collapse balanced empty pairs in C before walking structural bytes in
+    # Python. A near-limit body can have ~100,000 flat objects; the Python
+    # walk otherwise holds the GIL for every bracket and comma. Removing commas
+    # does not change nesting, and a sequence reduced to empty within
+    # max_depth passes is balanced and cannot exceed that depth. Count the
+    # original structural bytes so the element limit stays exact. Malformed or
+    # deeper sequences still take the original ordered scanner below.
+    elements_total = structural.count(_COMMA) + structural.count(ord('[')) + structural.count(ord('{'))
+    brackets = structural.replace(b',', b'')
+    if not brackets:
+        return f"more than {max_elements} JSON elements" if elements_total > max_elements else None
+    for _ in range(max_depth):
+        collapsed = brackets.replace(b'[]', b'').replace(b'{}', b'')
+        if not collapsed:
+            return f"more than {max_elements} JSON elements" if elements_total > max_elements else None
+        if len(collapsed) == len(brackets):
+            break
+        brackets = collapsed
     depth = elements = 0
     for char in structural:
         if char == _COMMA:
