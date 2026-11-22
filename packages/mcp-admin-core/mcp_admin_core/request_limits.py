@@ -71,16 +71,20 @@ def _scan_structure(data: bytes, max_depth: int, max_elements: int) -> str | Non
     # does not change nesting, and a sequence reduced to empty within
     # max_depth passes is balanced and cannot exceed that depth. Count the
     # original structural bytes so the element limit stays exact. Malformed or
-    # deeper sequences still take the original ordered scanner below.
+    # deeper sequences still take the original ordered scanner below. Each
+    # replacement pass removes at most one nesting level: replacing [] and {}
+    # in the same pass could remove two nested levels and bypass max_depth.
     elements_total = structural.count(_COMMA) + structural.count(ord('[')) + structural.count(ord('{'))
     brackets = structural.replace(b',', b'')
     if not brackets:
         return f"more than {max_elements} JSON elements" if elements_total > max_elements else None
-    for _ in range(max_depth):
-        collapsed = brackets.replace(b'[]', b'').replace(b'{}', b'')
+    unchanged_passes = 0
+    for step in range(max_depth):
+        collapsed = brackets.replace(b'[]' if step % 2 == 0 else b'{}', b'')
         if not collapsed:
             return f"more than {max_elements} JSON elements" if elements_total > max_elements else None
-        if len(collapsed) == len(brackets):
+        unchanged_passes = unchanged_passes + 1 if len(collapsed) == len(brackets) else 0
+        if unchanged_passes == 2:
             break
         brackets = collapsed
     depth = elements = 0
