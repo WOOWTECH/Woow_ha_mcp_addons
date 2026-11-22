@@ -156,7 +156,7 @@ async def rpc(client, url, headers, message):
 
 
 @pytest.mark.parametrize('product', PRODUCTS)
-async def test_real_child_fake_backend_and_boundary(tmp_path, product):
+async def test_real_child_fake_backend_and_boundary(tmp_path, product, *, outage_check=None):
     with backend(product) as (url, calls, offline):
         store = ProductStore(tmp_path / 'state', product)
         store.update(connection=connection(product, url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
@@ -259,11 +259,14 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     children_path = Path(f'/proc/{process.pid}/task/{process.pid}/children')
                     child_pids = children_path.read_text().split()
                     assert len(child_pids) == 1
-                    offline.set()
-                    # Odoo's guard probe and released multi-profile products require two failed checks.
-                    async with asyncio.timeout(22 + (HEALTH_INTERVAL if product == 'odoo' or features.enabled(product) else 0)):
-                        while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
-                            await asyncio.sleep(.25)
+                    if outage_check is not None:
+                        await outage_check(client, f'http://127.0.0.1:{port}/health/ready')
+                    else:
+                        offline.set()
+                        # Odoo's guard probe and released multi-profile products require two failed checks.
+                        async with asyncio.timeout(22 + (HEALTH_INTERVAL if product == 'odoo' or features.enabled(product) else 0)):
+                            while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
+                                await asyncio.sleep(.25)
                     assert process.poll() is None
                     assert children_path.read_text().split() == child_pids, 'backend outage restarted child'
                     pong = await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'id': 6, 'method': 'ping'})
