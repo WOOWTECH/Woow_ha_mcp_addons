@@ -70,6 +70,13 @@ SMALL_REQUEST_BYTES = 64 * 1024
 #: UTF-8 (PaaS d7f5849, measured with a real uvicorn gateway and MCP SDK child: one ASCII string 5.5, the guard's worst
 #: structure 8.0, one non-BMP character in a large string 15.2, both together 17.8; HM-19c measures HA's own).
 AMPLIFICATION = 20.0
+# HM-19c: Odoo's release gate remains 20x. The larger number here is a
+# conservative *admission* factor while the near-200k-element shape's measured
+# gateway-plus-child peak is unresolved. It must never be reported as a pass.
+ODOO_ADMISSION_AMPLIFICATION = 64.0
+ODOO_REPLY_RESERVE_MIB = 512
+ODOO_REPLY_WORK_MIB = 221       # ceil(8 MiB * 27.6)
+ODOO_SMALL_BODY_MIB = 128      # uncharged bodies and other concurrent copies
 GATEWAY_BASELINE_MIB = 76      # the gateway's own baseline (PaaS sandbox 71-76 MiB)
 SAFETY_MARGIN_MIB = 150        # what is left for peaks (GC, a child growing, logs) with every budget full
 FALLBACK_TOTAL_BYTES = 32 * MiB
@@ -115,6 +122,21 @@ def default_total_bytes(ceiling_mib: int | None, *, accounts: int = 1,
     return min(MAX_BUDGET_BYTES, max(MIN_BUDGET_BYTES, derived))
 
 
+def odoo_switched_total_bytes(ceiling_mib: int | None, accounts: int, source: str) -> int:
+    """Joint body/reply planning cap; cgroup also keeps the 256 MiB host reserve.
+
+    A tiny ceiling retains the 16 MiB protocol floor, but the reply gate cannot
+    make such a configuration a capacity pass. HM-19c validates 3 GiB and HAOS.
+    """
+    if ceiling_mib is None:
+        return MIN_BUDGET_BYTES
+    available = (ceiling_mib - (HOST_RESERVE_MIB if source == 'cgroup' else 0)
+                 - GATEWAY_BASELINE_MIB - accounts * 100 - SAFETY_MARGIN_MIB
+                 - ODOO_REPLY_RESERVE_MIB - ODOO_REPLY_WORK_MIB - ODOO_SMALL_BODY_MIB)
+    derived = int(max(0, available) * MiB / ODOO_ADMISSION_AMPLIFICATION)
+    return min(MAX_BUDGET_BYTES, max(MIN_BUDGET_BYTES, derived))
+
+
 def default_per_profile_bytes(total: int) -> int:
     """A profile's share before its quota caps it (PaaS): half the budget, at least the single-request ceiling."""
     return max(MIN_BUDGET_BYTES, int(total * PER_PROFILE_FRACTION))
@@ -150,7 +172,8 @@ class BudgetLimits:
         ceiling, source = memory_ceiling()
         accounts, child = runtime_inputs(product, switched_on=switched_on,
                                          memory_limit=ceiling if source == 'cgroup' else None)
-        total = default_total_bytes(ceiling, accounts=accounts, child_memory_mib=child)
+        total = (odoo_switched_total_bytes(ceiling, accounts, source) if switched_on and product == 'odoo'
+                 else default_total_bytes(ceiling, accounts=accounts, child_memory_mib=child))
         return cls(total=total, per_profile=default_per_profile_bytes(total), source=source)
 
 

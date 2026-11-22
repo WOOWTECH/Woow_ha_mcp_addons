@@ -147,6 +147,19 @@ PENDING_REPLIES = "pending_replies"
 # server took a byte of it); the profile's gate counts them as its answers not received yet from then on, and against
 # what its app hands the server later. A tools/call that waited for that slot is then refused by the check above.
 PENDING_CHARGE = "pending_charge"
+# A switched-on Odoo profile's shared reply-memory ticket, taken only after a
+# forwarding slot and immediately before the child request is built.
+REPLY_RESERVE = "reply_reserve"
+UNTICKETED_CONTROL_RESPONSE = 64 * 1024
+
+
+def reply_may_hold_large_child_output(http_method, message):
+    """GET streams and every identified POST may hold a large child reply.
+
+    Notifications and DELETE have no relayed body; health never enters serve.
+    """
+    return http_method == "GET" or (http_method == "POST" and isinstance(message, dict)
+                                    and "id" in message and message.get("method") not in ("initialize", "ping"))
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -1758,7 +1771,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except ConfigError:
             return False
 
-    async def chunks(owner, lease, seconds=None):
+    async def chunks(owner, lease, seconds=None, max_bytes=MAX_RESPONSE):
         """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle.
 
         HM-30 D3 (contract 6), only for a switched-on product (reply_worker given): each piece is read under the lease
@@ -1779,7 +1792,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     except StopAsyncIteration:
                         return
                     total += len(chunk)
-                    if total > MAX_RESPONSE:
+                    if total > max_bytes:
                         owner.overflowed = True
                         return
                     yield chunk
@@ -1805,7 +1818,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except Exception:
             pass
 
-    async def initialize_reply(owner, lease, is_sse, ident):
+    async def initialize_reply(owner, lease, is_sse, ident, max_bytes=MAX_RESPONSE):
         """Read the child's reply to initialize: (outcome, message, SSE frame lines other than data).
 
         outcome is "ok", "missing" or "invalid". Stops at the JSON-RPC response with the request's id
@@ -1821,7 +1834,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return "ok" if one_reply(value) else "invalid"
 
         pending = bytearray()
-        reader = chunks(owner, lease)
+        reader = chunks(owner, lease, max_bytes=max_bytes)
         try:
             async for chunk in reader:
                 start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
@@ -2246,6 +2259,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             except Denied:
                 raise BadRequest(403) from None
         if listing is not None:
+            if method == "tools/list":
+                reserve_reply = getattr(request.state, REPLY_RESERVE, None)
+                if reserve_reply is not None:
+                    answer = reserve_reply(message)
+                    if answer is not None:
+                        return answer
             answer = without_child()
             if answer is not None:
                 return answer
@@ -2318,6 +2337,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     budget_share.warn("bytes", request_budget.budget_note(exceeded))
                     # the slot is released below; the child never gets the request
                     return busy_reply(message, request_budget.budget_text(exceeded))
+            reserve_reply = getattr(request.state, REPLY_RESERVE, None)
+            if reserve_reply is not None and reply_may_hold_large_child_output(request.method, message):
+                answer = reserve_reply(message)
+                if answer is not None:
+                    return answer
             waited = time.monotonic() + CHILD_WAIT_SECONDS
             call_seconds = CALL_SECONDS if method == "tools/call" else None  # 0.2.2: see CALL_SECONDS
             async with asyncio.timeout(call_seconds + 5 if call_seconds else 35):
@@ -2370,6 +2394,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(502)  # the child refused the gateway's own token or Host: not a client credential issue
             media = upstream.headers.get("content-type", "").split(";")[0].strip().lower()
             is_sse = media == "text/event-stream"
+            # A child ping normally returns tiny JSON. An SSE ping could keep
+            # producing events without a reply ticket, so fail closed here.
+            if reserve_reply is not None and method == "ping" and is_sse:
+                raise BadRequest(502)
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
             request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
@@ -2393,7 +2421,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         return backend_unavailable(message.get("id"))  # the child sent no reply
                     raise BadRequest(502)
             if method == "initialize" and upstream.status_code == 200:
-                outcome, value, frame = await initialize_reply(owner, lease, is_sse, message.get("id"))
+                outcome, value, frame = await initialize_reply(
+                    owner, lease, is_sse, message.get("id"),
+                    UNTICKETED_CONTROL_RESPONSE if reserve_reply is not None else MAX_RESPONSE)
                 if not still_authorized(state.token):
                     raise refused()
                 if lanes is not None and owner.interrupted is not None:
@@ -2448,7 +2478,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
                 # cannot hand a client an unfiltered list under another request's id or in a batch.
                 result = bytearray()
-                async for chunk in chunks(owner, lease, call_seconds):
+                async for chunk in chunks(owner, lease, call_seconds,
+                                          UNTICKETED_CONTROL_RESPONSE if reserve_reply is not None and method == "ping"
+                                          else MAX_RESPONSE):
                     result.extend(chunk)
                 if not still_authorized(state.token):
                     raise refused()

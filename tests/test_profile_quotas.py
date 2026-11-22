@@ -34,7 +34,7 @@ import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import (Children, RealChild, create_profile, ids, multi_profile_runtime, stored)
-from mcp_admin_core import gateway, profiles
+from mcp_admin_core import gateway, profiles, reply_memory
 from mcp_admin_core.products import PROBES
 from test_profile_runtime import ProfileChild
 from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, GENUINE_CLIENT, NOT_FOUND, answer, configure,
@@ -76,6 +76,13 @@ def add_on_budget(monkeypatch, total_mib, per_mib):
     def derive(cls, product=None, *, switched_on=False):
         return cls(total=int(total_mib * MiB), per_profile=int(per_mib * MiB))
     monkeypatch.setattr(request_budget().BudgetLimits, 'derive', classmethod(derive))
+
+
+def isolate_reply_memory_from_other_quota_tests(monkeypatch):
+    """Exercise the named admission/slot/stream rule without the separate HM-19c gate."""
+    monkeypatch.setattr(reply_memory, 'DEFAULT_TICKETS', 64)
+    monkeypatch.setattr(reply_memory, 'EXTRA_TICKETS', 32)
+    monkeypatch.setattr(reply_memory, 'TOTAL_BYTES', 64 * 64 * MiB)
 
 
 def budget_text(scope, limit):
@@ -159,6 +166,16 @@ def holding_children(data, extras=(B, C)):
     return children
 
 
+class OversizePingChild(HoldingChild):
+    async def __call__(self, request):
+        message = json.loads(request.content) if request.content else {}
+        if message.get('method') == 'ping':
+            self.requests.append(request)
+            return httpx.Response(200, json={'jsonrpc': '2.0', 'id': message['id'],
+                                             'result': {'text': 'x' * (65 * 1024)}})
+        return await super().__call__(request)
+
+
 def setup(tmp_path, extras=(B, C)):
     data = tmp_path / 'data'
     configure(data, PRODUCT)
@@ -185,6 +202,55 @@ async def until(condition, seconds=5):
     async with asyncio.timeout(seconds):
         while not condition():
             await asyncio.sleep(.005)
+
+
+async def test_full_reply_reservation_keeps_other_profile_controls_available(tmp_path, log_scan):
+    """Full A/other tickets cannot hide B's control probes or admit a large listing."""
+    data = setup(tmp_path)
+    children = holding_children(data)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        await until(lambda: runtime.manager.get(B).runtime.health.availability()['child'] in gateway.CHILD_UP)
+        memory = runtime.manager.reply_memory
+        holders = ['default'] * 3 + [B, C] + [f'{i:024x}' for i in range(3)]
+        for name in holders:
+            assert memory.take(name)
+        try:
+            async with runtime.mcp() as client:
+                token = runtime.token(B)
+                initialized = await asyncio.wait_for(
+                    client.post('/mcp', headers=bearer(token), json=initialize_message()), 2)
+                assert initialized.status_code == 200
+                assert not initialized.headers['mcp-session-id'].startswith('woow-local-')
+                headers = {**bearer(token), 'Mcp-Session-Id': initialized.headers['mcp-session-id']}
+                ping = await asyncio.wait_for(client.post('/mcp', headers=headers,
+                    json={'jsonrpc': '2.0', 'id': 9, 'method': 'ping'}), 2)
+                assert ping.status_code == 200 and ping.json()['result'] == {}
+                listed = await client.post('/mcp', headers=headers,
+                    json={'jsonrpc': '2.0', 'id': 10, 'method': 'tools/list'})
+                busy(listed, status=200, retry_after=5, ident=10)
+                streamed = await client.get('/mcp', headers=headers)
+                busy(streamed, status=503, retry_after=5, ident=None)
+        finally:
+            for name in holders:
+                memory.give(name)
+        assert memory.held == 0
+
+
+async def test_unticketed_ping_child_body_is_hard_capped(tmp_path, log_scan):
+    data = setup(tmp_path, extras=(B,))
+    children = holding_children(data, extras=(B,))
+    children.add(18000, OversizePingChild('pbeta', PRODUCT, profiles.Layout(data).profile(B)))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        await until(lambda: runtime.manager.get(B).runtime.health.availability()['child'] in gateway.CHILD_UP)
+        async with runtime.mcp() as client:
+            token = runtime.token(B)
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            answer = await client.post('/mcp', headers=headers,
+                                       json={'jsonrpc': '2.0', 'id': 11, 'method': 'ping'})
+            assert answer.status_code == 502
+            assert runtime.manager.reply_memory.held == 0
 
 
 def slow_body(first, opened, rest=b'', length=None):
@@ -313,7 +379,8 @@ async def test_the_byte_budget_answers_as_the_paas_table(tmp_path, log_scan, mon
         assert len(lines) == 1, lines  # one line a minute for this profile and situation
 
 
-async def test_a_busy_forwarding_slot_answers_as_the_paas_table(tmp_path, log_scan):
+async def test_a_busy_forwarding_slot_answers_as_the_paas_table(tmp_path, log_scan, monkeypatch):
+    isolate_reply_memory_from_other_quota_tests(monkeypatch)
     """B's 16 forwarding slots held by tools/calls its child has not answered: the next one waits one second, then gets
     200 + -32003 under its id + Retry-After 5 (PaaS row "等名額逾時，請求有 JSON-RPC id"; #148 shape) and a DELETE 503 id
     null; the child never gets them. The default profile's 32 slots are its own: its calls are answered meanwhile (the
@@ -350,7 +417,8 @@ async def test_a_busy_forwarding_slot_answers_as_the_paas_table(tmp_path, log_sc
 
 
 @pytest.mark.parametrize('profile_id', ['default', B])
-async def test_the_stream_cap_answers_429_at_once_and_posts_still_work(tmp_path, log_scan, profile_id):
+async def test_the_stream_cap_answers_429_at_once_and_posts_still_work(tmp_path, log_scan, monkeypatch, profile_id):
+    isolate_reply_memory_from_other_quota_tests(monkeypatch)
     """A profile's open GET streams reach its cap (the default profile 24, an additional one 8; PaaS 32 < 64): the
     next GET gets 429 + -32003 id null + Retry-After 30 at once (no wait), while its POSTs are still answered (PaaS
     test_stream_limit_refuses_immediately_and_posts_still_work)."""
@@ -489,7 +557,8 @@ async def test_the_default_profiles_token_holder_cannot_exhaust_memory(tmp_path,
         assert runtime.manager.budget.peak <= 64 * MiB
 
 
-async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(tmp_path, log_scan):
+async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(tmp_path, log_scan, monkeypatch):
+    isolate_reply_memory_from_other_quota_tests(monkeypatch)
     """G2's S5 and S6 on the real listener (uvicorn, h11) with real loopback children and every profile's own real
     httpx client: the default profile holds its 32 forwarding slots and B its 16 (S5: one shared pool of 40 left C
     waiting 3 s for a 502) and then the default profile fills its admission with 64 slow bodies (S6: 63 of the 64
@@ -607,6 +676,7 @@ def forwarded_bodies(port):
 
 @pytest.mark.parametrize('text,streams', [('x', 4), ('中', 2), ('\U0001F600', 1)], ids=['ascii', 'cjk', 'emoji'])
 async def test_an_event_stream_keeps_its_bytes_charged_until_it_ends(tmp_path, log_scan, monkeypatch, text, streams):
+    isolate_reply_memory_from_other_quota_tests(monkeypatch)
     """A child answers a request with an event stream whose headers come before its tool runs, and the gateway's
     forwarded copy of the body stays referenced until the stream ends (HM-08 review MF-1: E1 found 192 MiB held for an
     additional profile and 480 MiB for the default one while the dispatcher counted 0). So a request stays charged until
@@ -724,7 +794,8 @@ async def test_every_profile_has_its_own_child_client(tmp_path, log_scan):
                                                                     profiles.EXTRA_PROFILE_QUOTA]
 
 
-async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends(tmp_path, log_scan):
+async def test_admission_bytes_and_streams_are_given_back_however_a_request_ends(tmp_path, log_scan, monkeypatch):
+    isolate_reply_memory_from_other_quota_tests(monkeypatch)
     """Every way a request ends gives back what it held (PaaS test_slots_are_returned_on_transport_errors_and_
     cancellation): an answer, an answer of the gateway's own (502 when the child cannot be reached), a refusal of the
     app (400, 403, 405, 415), a client that is cancelled while its body is read or while its call waits, a stream that
