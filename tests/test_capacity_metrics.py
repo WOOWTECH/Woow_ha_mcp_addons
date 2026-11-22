@@ -90,8 +90,8 @@ async def test_rejects_invalid_or_cross_loop_charge_samples():
         probe.start()
     assert await asyncio.to_thread(_call_from_new_loop, probe) == 'wrong loop'
     await probe.stop()
-    with pytest.raises(RuntimeError):
-        probe.on_charge_change(1)
+    probe.on_charge_change(1)  # The gateway keeps running after a diagnostic dump.
+    assert probe.snapshot().charged_bytes_now == 0
 
 
 def _call_from_new_loop(probe):

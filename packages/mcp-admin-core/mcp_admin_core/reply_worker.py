@@ -423,7 +423,7 @@ class ReplyWorker:
     what ended it when that was not stop(). processed and peak count the jobs done and the most in process at once
     (never more than one); handed counts the jobs each profile handed over."""
 
-    def __init__(self):
+    def __init__(self, *, capacity_metrics=None):
         self._lock = threading.Lock()
         self._work = threading.Condition(self._lock)
         self._queues = {}        # profile -> deque of its queued jobs
@@ -437,6 +437,7 @@ class ReplyWorker:
         self.processed = 0
         self.peak = 0
         self.handed = Counter()  # jobs each profile handed over so far (the tests read it; nothing else does yet)
+        self._capacity_metrics = capacity_metrics
 
     @property
     def alive(self):
@@ -543,6 +544,7 @@ class ReplyWorker:
         try:
             while (job := self._next()) is not None:
                 result = error = None
+                capacity_started = time.monotonic_ns() if self._capacity_metrics is not None else None
                 # D1: the cyclic collector held off while the job runs (the module docstring), given back however it
                 # ends; left as it is when something else had it off.
                 held = gc.isenabled()
@@ -554,6 +556,9 @@ class ReplyWorker:
                     error = caught
                     traceback.clear_frames(caught.__traceback__)
                 finally:
+                    if capacity_started is not None:
+                        self._capacity_metrics.on_reply_job(
+                            capacity_started, time.monotonic_ns(), 1 if error is not None else 0)
                     if held:
                         gc.enable()
                 job.function = job.args = None
