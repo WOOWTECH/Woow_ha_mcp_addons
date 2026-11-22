@@ -832,7 +832,7 @@ async def test_the_new_token_reaches_no_child_before_the_new_one_and_the_old_tok
             held = [asyncio.create_task(client.post('/mcp', headers=in_session, json=call(100))),
                     asyncio.create_task(client.post('/mcp', headers=in_session, json=ping(101)))]
             await until(lambda: child.waiting == 2)
-            queued = asyncio.create_task(client.post('/mcp', headers=in_session, json=ping(200)))
+            queued = asyncio.create_task(client.post('/mcp', headers=in_session, json=call(200)))
             await until(lambda: lanes['ordinary'].waiting == 1)
             gate = journal.hold_start = asyncio.Event()
             saving = asyncio.create_task(save(runtime, B, 'backend/patch', {'changes': {'username':

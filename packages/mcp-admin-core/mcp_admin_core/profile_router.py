@@ -35,7 +35,8 @@ Which profile (plan 5.1; I1, I2; DQ-01 (a), DQ-09, DQ-12):
 
 Every profile's own limits (ProfileGate; plan 5.2; contract 5; I8; DQ-07 (a)): before a request's body is read, its
 profile's admission (64 for the default profile, 32 for an additional one; a request with no candidate or no match
-takes none). A GET (an event stream) takes one of the profile's stream places (24, 8). A GET past the stream cap: 429 +
+takes none). A GET (an event stream) takes one of the profile's stream places (nominally 24, 8; ticket-backed Odoo 3, 1).
+A GET past the stream cap: 429 +
 -32003 id null + Retry-After 30, at once. The profile's app answers a forwarding slot that stays busy for a second with
 the PaaS busy shapes (ProfileGate.slot_busy, make_apps slot_busy). Each limit writes one WARNING per profile and
 situation a minute (Reports: id's first 8 characters, suppressed=N), never a token, URL, label or request content.
@@ -115,7 +116,7 @@ from dataclasses import dataclass
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Match, Route
 
-from . import gateway, origin_policy, profiles, request_budget
+from . import gateway, origin_policy, profiles, reply_memory, request_budget
 from .admin_auth import BadRequest
 from .config import ConfigError, strict_json
 from .profile_admin import Call
@@ -183,7 +184,12 @@ def global_reply_text() -> str:
             "(外掛的回覆記憶體額度已滿，這個請求沒有送出，請稍後再試。)")
 
 
-def streams_text(streams: int) -> str:
+def streams_text(streams: int, *, ticketed: bool = False) -> str:
+    if ticketed:
+        return (f"This MCP URL already has {streams} open event streams (GET), the limit of its profile. Close MCP "
+                "clients that are no longer used, or retry later; requests needing a large reply may also be busy. "
+                f"(這個 MCP 網址已經開著 {streams} 條事件串流（GET），是這個帳號的上限；請關閉不再使用的 MCP 用戶端或稍後再試；"
+                "需要大型回覆的請求也可能忙碌。)")
     return (f"This MCP URL already has {streams} open event streams (GET), the limit of its profile. Close MCP clients "
             "that are no longer used, or retry later; requests (POST) still work. "
             f"(這個 MCP 網址已經開著 {streams} 條事件串流（GET），是這個帳號的上限；請關閉不再使用的 MCP 用戶端或稍後再試，"
@@ -283,10 +289,19 @@ class ProfileGate:
     async def serve(self, app, scope, receive, send):
         quota = self.quota
         stream = scope['method'] == 'GET'
-        if stream and self.streams >= quota.get_streams:
-            self.warn('streams', f'{quota.get_streams} event streams (GET) were open, its limit; new ones were '
+        # A stream holds one reply ticket until its ASGI send ends. Enforce the
+        # ticket-backed stream cap as a stream cap, before taking admission: an
+        # extra Odoo profile can hold only one 64 MiB ticket at a time.
+        stream_cap = quota.get_streams
+        if self.reply_memory is not None:
+            tickets = (reply_memory.DEFAULT_TICKETS if self.profile_id == 'default'
+                       else reply_memory.EXTRA_TICKETS)
+            stream_cap = min(stream_cap, tickets)
+        if stream and self.streams >= stream_cap:
+            self.warn('streams', f'{stream_cap} event streams (GET) were open, its limit; new ones were '
                                  'answered 429')
-            return await gateway.stream_busy_reply(streams_text(quota.get_streams))(scope, receive, send)
+            return await gateway.stream_busy_reply(streams_text(stream_cap, ticketed=self.reply_memory is not None))(
+                scope, receive, send)
         if self.active >= quota.admission:
             return await self.beyond_admission(app, scope, receive, send)
         self.active += 1
