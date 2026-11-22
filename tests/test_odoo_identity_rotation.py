@@ -52,7 +52,7 @@ from mcp_admin_core.access import TokenAccess, masked_token
 from mcp_admin_core.config import ConfigError
 from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS
-from switched_gateway import GatewayChild, call, quota, until
+from switched_gateway import GatewayChild, call, ping, quota, until
 from test_profile_runtime import connection_of
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, GENUINE_CLIENT, INGRESS, NOT_FOUND,
                                         NoProcessSupervisor, answer, configure, initialize_message,
@@ -803,7 +803,7 @@ async def test_a_new_child_that_cannot_start_leaves_the_new_token_and_never_the_
 
 async def test_the_new_token_reaches_no_child_before_the_new_one_and_the_old_tokens_requests_end(tmp_path, log_scan,
                                                                                               monkeypatch):
-    """B's two forwarding slots are held by calls of the old token and a third waits in B's queue (HM-14) when B's
+    """B's two forwarding slots are held by a call and bounded ping of the old token; a third waits in B's queue when B's
     username is saved anew. The new child's start is held: by then the old child has stopped and the new token is
     published; the held calls end (401) and the waiting one is refused (401) without ever reaching the child, the old
     token is refused on both paths, and the new token reaches no child at all: its initialize is the gateway's own
@@ -816,6 +816,7 @@ async def test_the_new_token_reaches_no_child_before_the_new_one_and_the_old_tok
     children.add(3000, GatewayChild('default', PRODUCT, data))
     child = children.add(PORTS[B], GatewayChild('p' + B[:4], PRODUCT, directory(data, B)))
     child.hold_calls = True
+    child.hold_ping = True
     journal = Journal()
     record_writes(monkeypatch, journal)
     async with multi_profile_runtime(PRODUCT, data, children=children, supervisor=journal.supervisor()) as runtime:
@@ -828,9 +829,10 @@ async def test_the_new_token_reaches_no_child_before_the_new_one_and_the_old_tok
             init = await client.post('/mcp', headers=bearer(old), json=initialize_message())
             in_session = {**bearer(old), 'Content-Type': 'application/json',
                           'Mcp-Session-Id': init.headers['mcp-session-id']}
-            held = [asyncio.create_task(client.post('/mcp', headers=in_session, json=call(100 + n))) for n in range(2)]
+            held = [asyncio.create_task(client.post('/mcp', headers=in_session, json=call(100))),
+                    asyncio.create_task(client.post('/mcp', headers=in_session, json=ping(101)))]
             await until(lambda: child.waiting == 2)
-            queued = asyncio.create_task(client.post('/mcp', headers=in_session, json=call(200)))
+            queued = asyncio.create_task(client.post('/mcp', headers=in_session, json=ping(200)))
             await until(lambda: lanes['ordinary'].waiting == 1)
             gate = journal.hold_start = asyncio.Event()
             saving = asyncio.create_task(save(runtime, B, 'backend/patch', {'changes': {'username':
@@ -842,7 +844,7 @@ async def test_the_new_token_reaches_no_child_before_the_new_one_and_the_old_tok
                                       ('start waits',)]
             ended = await asyncio.wait_for(asyncio.gather(*held, queued), 10)
             assert [response.status_code for response in ended] == [401, 401, 401]
-            assert child.client_calls() == [100, 101]  # the waiting call never reached a child
+            assert child.client_calls() == [100] and child.client_pings() == [101]
             assert await refused_everywhere(runtime, old)
             seen = len(child.seen)
             local = await client.post('/mcp', headers=bearer(new), json=initialize_message())

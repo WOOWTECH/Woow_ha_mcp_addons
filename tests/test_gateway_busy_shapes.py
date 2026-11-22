@@ -24,7 +24,7 @@ import pytest
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profile_router, profiles
-from switched_gateway import (B, INITIALIZED, PRODUCT, GatewayChild, bearer, call, quota, session_of, setup, until,
+from switched_gateway import (B, INITIALIZED, PRODUCT, GatewayChild, bearer, call, ping, quota, session_of, setup, until,
                               watch)
 from test_single_profile_golden import answer, configure, initialize_message, settle
 
@@ -61,8 +61,8 @@ async def test_a_busy_lane_answers_as_the_paas_table_and_the_session_goes_on(tmp
         wait_text, queue_text = profile_router.forward_text(2, .6), profile_router.queue_text(1, 2)
         async with runtime.mcp() as client:
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
-            child.hold_calls = True
-            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(60 + n))) for n in range(2)]
+            child.hold_ping = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(60 + n))) for n in range(2)]
             await until(lambda: child.waiting == 2)
             loop = asyncio.get_running_loop()
             started = loop.time()
@@ -78,13 +78,13 @@ async def test_a_busy_lane_answers_as_the_paas_table_and_the_session_goes_on(tmp
             busy(await client.get('/mcp', headers=headers), status=503, ident=None, text=queue_text)
             assert loop.time() - started < .5, 'over the queue cap is refused at once (a wait is 0.6 s)'
             busy(await queued, status=200, ident=8, text=wait_text)
-            assert child.client_calls() == [60, 61] or sorted(child.client_calls()) == [60, 61]
+            assert child.client_calls() == [] and sorted(child.client_pings()) == [60, 61]
             child.free.set()
             assert all(response.status_code == 200 for response in await asyncio.gather(*held))
-            child.hold_calls = False
+            child.hold_ping = False
             after = await client.post('/mcp', headers=headers, json=call(10))
             assert after.status_code == 200 and after.json()['result']['content'][0]['text'] == child.text
-        assert sorted(child.client_calls()) == [10, 60, 61]
+        assert child.client_calls() == [10]
 
 
 
