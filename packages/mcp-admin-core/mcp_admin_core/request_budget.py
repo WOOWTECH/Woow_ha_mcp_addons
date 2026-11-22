@@ -57,6 +57,7 @@ from typing import Callable
 from starlette.requests import ClientDisconnect
 
 from . import profiles
+from .capacity_metrics import active_metrics
 from .request_limits import ID_WINDOW, head_tail_id  # noqa: F401  (head_tail_id: the gateway's)
 
 logger = logging.getLogger(__name__)
@@ -230,6 +231,9 @@ class RequestBudget:
         self._total = 0
         self._profiles: dict[str, int] = {}
         self.peak = 0  # the most the add-on ever held (tests, diagnostics)
+        self._capacity_metrics = active_metrics()
+        if self._capacity_metrics is not None:
+            self._capacity_metrics.on_charge_change(0)
 
     def used(self, profile_id: str | None = None) -> int:
         """What is charged now: the add-on's, or one profile's."""
@@ -249,6 +253,8 @@ class RequestBudget:
         self._total += amount
         self.peak = max(self.peak, self._total)
         self._profiles[profile_id] = used + amount
+        if self._capacity_metrics is not None:
+            self._capacity_metrics.on_charge_change(self._total)
 
     def _refund(self, profile_id: str, amount: int) -> None:
         self._total -= amount
@@ -257,6 +263,8 @@ class RequestBudget:
             self._profiles[profile_id] = left
         else:
             self._profiles.pop(profile_id, None)
+        if self._capacity_metrics is not None:
+            self._capacity_metrics.on_charge_change(self._total)
 
 
 class Share:

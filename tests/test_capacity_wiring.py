@@ -17,7 +17,32 @@ from mcp_admin_core.capacity_metrics import (
 )
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.reply_worker import ReplyWorker
-from mcp_admin_core import run_product
+from mcp_admin_core import request_budget, run_product
+
+
+@pytest.mark.asyncio
+async def test_shared_budget_records_actual_charge_and_refund_not_failed_admission():
+    probe = CapacityMetrics(enabled=True)
+    probe.start()
+    token = activate(probe)
+    try:
+        budget = request_budget.RequestBudget(request_budget.BudgetLimits(
+            total=128 * 1024, per_profile=128 * 1024, small_minimum=64 * 1024))
+    finally:
+        deactivate(token)
+    reservation = budget.share('default', cap=128 * 1024).open()
+    assert probe.snapshot().charge_hook_calls == 1
+    reservation.reserve_small()
+    assert budget.used() == 64 * 1024
+    assert probe.snapshot().charged_bytes_peak == 64 * 1024
+    with pytest.raises(request_budget.BudgetExceeded):
+        reservation.grow(256 * 1024, cap=16 * 1024 * 1024)
+    assert budget.used() == 64 * 1024 and probe.snapshot().charge_hook_calls == 2
+    reservation.close()
+    snap = await probe.stop()
+    assert budget.used() == 0
+    assert snap.charge_hook_calls == 3
+    assert [row.charged_bytes for row in snap.charge_samples] == [0, 64 * 1024, 0]
 
 
 def test_environment_requires_exact_opt_in(monkeypatch):
