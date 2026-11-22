@@ -22,6 +22,9 @@ from test_expansion_policy import call
 from n8n_adapter import TOOLS as N8N_TOOLS, child_spec as n8n_spec
 import nextcloud_fixtures
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 PID = '12345678-1234-1234-1234-123456789abc'
 READS = {

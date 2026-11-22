@@ -92,7 +92,8 @@ class CandidateInvocationTests(unittest.TestCase):
                 self.assertEqual(commands[-1], ['docker', 'network', 'rm', NETWORK_ID])
 
     def test_existing_candidate_keeps_network_none(self):
-        commands = self.invoke('emqx')
+        with switched():  # HM-23: a product not switched on, whatever the repository switches on
+            commands = self.invoke('emqx')
         self.assertEqual(len(commands), 2)
         self.assertEqual(commands[1][:7], ['docker', 'run', '--rm', '--init', '--network', 'none', '--read-only'])
 

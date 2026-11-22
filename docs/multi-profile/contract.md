@@ -6,6 +6,8 @@
   合併順序 HM-00 → HM-10 → HM-18。定稿之後還會改本檔的主要是：HM-19c（第 5、6 節標「暫定」
   的數值）、HM-19b（在正式映像上確認後改 #89、#111 的理由欄）、各產品開通片（HM-21～HM-26：第 9 節還待決的 #65
   與新列），以及 S14 之後的 DQ-11 第二問（#10）；每次改動照第 10 節記一列。
+  HM-21 加第 9 節 #129（LiteLLM 的後端並行連線上限；列號暫定，2026-11-19），依獨立審查補 #129 的健康檢查（同日）；合併 HM-18 定稿
+  （`claude-delivery` `95b7e9d`）之後本片的列與紀錄接在定稿之後、列號照舊（同日；HM-22～HM-26 也從第 129 列編起，誰後合併誰往後重編）。
 - 「中立」：PaaS `WOOWTECH/woow-mcp-server` 的行為（pin `69ac425`）是期望值；HA 和它不同的地方，每一條都列在第 9 節的刻意差異表
   （計畫 §8.8，下稱「§8.8 #n」），沒列的就要相同。FEATURE-MATRIX 每一列（含「HA 平台差異」欄是「—」的列）對到哪一列、
   或為什麼相同，見 `deviation-trace.md`。
@@ -161,6 +163,29 @@ Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改�
   `tool_snapshot.py` 改了）；新的回答就是舊的回答只換掉這段說明（逐位元核對過）。兩個契約凍結不用改，照過。
 - 測試：`tests/test_hermes_cron_description.py`（子程式自己的 tools/list 與閘道內附的清單都逐字是 PaaS 的說明；拿掉這兩句就是原本的說明；
   trigger 只送一個 POST，自己不會再 pause 或 resume）。
+
+**HM-23 的不受開關管變更：EMQX 的三個實測小修**（2026-11-19；對齊 PaaS #153，woow-mcp-server `cd1ed89`、`4b4fd16`、`574c805`，
+合併 `5b84b5d`）
+
+- 來由：PaaS 2026-11-14 用真 EMQX 5.8.9 實測找到三個問題（PaaS 報告 F-01～F-03），2026-11-15 合併 #153。HA 的 EMQX 子程式和 PaaS 修正前是
+  同一份程式，三個問題都有。計畫把 #153 交給 HM-23（README 2026-11-16 07:1x）；要不要留在 HM-23 的 PR，交使用者確認（HM-23 筆記）。
+- 改了什麼（`apps/emqx/vendor/emqx_mcp_server/`）：
+  1. `emqx_list_subscriptions`：`match_topic` 的參數說明與工具說明照 PaaS 逐字改。舊說明說它找得出「誰會收到發到這個主題的訊息」；
+     broker 實際上是把它當過濾器，去比對已儲存的訂閱主題，具體主題找不到萬用字元訂閱。參數照舊原樣轉給 broker，回傳不在閘道比對。
+     閘道內附的工具清單（`tool_snapshot.py`）跟著改同一段說明。
+  2. `emqx_prometheus_stats`：只有這個請求送 `Accept: text/plain`，回 Prometheus 文字。以前送 JSON，EMQX 回 JSON 統計，截斷時把 JSON
+     切在半途。其他請求照舊 `application/json`。空的文字（含 204）回 `EMQX_INVALID_RESPONSE`。
+  3. 編碼後超過 65,536 字元或無法編碼（單獨的 surrogate）的識別字與查詢值：送出前就回固定的 `EMQX_DESTINATION_DENIED`。以前 httpx 丟
+     `InvalidURL` 或 `UnicodeEncodeError`，用戶端只拿到 FastMCP 的「Error calling tool …」，子程式輸出多一大段 traceback。
+  - 每個工具的請求都經 `deps.EmqxHttp.request`：Accept 只收這兩個固定值，請求選項只收 `params`、`json`、`content`、`data`，其他一律在送出前
+    拒絕（照 PaaS 的 `BrokerClient.request`）。
+- 改了什麼回應（單帳號）：8081 tools/list 與 8099 工具目錄裡 `emqx_list_subscriptions` 的說明；`emqx_prometheus_stats` 的回傳文字；上面那兩種
+  請求的錯誤文字。工具名稱、輸入與輸出 schema、annotations、寫入權限都不變；其他工具的請求與回應逐位元不變。
+- 沒照抄的：PaaS `BrokerClient` 本來就有的 4 MiB 回應上限與拒絕壓縮回應不是 #153 的內容，HA 的傳輸層（`backend_policy`）沒有，本片不加。
+- 為什麼不受開關管：和多帳號無關，是 EMQX 子程式本身的修正；跟著 EMQX 的下一版出去。
+- HM-01：黃金回歸 EMQX 的兩個 tools/list 摘要（`LISTING_SHA256`、`LISTED_SHA256`）照測試檔頭的規則一起更新（刻意的工具表面變更）；新的
+  回答就是舊的回答只換掉這段說明（逐位元核對）。兩個契約凍結不用改，照過。
+- 測試：`tests/test_emqx_field_findings.py`（子程式在自己的釘版環境、假 broker；另一案是真的子程式行程在閘道後面，輸出沒有 traceback）。
 
 **HM-13c 的不受開關管變更：還原後保留預設帳號權杖時的面板提示**（2026-11-16；使用者對 HM-13b 審查 Q-1 的定案）
 
@@ -1208,6 +1233,7 @@ A 超過待送上限後，新的 tools/call 立刻回 200＋`-32003`。D2 定案
 第 118～121 列出自 HM-13b 的實作（開機守門；不是 FEATURE-MATRIX 的列；`deviation-trace.md` 在 2026-11-19 HM-18 重產後經 G6 §5 的 T-21 對到）；#24、#67、#82 的附註也是。
 第 122、123 列出自 HM-13c 的實作（單帳號還原後的面板提示：使用者 2026-11-16 定案；隔離目錄的清單與刪除；不是 FEATURE-MATRIX 的列；HM-18 重產後經 T-21 對到）；#58、#67、#82 的 HM-13c 附註也是。HM-13c 獨立審查的修正只補 #58、#82、#123 的附註，沒有新列。
 第 124～128 列出自 HM-27 的實作（密鑰網址的服務層級 Origin 清單；#9、#10、#42 由 HM-27 定案改寫；不是 FEATURE-MATRIX 的列；HM-18 重產後經 T-24 對到）。原稿是第 118～122 列：HM-13b（#108）、HM-13c（#112）先合併、用掉第 118～123 列，本片合併時往後重編（第 10 節）。
+第 129 列出自 HM-21 的實作（LiteLLM 開通的功能 PR）：HM-32 審查 S-4 (b) 交給 HM-29、計畫 HM-29 記下的「既有」差異（LiteLLM 的後端並行連線上限），不是 FEATURE-MATRIX 的列，G6 §5 也沒有列對到；本片合併 HM-18 之後重產 `deviation-trace.md`，出處寫在它的文末。列號是暫定的：HM-18 定稿沒有加列，合併 `claude-delivery` `95b7e9d` 之後照舊；HM-22～HM-26 也從第 129 列編起，誰後合併誰往後重編（同 HM-27 的做法，第 10 節記改號）。
 2026-11-17 文件同步重產 `deviation-trace.md`（到第 117 列）：第 87 列以後的列，FEATURE-MATRIX 有說到同一件事的列就加進那一列的「對到」
 （例如 FM-154 → #101～#108、FM-81 → #113、#114）；沒有任何 FEATURE-MATRIX、G6 §5 的列對到的（#22、#33、#83、#88、#89、#90、#99），
 出處寫在 `deviation-trace.md` 文末「差異表每一列的來處」。
@@ -1284,7 +1310,7 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 62 | n8n session 名額與滿了的回應 | 每帳號 20、逾時 900 秒；上游 429 原文轉回；`AUTH_RATE_LIMIT_MAX` 1000 | 每帳號 20、逾時 600 秒；閘道回 429「Too Many Requests」；上游預設限流 | HA 既有（DQ-22 已定：逾時與限流維持 HA 現值，2026-11-19 08:4x 使用者採用建議） | 既有 |
 | 63 | Hermes Dashboard | 管理端有 Dashboard 代理（cookie 快取 key 帶帳號，刪帳號清除） | 沒有管理端代理；子程式內 cookie 每個子程式一份 | HA 沒有 Dashboard 代理頁 | 既有 |
 | 64 | LiteLLM 寫入權限 | `LITELLM_MCP_READONLY` 一個開關 | 逐支工具授權 | HA 既有政策模型 | 既有 |
-| 65 | EMQX 子程式端政策 | 子程式每次呼叫讀自己帳號的設定再擋一次 | 只在閘道擋；子程式只收 READONLY 與 DISABLED_TOOLS | 閘道政策＋每帳號子程式＋bearer（DQ-27 待定，建議不做） | 待決 |
+| 65 | EMQX 子程式端政策 | 子程式每次呼叫讀自己帳號的設定再擋一次 | 子程式讀取、驗證並綁定本帳號 state，依 HA 政策檢查工具及操作；唯讀固定健康探測保留。政策儲存仍重啟該帳號的子程式 | 使用者 2026-11-20 指示採用子程式防線；閘道與 child bearer 保留 | 既有 |
 | 66 | 還原的舊 schema 預設 state | restore guard 設 `RESTORE_POLICY_HOLD`，保留還原回來的舊政策 | 照 2026-10-27 決定做全開遷移，留復原紀錄與面板通知；額外帳號一出生就是 schema 4 | HA owner-defaults 規則；只在還原拉不到舊映像時發生（UC-24） | 既有 |
 | 67 | 還原收據封存 | 封存 bundle、可壓縮，重複還原保留每一份；還原前的舊操作 id 回 410 `operation_id_expired` | 每帳號只留最近 1 份 `.restored`；舊操作 id 回 410 `operation_restored`（HM-13b：新收據檔多一個 `restored_before_ms`；沒有收據的收據檔不再封存，重做時不會用空檔蓋掉封存；索引旁的收據也封存）。`restored_before_ms` 不早於被封存收據檔最新的 id 或下限（同 PaaS `max(cutoff_ms, journal_floors[...])`），但最多比還原當下晚 24 小時（`TTL_MS`；PaaS 沒有上限，`Pc/restore_guard.py:513-516`；HM-13b 審查 S-6）。HM-13c：守門處理的每個收據檔都換新，備份時沒有收據檔的帳號與索引旁也寫一份（同 PaaS 每份設定都換新），備份後才做、隨還原消失的操作 id 也回 410；#121 的預設帳號除外。HM-27（和 HM-13b、HM-13c 合併後）：Origin 政策旁的收據也一樣封存、換新 | entrypoint 修復項目上限（512 項、8 層）；代碼分開，看得出是還原造成（FM-07）。24 小時上限：偽造備份裡遠在未來的 id 不會讓之後的新操作好幾年都 410；代價是主機時鐘慢超過 24 小時時，備份裡較新的 id 在時鐘校正後可能被當成新操作（`threat-model.md` 第 3 節） | 部署 |
 | 68 | 子程式未就緒時的回應 | 503「MCP child is not ready」，或只有一支 setup_status 工具的佔位伺服器 | 閘道自答 initialize、ping、tools/list（內附清單），tools/call 回 JSON-RPC 錯誤；就緒後自答 session 404、要求重連 | HA 既有（0.2.2） | 既有 |
@@ -1348,6 +1374,8 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 126 | Origin 政策的設定入口與壞值 | 環境變數 `MCP_ADMIN_ALLOWED_ORIGINS`、`MCP_ADMIN_ORIGIN_MODE`（chart values）；壞值啟動失敗（exit 3）、執行中讀到壞值 MCP 路徑一律 503 `ORIGIN_POLICY_UNAVAILABLE`；啟動時記一行生效政策（INFO） | `/data/mcp/origin-policy.json`，面板經共用管線 GET／PUT `{base}/api/origin-policy`（If-Match、Idempotency-Key、收據）；檔案不能用時密鑰網址一律 503 `{"error":"state unavailable"}`（不拒絕啟動，面板用那個檔自己的 ETag 存一份蓋過去），只記 WARNING；沒有啟動時的 INFO 行（HM-27） | add-on options 鎖死（#45），只有面板能改；拒絕啟動會讓壞檔沒有修復途徑 | 部署 |
 | 127 | Origin 紀錄的節流 | 整台一份：每個來源 60 秒一行、全部每 60 秒最多 20 行，壓下的補一行；不標帳號，只進預設帳號的 Logs 頁（R04 S-10） | 每帳號一份：每帳號每個（判定、原因、來源）60 秒一行、每帳號每 60 秒最多 20 行，壓下的補一行；帶帳號 id 前 8 碼，寫在 add-on log（WARNING）（HM-27） | HA 在 token 之後判斷、知道帳號；一個帳號被灌爆不會蓋掉其他帳號的紀錄（PaaS 多帳號實測的 info，HANDOFF :241） | 部署 |
 | 128 | Origin 清單的格式與上限 | 逗號分隔的環境變數、每項去空白、不限個數，正規化後的重複合併 | JSON 陣列、最多 16 個、每項要剛好是一個來源（不去空白）、正規化後重複 → 422 `origin_policy_invalid`；存正規化後的寫法（HM-27）；IPv6 寫成 RFC 5952 的十六進位、不寫點分，不跟 Python 版本變（HM-27 審查 S-9） | 檔案與請求有界；不默默合併；存過的檔換 Python 也照樣能用 | 加嚴 |
+| 129 | LiteLLM 的後端並行連線與健康檢查 | 每個子程式最多 50 條，不留閒置連線；管理程序用獨立客戶端探測 `/v1/models`。 | LiteLLM 子程式的工具池最多 50 條、不留閒置連線；私有 `woow_backend_probe` 用另一個短生命週期、受同樣目的地政策保護的 client 驗 `/v1/models`，不佔用工具池。DNS 執行緒仍最多 4 條，LiteLLM 的連線在 deadline 內等待解析名額；其他產品維持立即拒絕與原本的池上限。健康探測仍可能因 DNS、網路或後端本身逾時。 | 與 PaaS 的工具池及獨立健康探測對齊；HA 保留 DNS 釘選、位址驗證、TLS、禁轉址與禁代理。四個帳號的工具池最多 200 條，另有短暫探測連線；HAOS 小型設備的記憶體、FD、TLS 與尖峰負載量測尚待發行前完成。 | 既有（對齊） |
+| 130 | EMQX 受限帳號的子程式與後端金鑰 | 子程式每次呼叫讀自己帳號存的政策，停用的工具與操作在子程式也擋 | 子程式依本帳號 state 檢查停用與寫入授權；固定唯讀健康探測例外。受限帳號仍可用 EMQX viewer 角色金鑰作縱深防禦 | 閘道、子程式、child bearer 與後端角色分層 | 既有 |
 
 ## 10. 變更紀錄
 
@@ -1409,3 +1437,6 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | v1 定稿（HM-18，R1） | 2026-11-19 | HM-18 | 定稿，R1（Odoo 首發）用；不開通任何產品，README、`addons/` 與程式都沒動。標題與開頭狀態寫明定稿與之後還會改本檔的片。第 1.4 節（新）：計畫 §7.2「開通後預設帳號會變的事」的完整清單（20 點加「不變的」），收進 HM-10 審查 S-6 的兩個位元組變化（PATCH、DELETE 沒過 identity 從 405 變 403；表外方法的 `Allow` 從 4 個方法變 6 個，本機用 `management_app` 兩種方法表核對過），交升版片寫進 CHANGELOG 與 `upgrade-notes.yaml`（建議句在 `unreleased-changes.md` 第 7 節）。第 2.6 節：S14 改由 HM-19b 量（HM-03b 沒做）。第 3.1 節：兩個位元組變化那一點指到第 1.4 節。第 3.3 節：補第一個 bootstrap 的探測例外（#110；HM-11 的交接）。第 3.5 節：補「全域收據沒有查詢路徑」（HM-11 的交接，規則不變）。第 3.7 節：寫回 HM-03a 的 UC-10（Ingress 照原樣轉 `X-MCP-Profile` 與 PATCH、DELETE），備援不做。第 2.4、2.6、6 節原本寫「HM-18 寫進 DOCS」的三處，改成已寫進的 `docs/operations/` 文件（產品 DOCS 交升版片）。第 9 節沒有加列、沒有改號：#5、#6（DQ-24、DQ-23，2026-11-17 已定）、#50（UC-10 已證實；類型待決 → 部署）、#55、#84（HM-11 的用字）、#56、#60（DQ-31、DQ-30 已定；#60 類型待決 → 既有）、#85（DQ-31 已定；類型待決 → 加嚴（建議回補），HA 欄照 HM-11 的實作）、#87（HM-03a 量到的 FD 上限）。#75 已是 60 分鐘（HM-10 rebase 的 `b51cf8c` 改的；`.github/workflows/woow-addon-release.yml` 的 `checks` 是 `timeout-minutes: 60`），沒有再改。還待決、不擋 R1：#10（DQ-11 第二問，S14 之後）、#28 與 #62 的 DQ-22、#47 與第 8 節的 DQ-04（n8n，HM-25 前）、#65（DQ-27，HM-23 前）。理由欄仍寫待實測的：#89（IPv6 試綁被平台擋，HM-03a 沒量）、#111（`ETag` 回應標頭經 Ingress：發版前預驗看到照轉，HM-19b 在正式映像上確認後改）。第 5、6 節的「暫定」數值等 HM-19c |
 | v1 定稿（HM-18 審查修正） | 2026-11-19 | HM-18 | 依 HM-18 的獨立審查（報告 `artifacts/…/wave5/review-HM-18-correctness.md`，修正後通過）：開頭狀態的「之後還會改本檔的片」補 HM-19b（#89、#111 的理由欄；S-1），「第 10 節最後一列」改指 HM-18 的列（開頭兩處、第 2.6 節一處）。第 1.4 節：第 4 點補 `X-Ingress-Path` 格式錯時的 400（N-2）；第 5、10、19 點標「Headscale 除外」，第 19 點補索引旁與 Origin 政策旁的收據檔，第 20 點補開通而沒有帳號資料的還原也寫 `restore-record.json`（預設帳號記為保留）並換新那兩個收據檔（S-3）。第 9 節開頭：第 118～128 列改寫成 HM-18 重產後經 T-21、T-24 對到（S-2），HM-18 那段的待決列補 #28（N-7）；#69 的理由照版本寫（0.4.14、Headscale 0.4.19 起的 entrypoint 會建標記；S-5 的同一件事）。規則內容、差異表的列與錯誤代碼都沒改 |
 | v1 定稿（DQ-04、DQ-22 定案） | 2026-11-19 | HM-18 | 負責人 2026-11-19 08:4x 照計畫建議定 DQ-04（n8n 額外帳號的 `nodes.db` 每帳號一份、在 `/tmp/woow-n8n-mcp/profiles/<id>/`、不進備份，預設帳號的路徑不變）與 DQ-22（沒後端的 n8n 額外帳號不起子程式，所有工具含 7 支文件工具回 `backend_not_configured`；逾時與限流維持 HA 現值），`decisions.md` 記成已定。開頭狀態：還待決的列只剩 #65（產品開通片）與 #10（S14 之後）。第 4.2 節 `backend_not_configured` 列、第 8 節 `nodes.db` 那一句、第 9 節 #28 的 HA 欄：「待定」改成已定。第 9 節 #47：理由欄寫已定，類型待決 → 部署（add-on 的備份含整個 `/data`，持久化每帳號多約 67 MiB（FM-110）；不加大備份和 #28 的省記憶體一樣是平台的考量）；#62：理由欄寫已定，類型待決 → 既有（維持 HA 現值）。第 9 節開頭補一段。HA 欄寫的行為沒變；列沒有加、沒有改號，錯誤代碼沒改；`deviation-trace.md` 不受影響（產生器只讀第 9 節的項目欄，重產逐位元相同） |
+| v1 定稿（HM-21） | 2026-11-19 | HM-21 | LiteLLM 開通的功能 PR（計畫 §9 LiteLLM 列、§12.3 HM-21～HM-26；計畫 HM-29 記下的 HM-32 審查 S-4 (b)）：第 9 節加第 129 列（LiteLLM 的後端並行連線上限：PaaS 每個子程式 50 條，HA 4 條，`backend_policy` 的傳輸層，`lifespan.py` 的 50 不生效；開通後每個帳號的子程式各自 4 條；類型既有；取捨寫在列裡，要不要改交負責人，本片不改），說明段記它的出處與暫定的列號（HM-22～HM-26、HM-18 同時在準備，誰後合併誰往後重編）。LiteLLM 沒有產品專屬程式（計畫 §9）：規則內容、錯誤代碼與其他列都沒改 |
+| v1 定稿（HM-21 審查修正） | 2026-11-19 | HM-21 | 依 HM-21 的獨立審查（報告 `artifacts/…/wave5/review-HM-21-correctness.md`，修正後通過）：#129 的 HA 欄補健康檢查也要用同一個 4 條的連線池（4 條被超過 5 秒的呼叫占住又碰上檢查時，沒開通一次、開通後連兩次就判 `unreachable`，閘道對這個帳號的 tools/call 回 `-32603`「Backend unreachable」直到下一次檢查通過；`tests/test_litellm_multi_profile.py` 加兩案），「一陣同時的請求只會排隊」改成只說工具呼叫，理由欄的代價與另一條路（讓健康探測不和工具搶連線）跟著補（MF-1）。規則內容、錯誤代碼與其他列都沒改 |
+| v1 定稿（HM-21 合併 HM-18 之後） | 2026-11-19 | HM-21 | 用 merge commit 把 `claude-delivery` `95b7e9d`（#122 HM-18 定稿、#123 P9 清單產生器、#124 測試工具的 port 撞號）合進本片（不 rebase、不 force push）。HM-18 定稿沒有加列，`claude-delivery` 到第 128 列為止，本片的第 129 列列號照舊、仍是暫定（HM-22～HM-26 也從第 129 列編起，誰後合併誰往後重編）。解衝突以 HM-18 的定稿文字為底、本片加的照原樣接上：開頭狀態在 HM-18 那段之後加本片一句；第 9 節說明段 HM-18 改寫的第 118～128 列三行在前、本片第 129 列那行在後，改寫成 HM-18 已合併、`deviation-trace.md` 已重產；本節 HM-18 的三列在前、本片的兩列在後，兩列的版本由「v1 草案」改成「v1 定稿」（內容不變）。HM-18 改的 #28（HA 欄）、#47（類型改部署）、#62（類型改既有）和 #129 不相干，照 HM-18。`deviation-trace.md` 照 HM-18 的做法用 repo 外產生器的暫存複本重產：只多 #129 的出處（HM-32 審查 S-4 (b)、計畫 HM-29、HM-21）與檔頭一句。規則內容、錯誤代碼與其他列都沒改 |

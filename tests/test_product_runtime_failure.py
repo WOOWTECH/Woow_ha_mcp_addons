@@ -5,6 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from mcp_admin_core import profile_runtime, run_product
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 
 async def test_invalid_replacement_spec_stops_previous_child_first(tmp_path, monkeypatch):

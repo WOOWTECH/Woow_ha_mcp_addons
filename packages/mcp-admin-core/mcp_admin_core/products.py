@@ -948,7 +948,7 @@ INSTRUCTIONS = {'headscale': ('Manage one Headscale control server through its n
     'Text tools refuse folders, binary (non UTF-8) files and files over the configured size limit.',
     'list_calendars shows calendar ids; list_tasks reads tasks (VTODO) from them.',
     'Some tools may be absent because the administrator made the server read-only or disabled them.'))}
-PRIVATE_PROBES = ('odoo', 'odoo-manage', 'nextcloud')
+PRIVATE_PROBES = ('odoo', 'odoo-manage', 'nextcloud', 'litellm')
 
 
 def health_probe(product):
@@ -956,6 +956,8 @@ def health_probe(product):
 
 
 def health_probe_success(product, payload):
+    if product == 'litellm':
+        return probe_success(product, payload)
     if product == 'nextcloud':
         # client.py _fetch_user_id: the OCS answer's ocs.data.id, a non-empty string; any failure is a tool error.
         return (isinstance(payload, dict) and set(payload) == {'ok', 'user_id'} and payload['ok'] is True
@@ -1036,7 +1038,9 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
             argv = (str(python), str(app / 'launch.py'), '--host', '127.0.0.1', '--port', listen)
             return ChildSpec(argv, env, cwd)
         if product == 'emqx':
-            env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret, EMQX_MCP_READONLY='true')
+            env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
+            env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret,
+                       EMQX_MCP_STATE_PATH=str(directory / 'state.json'), EMQX_MCP_READONLY='true')
             module = 'emqx_mcp_server.server'
         elif product == 'nextcloud':
             # No ALLOWED_HOSTS (the gateway reaches the child as 127.0.0.1, which its Host/Origin guard accepts)
@@ -1058,8 +1062,8 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
         public_allowed = {name for name in TOOLS[product] if enabled(name, TOOLS[product], state)}
         # Private loopback registration also serves HealthMonitor, independently
         # of public disables. Reserve ONLY the fixed, argument-free read probe:
-        # EMQX GET /nodes or LiteLLM GET /v1/models (never provider /health); Nextcloud's
-        # private woow_backend_probe (OCS GET cloud/user) is not in NAMES and never disabled.
+        # EMQX GET /nodes; LiteLLM and Nextcloud have their own private
+        # woow_backend_probe, not in NAMES and never disabled.
         # Parent authorize/filter_list still enforce every public disable; raw
         # child tools/list is intentionally not the public authorization surface.
         native_allowed = public_allowed | {health_probe(product)[0]}  # the probe HealthMonitor actually calls
