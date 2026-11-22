@@ -561,14 +561,14 @@
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/capacity_metrics.py",
-      "sha256": "47dc4b60e777a5ff5a8d321a701e6ee90f09a1ffe80b31a84e1cf9f74b039c85",
-      "change": "HM-19c candidate evidence: opt-in bounded in-process numeric samples for gateway event-loop lag and charged request bytes. Dormant by default, no endpoint or logs; requires explicit runtime hooks before it produces evidence. This is not a release capacity pass. HM-19c opt-in numeric-only bounded capacity evidence: scheduled gateway-loop lag, charged-byte transitions, health check outcomes and reply-worker durations; fixed mode-0600 /tmp output on SIGUSR1, no endpoint or /data write. Dormant without WOOW_CAPACITY_METRICS=1.",
+      "sha256": "b4b28722e8d13e85e005b708eb4c77b3b7e3f8634118821cd664727535f2d0eb",
+      "change": "HM-19c candidate evidence: opt-in bounded in-process numeric samples for gateway event-loop lag and charged request bytes. Dormant by default, no endpoint or logs; requires explicit runtime hooks before it produces evidence. This is not a release capacity pass. HM-19c opt-in numeric-only bounded capacity evidence: scheduled gateway-loop lag, charged-byte transitions, health check outcomes and reply-worker durations; fixed mode-0600 /tmp output on SIGUSR1, no endpoint or /data write. Dormant without WOOW_CAPACITY_METRICS=1. HM-19c evidence review fix: export a conservative event-loop pause bound (sampled maximum lateness plus timer interval), and use ephemeral health slots without exporting child ports.",
       "guarded_sources": {}
     },
     {
       "path": "packages/mcp-admin-core/mcp_admin_core/health.py",
-      "sha256": "412adca25fe3d2f71878efc9e0392dc85d4cf8ebaee35ccc3d23f92c92b453ae",
-      "change": "HM-19c opt-in capacity probe records scheduled child health-check count, phase, duration and fixed outcome on the gateway loop, including zero-check monitors. No credential, backend response, URL or profile label is exported.",
+      "sha256": "c7106592ae06a739ceb4f6aef5eb02e877363314b30262e4eaa2a62962dc84ca",
+      "change": "HM-19c opt-in capacity probe records scheduled child health-check count, phase, duration and fixed outcome on the gateway loop, including zero-check monitors. No credential, backend response, URL or profile label is exported. HM-19c evidence review fix: count httpx transport timeouts as timeouts, not ordinary unreachable results.",
       "guarded_sources": {}
     }
   ]
