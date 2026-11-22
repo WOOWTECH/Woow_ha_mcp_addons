@@ -23,10 +23,13 @@ from starlette.requests import Request
 DEFAULT_MAX_TOTAL_ELEMENTS = 200_000
 DEFAULT_MAX_DEPTH = 64
 
-# 一次比對「一段不含結構字元的內容（字串整段、含跳脫，其餘字元）＋一個結構字元」：Python 迴圈的次數＝結構字元數（超過上限就停），
-# 不是 body 的位元組數。possessive 量詞：長字串一次吃完、不回溯。
-_RUN_THEN_STRUCTURE = re.compile(rb'(?:"(?:[^"\\]+|\\.)*+"|[^"\[\]{},]++)*+([\[\]{},])', re.DOTALL)
-_OPENERS = frozenset(b"[{")
+# Remove complete JSON strings in C before the Python structural loop. The
+# possessive repeat keeps an unterminated long string from backtracking.
+_COMPLETE_STRING = re.compile(rb'"(?:[^"\\]|\\.)*+"', re.DOTALL)
+# Keep only structural bytes outside strings. Removing other bytes in C avoids
+# creating one Python match object for each of ~200,000 tiny JSON elements.
+_STRUCTURE_BYTES = bytes.maketrans(bytes(range(256)),
+                                   bytes(char if char in b'[]{},' else 0 for char in range(256)))
 _COMMA = ord(",")
 #: 檢查「整段是合法 UTF-8」時每次解碼的區塊大小：不把整份內容解成 str（astral 字元會讓 str 變成 4 倍），暫存只有區塊大小。
 _UTF8_CHUNK = 1024 * 1024
@@ -60,7 +63,7 @@ def structure_violation(body: bytes, *, max_depth: int, max_elements: int) -> st
 
     - 先拒收不是 UTF-8 的內容（not_utf8）；
     - 快速路徑：整個 body 的 ``,``、``[``、``{`` 次數都沒超過上限就放行（三次 ``bytes.count``）；
-    - 否則逐一掃描結構字元，超過上限就停：成本只跟上限成正比、不跟 body 大小成正比；
+    - 否則先刪去完整字串，再逐一掃描結構字元，超過上限就停；
     - 閉括號多於開括號（``depth < 0``）就停、不判違規：那不是合法 JSON，之後的解析本來就會拒絕；沒有這一條時 1,500 萬個
       ``]`` 每個一次 Python 迴圈（PaaS 第三輪 P1-B：5.6 秒）；
     - 遇到沒結束的字串就停、不判違規（不是合法 JSON）。"""
@@ -69,14 +72,16 @@ def structure_violation(body: bytes, *, max_depth: int, max_elements: int) -> st
     openers = body.count(b"[") + body.count(b"{")
     if openers + body.count(b",") <= max_elements and openers <= max_depth:
         return None
-    depth = elements = pos = 0
-    match = _RUN_THEN_STRUCTURE.match
-    while (found := match(body, pos)) is not None:
-        pos = found.end()
-        char = body[pos - 1]
+    outside_strings = _COMPLETE_STRING.sub(b'', body)
+    # The original scanner still counted structure before an unterminated
+    # string. Stop at its opening quote, but retain any earlier violation.
+    outside_strings = outside_strings.split(b'"', 1)[0]
+    structural = outside_strings.translate(_STRUCTURE_BYTES).replace(b'\x00', b'')
+    depth = elements = 0
+    for char in structural:
         if char == _COMMA:
             elements += 1
-        elif char in _OPENERS:
+        elif char == ord('[') or char == ord('{'):
             elements += 1
             depth += 1
             if depth > max_depth:
