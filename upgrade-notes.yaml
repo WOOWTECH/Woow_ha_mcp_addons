@@ -61,10 +61,16 @@ releases:
       - id: mcp-busy-answers-and-interruptions
         change: >-
           Admission per profile on 8081: over 64 requests of the default profile get JSON-RPC -32003 with
-          Retry-After 5 (200 for a small body with an id, else 503) instead of a plain-text 503; a 25th GET stream
-          gets 429 with Retry-After 30; at most 32 wait and a forwarding slot not free within 1 second gives -32003.
+          Retry-After 5 (200 for a small body with an id, else 503) instead of a plain-text 503; at most 32 wait and
+          a forwarding slot not free within 1 second gives -32003.
           Each additional profile has 32 and 8 streams of its own; the outer bound is 224 connections. Pending replies
-          are capped at 32 MiB per profile (soft). A token changed during an answer gives -32005, a child lost during
+          are capped at 32 MiB per profile (soft). Forwarded GET streams and identified POST requests other than
+          initialize and ping also hold 64 MiB reservations: at most 3 for the default profile, 1 per additional profile,
+          and 512 MiB (8 reservations) across the add-on. The nominal GET quotas remain 24/8, but a further
+          same-profile GET after 3/1 open streams gets 429, -32003 and Retry-After 30. Other covered requests share
+          the tickets: a GET below its stream cap gets 503, -32003 and Retry-After 5 if its ticket is already held;
+          a covered POST gets 200, -32003 and Retry-After 5 when full. Ticket refusals have Cache-Control no-store
+          and never reach the child. A token changed during an answer gives -32005, a child lost during
           one -32004, without a log traceback. Replies are processed on one worker thread, profile by profile.
         migration: Retry -32003 after Retry-After; check the backend before retrying a write after -32004; reconnect with the new token after -32005.
       - id: child-watchdog-and-health
