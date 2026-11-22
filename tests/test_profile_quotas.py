@@ -336,8 +336,9 @@ async def test_the_byte_budget_answers_as_the_paas_table(tmp_path, log_scan, mon
     """B's share of the add-on's budget (here 1 MiB: its quota caps it; 64 MiB in the add-on), the PaaS budget rows
     (d7f5849, HM-31): a large declared body that does not fit what is left is refused before it is read, drained, its id
     from its head: 200 + -32003 under its id (503, id null, without one); a large body without Content-Length that grows
-    past the share is cut off at once (503 + -32003 id null + Retry-After 5), nothing of it forwarded; a small request
-    (64 KiB at most) is never charged nor refused. Every byte goes back; the default profile's share is its own."""
+    past the share is cut off at once (503 + -32003 id null + Retry-After 5), nothing of it forwarded; switched-on
+    Odoo's small POST reserves 64 KiB and is refused if the share is full. Every byte goes back; the default profile's
+    share is its own."""
     monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA, body_bytes=MiB))
     data = setup(tmp_path)
     children = holding_children(data)
@@ -363,7 +364,7 @@ async def test_the_byte_budget_answers_as_the_paas_table(tmp_path, log_scan, mon
             busy(await client.post('/mcp', headers=headers, content=note), status=503, retry_after=5, ident=None,
                  text=text)
             small = await client.post('/mcp', headers=headers, content=json.dumps(call(52)).encode())
-            assert small.status_code == 200 and 'result' in small.json()  # never charged nor refused
+            busy(small, status=200, retry_after=5, ident=52, text=text)
             since = len(children.by_port[18000].requests)
 
             async def growing():  # a body without Content-Length: refused once it would pass the share
@@ -515,6 +516,61 @@ async def test_beyond_the_admission_a_small_body_is_read_once_and_handed_on(monk
     assert await replay() == {'type': 'http.disconnect'}
 
 
+async def test_beyond_admission_odoo_small_body_stays_charged_through_slow_send():
+    module = router()
+    budget = request_budget().RequestBudget(request_budget().BudgetLimits(
+        total=64 * 1024, per_profile=64 * 1024, small_minimum=64 * 1024))
+    gate = module.ProfileGate(B, profiles.EXTRA_PROFILE_QUOTA, budget, request_budget().Reports())
+    gate.active = gate.quota.admission
+    body = json.dumps({'jsonrpc': '2.0', 'method': 'notifications/initialized',
+                       'params': {'items': ['x'] * 13000}}).encode()
+    assert len(body) <= 64 * 1024
+    scope = {'type': 'http', 'method': 'POST', 'headers': [(b'content-type', b'application/json')]}
+    sending = asyncio.Event()
+    release = asyncio.Event()
+    reads = 0
+
+    async def receive():
+        nonlocal reads
+        reads += 1
+        return {'type': 'http.request', 'body': body, 'more_body': False}
+
+    async def app(_scope, replay, send):
+        assert json.loads((await replay())['body'])['params']['items']
+        await send({'type': 'http.response.start', 'status': 202, 'headers': []})
+        await send({'type': 'http.response.body', 'body': b'', 'more_body': False})
+
+    async def send(message):
+        if message['type'] == 'http.response.body':
+            sending.set()
+            await release.wait()
+
+    task = asyncio.create_task(gate.serve(app, scope, receive, send))
+    try:
+        await asyncio.wait_for(sending.wait(), 2)
+        assert budget.used(B) == 64 * 1024 and gate.beyond == 1
+        # A second small POST cannot bypass the global or profile charge.
+        responses = []
+
+        async def collect(message):
+            responses.append(message)
+
+        await gate.serve(app, scope, receive, collect)
+        assert responses[0]['status'] == 503
+        headers = dict(responses[0]['headers'])
+        assert headers[b'retry-after'] == b'5'
+        assert headers[b'cache-control'] == b'no-store'
+        refused = json.loads(responses[-1]['body'])
+        assert refused['id'] is None and refused['error']['code'] == -32003
+        assert refused['error']['message'] == budget_text('profile', 64 * 1024)
+        assert reads == 1  # insufficient minimum refuses before parsing another body
+        assert budget.used(B) == 64 * 1024
+    finally:
+        release.set()
+        await task
+    assert budget.used(B) == 0 and gate.beyond == 0
+
+
 # ---- the default profile as the attacker (C1-M5, I8) and the starvation cases (G2 S5, S6) ----
 
 async def test_the_default_profiles_token_holder_cannot_exhaust_memory(tmp_path, log_scan, monkeypatch):
@@ -562,7 +618,8 @@ async def test_the_default_profiles_token_holder_cannot_exhaust_memory(tmp_path,
             for result in refused:
                 busy(result, status=503, retry_after=5, ident=None, text=budget_text('profile', 64 * MiB))
             await until(lambda: charged(runtime, 'default') == 0 and gate.active == 0)
-        assert runtime.manager.budget.peak <= 64 * MiB
+        # B's successful small POST also holds its own 64 KiB minimum briefly.
+        assert runtime.manager.budget.peak <= 64 * MiB + request_budget().SMALL_REQUEST_BYTES
 
 
 async def test_a_saturated_profile_does_not_starve_an_idle_one_on_real_sockets(tmp_path, log_scan, monkeypatch):

@@ -221,6 +221,8 @@ def test_switched_off_counts_one_account_and_switched_on_the_products_capacity(m
     assert off.total == int((4096 - 76 - 100 - 150) * MiB / 20)
     assert on.total == int((4096 - 256 - 76 - 600 - 150 - 512 - 221) * MiB
                            / module.ODOO_ADMISSION_AMPLIFICATION) < off.total
+    assert off.small_minimum == 0
+    assert module.BudgetLimits.derive('n8n', switched_on=True).small_minimum == 0
 
 
 def test_odoo_reply_and_body_reservations_fit_three_gib_without_relaxing_release_gate(monkeypatch):

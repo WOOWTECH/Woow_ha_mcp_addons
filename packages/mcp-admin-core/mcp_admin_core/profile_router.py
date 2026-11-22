@@ -370,7 +370,28 @@ class ProfileGate:
     async def beyond_admission(self, app, scope, receive, send):
         """The profile's admission is full (HM-31: HM-14 review MF-2 (b), the PaaS semantics; see the module docstring).
         A small POST is read: one carrying no request is served beyond the admission (the reserve's purpose: a
-        notification always gets through); any other is answered busy with its id. Anything else: busy, unread."""
+        notification can use the reserved lane when the body budget allows); any other is answered busy with its id.
+        Anything else: busy, unread."""
+        # Odoo's minimum charge must also cover the small POSTs inspected beyond
+        # admission. Keep it until the response send completes, including a
+        # notification handed to the app. Switched-off and other products have
+        # no minimum and retain their existing path.
+        reservation = None
+        if scope['method'] == 'POST' and json_content(scope) and self.budget_share.budget.limits.small_minimum:
+            reservation = self.budget_share.open()
+            try:
+                reservation.reserve_small()
+            except request_budget.BudgetExceeded as exceeded:
+                reservation.close()
+                self.budget_share.warn('bytes', request_budget.budget_note(exceeded))
+                return await gateway.busy_reply(None, request_budget.budget_text(exceeded))(scope, receive, send)
+        try:
+            return await self._beyond_admission_reserved(app, scope, receive, send)
+        finally:
+            if reservation is not None:
+                reservation.close()
+
+    async def _beyond_admission_reserved(self, app, scope, receive, send):
         quota = self.quota
         text = admission_text(quota.admission)
         message = None
