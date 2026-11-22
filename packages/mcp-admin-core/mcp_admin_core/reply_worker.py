@@ -101,7 +101,7 @@ STACK_BYTES = 16 * 1024 * 1024
 # note, CPU-starvation test): the loop's longest stop while the worker processed A's replies 17-27 ms (contract 6: at
 # most 50 ms), the other profile's tools/call p99 0.38-0.44 s (at most 0.7 s).
 SLICE_SECONDS = 0.005
-BREATH_SECONDS = 0.002
+BREATH_SECONDS = 0.004
 YIELD_SECONDS = 0.010   # how long one checkpoint may wait in all while the loop has callbacks ready to run
 YIELD_STEP_SECONDS = 0.0005
 _breath = threading.local()  # set on the worker thread only: since (its last breath or wake-up), ready, loop_thread
