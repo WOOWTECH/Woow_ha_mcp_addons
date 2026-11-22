@@ -5,8 +5,9 @@ RequestBudget.used() total to on_charge_change after successful changes,
 then await stop. The interface accepts numbers only, never profile identity,
 token, body, URL, or response data.
 
-The lag value is the largest observed late timer wake-up at the configured
-interval; it is not a continuous proof that no shorter pause occurred.
+The lag bound adds one timer interval to the largest observed late wake-up.
+It is conservative for a block that starts between timer wake-ups, but a
+sampled timer cannot prove the absence of every shorter pause.
 """
 
 import asyncio
@@ -83,12 +84,13 @@ class CapacitySnapshot:
     charge_samples: tuple[ChargeSample, ...]
     dropped_charge_samples: int
     lag_max_ns: int
+    lag_pause_bound_ns: int | None  # observed maximum plus one sampling interval
+    lag_50ms_gate_pass: int | None  # 1 pass, 0 fail, None no timer sample
     lag_max_at_monotonic_ns: int | None
     lag_samples: tuple[LagSample, ...]
     dropped_lag_samples: int
     health_monitors_registered: int
     health_monitors_untracked: int
-    health_monitor_child_ports: tuple[int | None, ...]
     health_checks_scheduled: int
     health_checks_by_slot: tuple[int, ...]
     health_inflight_by_slot: tuple[int, ...]
@@ -136,7 +138,6 @@ class CapacityMetrics:
         self._dropped_reply_samples = 0
         self._health_counts: list[int] = []
         self._health_inflight: list[int] = []
-        self._health_ports: list[int | None] = []
         self._health_checks = 0
         self._health_untracked = 0
         self._reply_jobs = 0
@@ -187,8 +188,12 @@ class CapacityMetrics:
             self._dropped_charge_samples += 1
         self._charge_samples.append(ChargeSample(at, total_charged_bytes))
 
-    def register_health_monitor(self, child_port: int | None = None) -> int | None:
-        """Assign an ephemeral numeric slot, including monitors with zero checks."""
+    def register_health_monitor(self) -> int | None:
+        """Assign an ephemeral construction-order slot, including zero-check monitors.
+
+        Attribute B/C only when the run controls monitor construction order;
+        use per-slot scheduled counts to distinguish zero-check monitors.
+        """
         if self._stopped_at is not None:
             return None
         if not self.enabled or self._loop is None or asyncio.get_running_loop() is not self._loop:
@@ -196,12 +201,9 @@ class CapacityMetrics:
         if len(self._health_counts) >= 256:
             self._health_untracked += 1
             return None
-        if child_port is not None and (type(child_port) is not int or not 1 <= child_port <= 65535):
-            raise ValueError('invalid numeric child port')
         slot = len(self._health_counts)
         self._health_counts.append(0)
         self._health_inflight.append(0)
-        self._health_ports.append(child_port)
         return slot
 
     def on_health_check_scheduled(self, slot: int, scheduled_at_ns: int) -> None:
@@ -304,14 +306,15 @@ class CapacityMetrics:
             reply_d_max = self._reply_d_max
             reply_samples = tuple(self._reply_samples)
             dropped_reply = self._dropped_reply_samples
+        lag_bound = self._lag_max + self._interval_ns if self._lag_samples else None
+        lag_gate = None if lag_bound is None else int(lag_bound <= 50_000_000)
         return CapacitySnapshot(
             self._started_at, self._stopped_at, self._interval_ns,
             self._charged_now, self._charged_peak, self._charged_peak_at, self._charge_hook_calls,
             tuple(self._charge_samples), self._dropped_charge_samples,
-            self._lag_max, self._lag_max_at, tuple(self._lag_samples),
+            self._lag_max, lag_bound, lag_gate, self._lag_max_at, tuple(self._lag_samples),
             self._dropped_lag_samples,
-            len(self._health_counts), self._health_untracked,
-            tuple(self._health_ports), self._health_checks,
+            len(self._health_counts), self._health_untracked, self._health_checks,
             tuple(self._health_counts), tuple(self._health_inflight), tuple(self._health_samples),
             self._dropped_health_samples, reply_jobs, reply_d_max,
             reply_samples, dropped_reply,

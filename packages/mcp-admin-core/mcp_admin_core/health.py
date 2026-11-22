@@ -30,7 +30,6 @@ import asyncio
 import re
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
 
 import httpx
 
@@ -140,11 +139,7 @@ class HealthMonitor:
         self._wake = asyncio.Event()
         self._capacity_metrics = active_metrics()
         if self._capacity_metrics is not None:
-            try:
-                child_port = urlsplit(str(child_url)).port
-            except ValueError:
-                child_port = None
-            self._capacity_slot = self._capacity_metrics.register_health_monitor(child_port)
+            self._capacity_slot = self._capacity_metrics.register_health_monitor()
         else:
             self._capacity_slot = None
         self._capacity_phase = 0
@@ -376,7 +371,7 @@ class HealthMonitor:
             # the backend unreachable; it must never stop the monitor, which would stop the add-on.
             if reason is None and isinstance(error, TimeoutError):
                 reason = "BACKEND_TIMEOUT: the health check got no answer within 5 s"
-            if self._capacity_metrics is not None and isinstance(error, TimeoutError):
+            if self._capacity_metrics is not None and isinstance(error, (TimeoutError, httpx.TimeoutException)):
                 self._capacity_timeout = True
         finally:
             if session:
