@@ -204,13 +204,21 @@ async def until(condition, seconds=5):
             await asyncio.sleep(.005)
 
 
+def mock_child_ready(runtime, profile_id):
+    """The mock transport has a child, while NoProcessSupervisor has no real process or spec."""
+    health = runtime.manager.get(profile_id).runtime.health
+    health.process.status = 'running'
+    health.process.ready = True
+    health.settled = (health.process.starts, True, 'reachable', None)
+
+
 async def test_full_reply_reservation_keeps_other_profile_controls_available(tmp_path, log_scan):
     """Full A/other tickets cannot hide B's control probes or admit a large listing."""
     data = setup(tmp_path)
     children = holding_children(data)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data)
-        await until(lambda: runtime.manager.get(B).runtime.health.availability()['child'] in gateway.CHILD_UP)
+        mock_child_ready(runtime, B)
         memory = runtime.manager.reply_memory
         holders = ['default'] * 3 + [B, C] + [f'{i:024x}' for i in range(3)]
         for name in holders:
@@ -243,7 +251,7 @@ async def test_unticketed_ping_child_body_is_hard_capped(tmp_path, log_scan):
     children.add(18000, OversizePingChild('pbeta', PRODUCT, profiles.Layout(data).profile(B)))
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
         watch(log_scan, data)
-        await until(lambda: runtime.manager.get(B).runtime.health.availability()['child'] in gateway.CHILD_UP)
+        mock_child_ready(runtime, B)
         async with runtime.mcp() as client:
             token = runtime.token(B)
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
