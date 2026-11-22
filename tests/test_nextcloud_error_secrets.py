@@ -7,8 +7,12 @@ from xml.sax.saxutils import escape
 import pytest
 
 from nextcloud_fixtures import NextcloudFake, OCS_PATH, respond
+from nextcloud_fixtures import switched_off  # noqa: F401  (fixture: HM-22, the switch these tests pin)
 from test_six_hardening import Quiet, call, runtime, serve
 
+# HM-22: the add-on as it is today, Nextcloud not switched on, whatever the repository switches on
+# (nextcloud_fixtures.switched_off).
+pytestmark = pytest.mark.usefixtures('switched_off')
 PASSWORD = 'FAKE-nc-pass/+"quoted-4917'
 DIAGNOSTIC = 'FAKE quota exhausted on isolated backend'
 UNKNOWN_TOKEN = 'FAKE-unknown-backend-token-20261101'

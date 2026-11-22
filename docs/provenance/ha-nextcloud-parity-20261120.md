@@ -1,0 +1,9 @@
+# Nextcloud PaaS parity candidate — 2026-11-20
+
+This is a candidate on HA HM-22 `b0b9c4f4ade56509e4484d63b541aa1961b748b0`, compared with the local PaaS `origin/main` `5ef1046927db4ec239bfde9b4a38c64eeafea399`. It does not enable the multi-profile feature switch, change an add-on version, merge, publish or deploy. The behavior and remaining differences are in `docs/multi-profile/nextcloud-paas-parity-20261120.md`.
+
+The five changed, pinned runtime modules are `configuration.py`, `gateway.py`, `identity_fields.py`, `products.py`, and `profile_runtime.py`; their `runtime-patches.json` digests and change descriptions are updated. No vendored source, launcher or tool surface changed. The local ledger precheck checks available files and separately reports dependencies that only an installed CI environment supplies.
+
+Local verification used Python 3.13 and temporary links to the unchanged HM-22 dependency environments and a copied local UI build. A combined Nextcloud/profile/configuration/owner-defaults/destination/identity/ledger/inventory run passed 420 cases before the inventory case encountered the fresh clone's missing n8n `node_modules`. After linking the existing local n8n dependencies, `tests/test_tool_inventory.py tests/test_ledger_precheck.py` passed 16 cases. The focused run includes real Nextcloud child processes against a fake backend; it is not HAOS acceptance or a real-backend test. The repository ledger precheck passed with zero available-file drift; an initial candidate-file scan with the pinned Gitleaks and builder allowlist reported zero findings. The final committed candidate must also pass the repository's committed-source/history secret precheck; see the delivery report for its result.
+
+No release or deployment checks are claimed. HAOS acceptance, actual Nextcloud backend isolation and backend rate-limit behavior remain separate release work.

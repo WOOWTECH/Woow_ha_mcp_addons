@@ -67,6 +67,14 @@ class ConfigurationState:
         self._minimum_generation = getattr(self.process, 'starts', 0) + 1
         self._error = None
 
+    def policy_accepted(self, previous, state):
+        """A gateway-enforced tightening/unchanged policy needs no new child generation."""
+        old, new = self.launch_revision(previous), self.launch_revision(state)
+        if self._attempted == old:
+            self._attempted = new
+        if self._applied == old:
+            self._applied = new
+
     def failed(self, code='child_start_failed'):
         if code not in ('child_start_failed', 'child_restart_failed'):
             raise ValueError('invalid configuration error code')

@@ -38,7 +38,7 @@
 | Hermes | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 | EMQX | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 | LiteLLM | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
-| Nextcloud | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
+| Nextcloud | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 3（A8、A9、NC1） | NC1（候選，未合併） |
 | OpenDesign | 0.4.14（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 2（A8、A9，寫成「applies to its source too」） | 無 |
 | Headscale | 0.4.19（2026-11-18 合併，#119 `53ffe61`） | `5a7c191`（2026-11-18，0.4.19 升版 commit） | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
 
@@ -154,9 +154,16 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.6 Nextcloud
 
 - 上次發版：0.4.14（同 Odoo）。
-- 要寫：A8、A9（第 1 節）。A1～A7、B1、B2 已寫進 0.4.14。
-- 自己的修正：沒有（`apps/nextcloud`、`addons/nextcloud` 在 0.4.13 之後沒改）。
+- 要寫：A8、A9（第 1 節）與 NC1。A1～A7、B1、B2 已寫進 0.4.14。
+- **NC1：Nextcloud PaaS 正規化與政策重啟對齊**（候選，PR／合併 commit 待補；不受多帳號開關管）：存檔正規化貼上的頁面網址與帳密空白；政策收緊或不變不重啟，放寬且子程式執行中才重啟，停著不啟動。換身分換 token 仍只在開通後生效。HA 保留目的地與跨來源秘密檢查。建議 CHANGELOG：
+
+  `Nextcloud connection saves normalize pasted page URLs and credentials; policy restrictions apply without restarting, while enabling tools restarts only a running child.`
+
+  出處：`docs/multi-profile/nextcloud-paas-parity-20261120.md`；實機 HAOS 驗收另行完成。Nextcloud 專屬的 HM-22 換身分換 token 受開關管（第 4.2 節）。
 - 發版時另外驗：第 5 節。
+- 開通那一版（Nextcloud 的升版 PR，把 `nextcloud` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Nextcloud 自己的 CHANGELOG 句子與同一個 PR
+  另外要改的檔在 HM-22 筆記第 9.5 節（`docs/provenance/ha-multiprofile-HM-22-20261119.md`；HM-22 審查 S-5，照檔頭第 2 點，同 HM-24
+  審查 S-7 的做法）。HM-22 受開關管，還沒開通的版本不寫、也不刪這一行；開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.7 OpenDesign（商店停用，只升來源版本）
 
@@ -207,6 +214,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-13c（A9 以外） | #112 | `e108a12` | 全部撤銷、還原紀錄、核對、刪除隔離目錄的路由與面板的核對卡；8081 擋全部撤銷沒撤銷成功的權杖 | 沒有這些路由（`/api/profiles*` 照舊 404），面板不畫核對卡；只有 A9 的還原提示（2026-11-19 HM-18 補列） |
 | HM-27 | #116 | `fcd0b22` | 密鑰網址的服務層級 Origin 清單（預設 report-only）、`/api/origin-policy`、面板「瀏覽器來源檢查」卡片；還原時封存政策旁的收據 | 不讀不寫 `origin-policy.json`、`/api/origin-policy` 照舊 404、密鑰網址照舊不看 Origin、面板不畫卡片（2026-11-19 HM-18 補列） |
 | HM-21 LiteLLM 開通的功能 PR | 合併後補 | 合併後補 | 沒有程式：只有測試（`tests/test_litellm_multi_profile.py`）與文件；映像只多 `docs/provenance/` 的筆記 | 沒有任何變化；開通時的句子見第 3.5 節 |
+| HM-22 | 合併後補 | 合併後補 | Nextcloud 開通的功能片：換 url、username 換 token（url 照伺服器與存的路徑比）、面板 `identityBound` 加 Nextcloud；面板等核對時被擋的存檔說明寫自己產品的身分欄位（`identityChange`，HM-22 審查 MF-1） | 換身分不換 token，回應沒有新欄位；面板的提示與請求不變（Odoo 的說明文字逐字不變） |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
@@ -215,7 +223,8 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 ```
 
 0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
-不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）。建議句（HM-18 補寫）：
+不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）；HM-22 合併後也在其中（第 4.2 節；PR 號合併後補，建議句的 PR 清單跟著加）。
+建議句（HM-18 補寫）：
 
 ```text
 - This image also carries more groundwork for multiple profiles per add-on (PRs #108, #112 and #116). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
@@ -278,7 +287,8 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
   ```
 - **其他項目的原句**：各片筆記交給升版片的句子，用的時候以契約第 1.4 節的事實為準：HM-20 筆記第 13 節（後端網址不能填 loopback，中文）、
   HM-12 筆記第 15 節（換身分換 token、新來源重填秘密、503 時重啟後確認網址）、HM-27 筆記第 13 節（Origin 清單）、HM-09 筆記第 13.2 節
-  （§7.2 要補的六點）、HM-13b 筆記第 13 節（還原會變的事）。
+  （§7.2 要補的六點）、HM-13b 筆記第 13 節（還原會變的事）、HM-22 筆記第 9.5 節（Nextcloud 開通那一版自己的句子與同一個 PR 另外要改的檔，
+  第 3.6 節；HM-22 合併 `claude-delivery` 時補）。
 - **發版時另外驗**：第 5 節，加上計畫 §10.6（Odoo 首發標準）與 `docs/operations/acceptance.md` 的多帳號驗收；容器驗收的多帳號階段第一次真跑是
   HM-19a 前的乾跑。
 

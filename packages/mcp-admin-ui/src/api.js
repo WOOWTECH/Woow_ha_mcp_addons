@@ -1,4 +1,4 @@
-import { identityBound, mountPath, products, UiError } from './contracts.js';
+import { identityBound, identityChange, mountPath, products, UiError } from './contracts.js';
 import { ORIGIN_REVISION, ORIGIN_SCOPE, OperationIdentity, operationKinds, operationReceipt, PROFILES_SCOPE } from './operation-identity.js';
 import { DEFAULT_PROFILE, INDEX_ETAG, INDEX_REVISION, echoMatches, isExtraProfile, isProfileId, labelProblem, orphanIds, profileRows } from './profiles.js';
 import { QUARANTINE_NAME, quarantinedEntries, recordView, revocationResults } from './restore.js';
@@ -63,7 +63,9 @@ export const TOKEN_ROTATED = '後端身分已變更，這個帳號的 MCP 權杖
 const OUTCOME_UNKNOWN = '存檔結果不明時請重新啟動 add-on，之後到「連線與權杖」確認 MCP 網址：若這次換了後端身分，權杖可能已換新，舊網址會失效。';
 // HM-13c review S-3: a backend save that would rotate the token of a profile whose restore review waits (HM-12's
 // identity change) is refused as token/rotate is; after restore_review_required's own copy, why a save waits too.
-const SAVE_WAITS_FOR_REVIEW = '改後端身分（Odoo 的網址、資料庫或使用者）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。';
+// HM-22 review MF-1 (HM-24's shape): the identity fields named are the save's own product's (contracts.js identityChange;
+// Odoo's copy unchanged).
+const saveWaitsForReview = product => `改後端身分（${identityChange[product]}）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。`;
 export class ApiError extends UiError {
   constructor(status, code = null, haVersion = null, detail = {}) {
     const messages = {
@@ -302,7 +304,7 @@ export class AdminApi {
       // HM-13c review S-3: the same backend save held for the profile's restore review (409; nothing was saved).
       if (error instanceof ApiError && error.code === 'restore_review_required' && profile !== null
           && ['backend', 'backend/patch'].includes(operation) && identityBound.includes(fresh.product)) {
-        error.message = `${error.message} ${SAVE_WAITS_FOR_REVIEW}`;
+        error.message = `${error.message} ${saveWaitsForReview(fresh.product)}`;
       }
       throw error;
     }
