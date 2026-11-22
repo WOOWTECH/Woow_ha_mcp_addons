@@ -44,7 +44,7 @@ import uvicorn
 
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, create_profile, multi_profile_runtime, stored
-from mcp_admin_core import gateway, profiles, run_product
+from mcp_admin_core import gateway, profiles, reply_memory, run_product
 from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS as N8N_TOOLS
@@ -792,13 +792,16 @@ async def test_a_queued_reply_whose_token_changes_is_withdrawn_at_once(tmp_path,
                 await until(started.is_set)
                 queued = asyncio.create_task(client.post('/mcp', headers=b, json=call(82)))
                 await until(lambda: worker.handed[B] >= 1)
+                assert runtime.manager.reply_memory.held == 2 * reply_memory.TICKET_BYTES
                 processed = worker.processed
                 log_scan.watch(await change_token(runtime, B, 'rotate'))
                 done, _ = await asyncio.wait({queued}, timeout=3)
                 assert queued in done, "a rotated token's reply still waits for the worker"
                 assert queued.result().status_code == 401 and not first.done()
+                assert runtime.manager.reply_memory.held == reply_memory.TICKET_BYTES
                 gate.set()
                 assert (await asyncio.wait_for(first, 10)).status_code == 200
+                assert runtime.manager.reply_memory.held == 0
                 await asyncio.sleep(0.1)
                 assert worker.processed == processed + 1  # the default profile's job only: B's never ran
     finally:
@@ -907,6 +910,11 @@ async def test_another_profiles_large_replies_leave_the_loop_and_this_profile_th
     review, the user's decision of 2026-11-16: reading counts too): while A's 160 MiB still arrive (A's 32 requests
     start at once, the loop reads the replies in 64 KiB pieces, each under the token lease, while the worker already
     processes the first ones) and while they are processed; both phases are printed."""
+    # Exercise the worker fairness rule with its historic 32 admitted calls;
+    # HM-19c's independent memory gate is covered in test_reply_memory.
+    monkeypatch.setattr(reply_memory, 'DEFAULT_TICKETS', 64)
+    monkeypatch.setattr(reply_memory, 'EXTRA_TICKETS', 32)
+    monkeypatch.setattr(reply_memory, 'TOTAL_BYTES', 64 * 64 * MiB)
     loop = asyncio.get_running_loop()
     latencies = []
     async with starved(tmp_path, log_scan, monkeypatch) as run:
@@ -1580,6 +1588,13 @@ def body_bytes(gate):
     return gate.budget_share.budget.used(gate.profile_id)
 
 
+def isolate_reply_memory_from_pending_test(monkeypatch):
+    """Keep the old pending-reply scenarios reachable while testing that separate rule."""
+    monkeypatch.setattr(reply_memory, 'DEFAULT_TICKETS', 64)
+    monkeypatch.setattr(reply_memory, 'EXTRA_TICKETS', 32)
+    monkeypatch.setattr(reply_memory, 'TOTAL_BYTES', 64 * 64 * MiB)
+
+
 @pytest.mark.parametrize('owner', ['default', B], ids=['default-profile', 'additional-profile'])
 async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next_tools_call(tmp_path, log_scan,
                                                                                             monkeypatch, owner):
@@ -1590,6 +1605,7 @@ async def test_answers_not_received_yet_past_the_budget_refuse_the_profiles_next
     200 + -32003 under its id, and never forwarded; a tools/list is still forwarded; the two other profiles are served
     as before; one WARNING a minute. Once the client reads, everything is given back and its tools/call is forwarded
     again."""
+    isolate_reply_memory_from_pending_test(monkeypatch)
     budget = 1 * MiB
     name = quota_name(owner)
     monkeypatch.setattr(profiles, name, replace(getattr(profiles, name), pending_reply_bytes=budget))
@@ -1654,6 +1670,7 @@ async def test_a_profile_past_its_pending_reply_budget_is_answered_before_it_wai
     slots is taken (its child holds as many pings) and B's answers not received yet hold its budget: B's next
     tools/call is answered 200 + -32003 with the pending-reply text at once, not with the slots' text after waiting
     FORWARD_WAIT_SECONDS for one. (HM-14 puts its queue at the slots: the check stays before it.)"""
+    isolate_reply_memory_from_pending_test(monkeypatch)
     budget = 1 * MiB
     monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(profiles.EXTRA_PROFILE_QUOTA,
                                                                  pending_reply_bytes=budget))
@@ -1707,6 +1724,7 @@ async def test_answers_that_arrive_at_once_hold_no_more_than_the_budget_and_a_re
     connection may take a moment: the call that waited for it runs its check meanwhile.) Before, all eight went out:
     4.8 MiB held. An event stream holds its slot until it ends, so the six time out in the queue (-32003, the queue's
     text). Once the client reads, everything is given back."""
+    isolate_reply_memory_from_pending_test(monkeypatch)
     budget, size, slots = 1 * MiB, 600 * 1024, 2
     monkeypatch.setattr(profiles, 'EXTRA_PROFILE_QUOTA', replace(
         profiles.EXTRA_PROFILE_QUOTA, admission=8, forward_slots=slots, queue=6, pending_reply_bytes=budget))
@@ -1869,7 +1887,7 @@ SLOW_READS = {
 
 
 @pytest.mark.parametrize('content', list(SLOW_READS))
-async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_path, log_scan, content):
+async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_path, log_scan, monkeypatch, content):
     """contract 6 (慢讀用戶端), on the real listener (uvicorn, h11): B's client asks for 8 MiB answers one after another
     and never reads them, JSON answers and event streams whose requests carry 4 MiB of arguments (an open stream keeps
     its forwarded body: charged to B's share of the request body budget, HM-08, HM-31): ASCII, four of them; emoji, two
@@ -1877,6 +1895,7 @@ async def test_a_slow_reader_holds_no_more_than_its_pending_reply_budget(tmp_pat
     the default profile and C are served as before. The management process's RSS grows by at most B's pending replies
     32 MiB + one processing's amplification 200 MiB + 64 MiB = 296 MiB. When the client leaves, every byte is given back
     and B is served again."""
+    isolate_reply_memory_from_pending_test(monkeypatch)
     fill, asked, forwarded = SLOW_READS[content]
     streams = {ident for ident, stream in asked if stream}
     eight = 8 * MiB

@@ -178,6 +178,11 @@ def pending_text(limit: int) -> str:
             f"(這個 MCP 網址還沒被用戶端收完的回覆已達這個帳號的上限 {size}，這個請求沒有送出，請稍後再試。)")
 
 
+def global_reply_text() -> str:
+    return ("The add-on's reply memory reservation is full, so this request was not sent. Retry shortly. "
+            "(外掛的回覆記憶體額度已滿，這個請求沒有送出，請稍後再試。)")
+
+
 def streams_text(streams: int) -> str:
     return (f"This MCP URL already has {streams} open event streams (GET), the limit of its profile. Close MCP clients "
             "that are no longer used, or retry later; requests (POST) still work. "
@@ -216,8 +221,9 @@ class ProfileGate:
     and not taken by it yet (HM-30); beyond, the POSTs it serves beyond its admission (they carry no request: HM-31,
     MF-2 (b))."""
 
-    def __init__(self, profile_id, quota, budget, reports):
+    def __init__(self, profile_id, quota, budget, reports, reply_memory=None):
         self.profile_id, self.quota, self.reports = profile_id, quota, reports
+        self.reply_memory = reply_memory
         self.name = profiles.log_id(profile_id)
         self.active = self.streams = self.beyond = 0
         self.reply_bytes = 0  # HM-30: its answers handed to the server and not taken by it yet
@@ -289,13 +295,26 @@ class ProfileGate:
         # the server and not known to be taken by it yet (charged to reply_bytes). HM-30 review 2 MF-2: early, the bytes
         # the app charged before it handed them over (gateway.PENDING_CHARGE: charged to reply_bytes too, until they
         # are handed over or the request ends).
-        started = framed = False
+        started = framed = ticket = False
         held = early = 0
+
+        def reserve_reply(message):
+            nonlocal ticket
+            if ticket:
+                return None
+            if self.reply_memory.take(self.profile_id):
+                ticket = True
+                return None
+            self.warn('reply_memory', 'the add-on reply memory reservation was full; request answered busy (-32003) '
+                                        'before forwarding')
+            return gateway.busy_reply(message, global_reply_text())
 
         def charge(size):
             """gateway.PENDING_CHARGE (HM-30 review 2 MF-2): an answer of size bytes the app is about to hand over,
             charged from now on (before the request's forwarding slot is released)."""
             nonlocal early
+            if ticket and held + early + size > self.reply_memory.TICKET_BYTES:
+                raise BadRequest(502)
             early += size
             self.reply_bytes += size
 
@@ -315,8 +334,10 @@ class ProfileGate:
             nonlocal held, early
             body = message.get('body', b'')
             earlier = held
-            held += len(body)
             covered = min(early, len(body))
+            if ticket and held + len(body) + early - covered > self.reply_memory.TICKET_BYTES:
+                raise BadRequest(502)
+            held += len(body)
             early -= covered
             self.reply_bytes += len(body) - covered
             if framed and len(body) > REPLY_PIECE:
@@ -332,14 +353,19 @@ class ProfileGate:
 
         # The app reaches pending_reply and charge through its request's state (Starlette's request.state is
         # scope['state']); a copy, so nothing is written into the server's own dict.
-        scope = {**scope, 'state': {**scope.get('state', {}), gateway.PENDING_REPLIES: self.pending_reply,
-                                    gateway.PENDING_CHARGE: charge}}
+        state = {**scope.get('state', {}), gateway.PENDING_REPLIES: self.pending_reply,
+                 gateway.PENDING_CHARGE: charge}
+        if self.reply_memory is not None:
+            state[gateway.REPLY_RESERVE] = reserve_reply
+        scope = {**scope, 'state': state}
         try:
             await app(scope, receive, counted_send)
         finally:
             self.active -= 1
             self.streams -= stream
             self.reply_bytes -= held + early
+            if ticket:
+                self.reply_memory.give(self.profile_id)
 
     async def beyond_admission(self, app, scope, receive, send):
         """The profile's admission is full (HM-31: HM-14 review MF-2 (b), the PaaS semantics; see the module docstring).

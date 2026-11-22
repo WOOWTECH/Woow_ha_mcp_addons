@@ -113,6 +113,7 @@ from .lifecycle import (CHILD_PORT, CHILD_PORT_CONFLICT, CHILD_PORT_IN_USE, EXTR
 from .products import CONNECTIONS, ProductStore
 from .profile_admin import ProfileAdmin
 from .profile_router import AdminDispatcher, Credentials, McpDispatcher, ProfileGate, Reports, Unavailable
+from .reply_memory import ReplyMemory
 from .profiles import PROFILE_ID
 
 logger = logging.getLogger(__name__)
@@ -544,6 +545,7 @@ class ProfileManager:
         self.reports = Reports()
         # HM-31: the add-on's request body budget, every profile's share of it (derived now: at startup)
         self.budget = request_budget.RequestBudget(request_budget.BudgetLimits.derive(product, switched_on=True))
+        self.reply_memory = ReplyMemory() if product == 'odoo' else None
         self.shared = self.index = self.mcp_app = None
         self.mcp_listener_limit = 64
         self.orphan_secrets = frozenset()
@@ -880,7 +882,7 @@ class ProfileManager:
             raise ValueError('profile already registered')
         default = profile_id == DEFAULT_PROFILE
         quota = profiles.DEFAULT_PROFILE_QUOTA if default else profiles.EXTRA_PROFILE_QUOTA
-        gate = ProfileGate(profile_id, quota, self.budget, self.reports)
+        gate = ProfileGate(profile_id, quota, self.budget, self.reports, self.reply_memory)
         credentials = Credentials(store, owned=not default)
         log = ChildLog(self.events, profile_id, profiles.log_id(profile_id), port)
         lifecycle = dict(WATCHDOG, preflight=partial(self.spawn_refusal, profile_id), log=log)

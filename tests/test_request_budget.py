@@ -219,7 +219,27 @@ def test_switched_off_counts_one_account_and_switched_on_the_products_capacity(m
     ceiling(monkeypatch, 4096)
     off, on = module.BudgetLimits.derive('odoo'), module.BudgetLimits.derive('odoo', switched_on=True)
     assert off.total == int((4096 - 76 - 100 - 150) * MiB / 20)
-    assert on.total == int((4096 - 76 - 600 - 150) * MiB / 20) < off.total
+    assert on.total == int((4096 - 256 - 76 - 600 - 150 - 512 - 221 - 128) * MiB
+                           / module.ODOO_ADMISSION_AMPLIFICATION) < off.total
+
+
+def test_odoo_reply_and_body_reservations_fit_three_gib_without_relaxing_release_gate(monkeypatch):
+    module = ceiling(monkeypatch, 3072)
+    limits = module.BudgetLimits.derive('odoo', switched_on=True)
+    assert module.AMPLIFICATION == 20  # the §5 release gate, distinct from conservative admission
+    assert module.ODOO_ADMISSION_AMPLIFICATION == 64
+    assert limits.total >= 16 * MiB and limits.per_profile == 16 * MiB
+    accounted = (256 + 76 + 600 + 150 + 512 + 221 + 128
+                 + limits.total / MiB * module.ODOO_ADMISSION_AMPLIFICATION)
+    assert accounted <= 3072
+
+
+def test_odoo_host_memavailable_is_reserved_once_and_switched_off_is_unchanged(monkeypatch):
+    module = ceiling(monkeypatch, 5970, 'meminfo')  # memory_ceiling already removed 256 MiB
+    on = module.BudgetLimits.derive('odoo', switched_on=True)
+    assert on.total == int((5970 - 76 - 600 - 150 - 512 - 221 - 128) * MiB / 64)
+    off = module.BudgetLimits.derive('odoo', switched_on=False)
+    assert off.total == int((5970 - 76 - 100 - 150) * MiB / 20)
 
 
 def test_more_accounts_or_heavier_children_shrink_the_budget():
