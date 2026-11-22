@@ -386,12 +386,12 @@ class ProfileGate:
                 self.budget_share.warn('bytes', request_budget.budget_note(exceeded))
                 return await gateway.busy_reply(None, request_budget.budget_text(exceeded))(scope, receive, send)
         try:
-            return await self._beyond_admission_reserved(app, scope, receive, send)
+            return await self._beyond_admission_reserved(app, scope, receive, send, reservation)
         finally:
             if reservation is not None:
                 reservation.close()
 
-    async def _beyond_admission_reserved(self, app, scope, receive, send):
+    async def _beyond_admission_reserved(self, app, scope, receive, send, reservation):
         quota = self.quota
         text = admission_text(quota.admission)
         message = None
@@ -404,7 +404,12 @@ class ProfileGate:
                 if gateway.carries_no_request('POST', message):
                     self.beyond += 1
                     try:
-                        return await app(scope, replayed(body, receive), send)
+                        # AnyMethod reuses this exact reservation while its
+                        # body watcher parses/forwards the replayed bytes.
+                        app_scope = ({**scope, 'state': {**scope.get('state', {}),
+                                                      gateway.BODY_RESERVATION: reservation}}
+                                     if reservation is not None else scope)
+                        return await app(app_scope, replayed(body, receive), send)
                     finally:
                         self.beyond -= 1
         self.warn('admission', f'{quota.admission} requests were in progress, its limit; requests were answered busy '

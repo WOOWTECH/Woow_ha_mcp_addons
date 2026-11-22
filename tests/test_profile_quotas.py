@@ -571,6 +571,65 @@ async def test_beyond_admission_odoo_small_body_stays_charged_through_slow_send(
     assert budget.used(B) == 0 and gate.beyond == 0
 
 
+async def test_real_gateway_reuses_one_slot_beyond_admission_and_refunds_on_cancel(tmp_path, log_scan):
+    data = setup(tmp_path, extras=(B,))
+    children = holding_children(data, extras=(B,))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data)
+        gate = runtime.gate(B)
+        token = runtime.token(B)
+        async with runtime.mcp() as client:
+            session = await session_of(client, token)
+            budget = runtime.manager.budget
+            budget.limits = replace(budget.limits, total=64 * 1024, per_profile=64 * 1024)
+            assert budget.limits.small_minimum == 64 * 1024
+            gate.active = gate.quota.admission
+            body = json.dumps({'jsonrpc': '2.0', 'method': 'notifications/initialized'}).encode()
+            headers = {**bearer(token), 'Mcp-Session-Id': session, 'Content-Type': 'application/json'}
+            scope = {'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1', 'method': 'POST',
+                     'scheme': 'http', 'path': '/mcp', 'raw_path': b'/mcp', 'query_string': b'', 'root_path': '',
+                     'server': ('mcp', 80), 'client': ('127.0.0.1', 1),
+                     'headers': [(name.lower().encode(), value.encode()) for name, value in headers.items()]}
+            first = True
+            blocked = asyncio.Event()
+            sent = []
+
+            async def receive():
+                nonlocal first
+                if first:
+                    first = False
+                    return {'type': 'http.request', 'body': body, 'more_body': False}
+                await asyncio.sleep(3600)
+
+            async def send(message):
+                sent.append(message)
+                if message['type'] == 'http.response.body':
+                    blocked.set()
+                    await asyncio.sleep(3600)
+
+            task = asyncio.create_task(runtime.mcp_app(scope, receive, send))
+            try:
+                await asyncio.wait_for(blocked.wait(), 3)
+                assert sent[0]['status'] == 202
+                assert budget.used(B) == 64 * 1024 and gate.beyond == 1
+                refused = await client.post('/mcp', headers=headers, content=body)
+                busy(refused, status=503, retry_after=5, ident=None,
+                     text=budget_text('global', 64 * 1024))
+                assert budget.used(B) == 64 * 1024
+            finally:
+                task.cancel()
+                assert isinstance((await asyncio.gather(task, return_exceptions=True))[0], asyncio.CancelledError)
+                gate.active = 0
+            assert budget.used(B) == 0 and gate.beyond == 0
+            gate.active = gate.quota.admission
+            try:
+                delivered = await client.post('/mcp', headers=headers, content=body)
+                assert delivered.status_code == 202
+            finally:
+                gate.active = 0
+            assert budget.used(B) == 0
+
+
 # ---- the default profile as the attacker (C1-M5, I8) and the starvation cases (G2 S5, S6) ----
 
 async def test_the_default_profiles_token_holder_cannot_exhaust_memory(tmp_path, log_scan, monkeypatch):
