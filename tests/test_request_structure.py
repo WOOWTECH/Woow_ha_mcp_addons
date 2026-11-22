@@ -134,6 +134,35 @@ def test_the_depth_boundary():
     assert violation(b'{"a":"' + b'[' * 500 + b'\\"' + b'[' * 500 + b'"}') is None
 
 
+@pytest.mark.parametrize('opening,closing', [(b'{"a":[', b']}'), (b'[{"a":', b'}]')])
+def test_mixed_container_depth_cannot_collapse_two_levels_per_pass(opening, closing):
+    # The JSON-RPC envelope and arguments object contribute three levels.
+    # 30 mixed pairs are depth 63; 31 are depth 65 and must be refused.
+    for pairs, expected in ((30, None), (31, 'nesting'), (33, 'nesting')):
+        body = envelope(b'{"padding":' + opening * pairs + b'0' + closing * pairs + b'}')
+        json.loads(body)
+        reason = violation(body)
+        if expected is None:
+            assert reason is None
+        else:
+            assert reason is not None and expected in reason
+            with pytest.raises(request_limits.RequestLimitError) as caught:
+                gateway._parse_json_body(body, gateway.STRUCTURE_LIMITS, True)
+            assert caught.value.status == 200
+            assert caught.value.payload['id'] == 7
+            assert caught.value.payload['error']['code'] == -32602
+
+
+def test_mixed_container_scan_preserves_malformed_and_depth_precedence():
+    deep = b'{"a":[' * 33 + b'0' + b']}' * 33
+    # The legacy scanner stops at an excess closer, and refuses over-depth
+    # structure even when malformed input ends before its closing brackets.
+    assert 'nesting' in violation(deep)
+    assert violation(b'}' + deep) is None
+    assert 'nesting' in violation(deep[:-1])
+    assert violation(b'[' * 64 + b']' * 63 + b'}') is None
+
+
 def test_the_element_boundary_counts_commas_and_containers():
     limit = 1000
     at_limit = b'[' + b','.join([b'0'] * limit) + b']'
