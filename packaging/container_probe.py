@@ -116,6 +116,8 @@ class Backend(BaseHTTPRequestHandler):
     def do_POST(self):
         CALLS.append(('POST', self.path))
         if OFFLINE.is_set():
+            if features.enabled(APP) and APP == 'odoo':
+                container_profiles.record_odoo_outage(self.path)
             self.send_error(503)
             return
         assert self.path.startswith('/xmlrpc/2/')
@@ -500,6 +502,8 @@ async def run():
                     await asyncio.sleep(.25)
             pids = children(process)
             assert len(pids) == 1
+            if features.enabled(APP) and APP == 'odoo':
+                await container_profiles.odoo_outage(sys.modules[__name__], client)
             OFFLINE.set()
             async with asyncio.timeout(22):
                 while (await client.get('http://127.0.0.1:8081/health/ready')).status_code != 503:
