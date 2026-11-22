@@ -330,6 +330,26 @@ def test_unterminated_string_keeps_earlier_structure_refusal():
     assert violation(b'"' + b',' * 300_000) is None
 
 
+def test_obvious_deep_prefix_rejects_before_full_body_preprocessing(monkeypatch):
+    original = request_limits._COMPLETE_STRING
+    lengths = []
+
+    class RecordingPattern:
+        def sub(self, replacement, data):
+            lengths.append(len(data))
+            return original.sub(replacement, data)
+
+    monkeypatch.setattr(request_limits, '_COMPLETE_STRING', RecordingPattern())
+    body = b'[' * 65 + b' ' * (N - 65)
+    assert violation(body) == 'more than 64 levels of nesting'
+    assert lengths == [request_limits._EARLY_STRUCTURE_WINDOW]
+
+
+def test_prefix_scan_does_not_count_brackets_inside_a_string():
+    body = b'["' + b'[' * 65 + b'"]' + b' ' * (N - 69)
+    assert violation(body) is None
+
+
 # ---- the corpora under the guard: what parsing still costs (HM-08's measurement, HM-19c measures on the hardware) ----
 
 PARSE_UNITS = {'dicts': b'{},', 'lists': b'[],', 'kv': b'{"a":1},', 'floats': b'1.5,', 'small-ints': b'1,'}

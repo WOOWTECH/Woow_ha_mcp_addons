@@ -30,6 +30,7 @@ _COMPLETE_STRING = re.compile(rb'"(?:[^"\\]|\\.)*+"', re.DOTALL)
 # creating one Python match object for each of ~200,000 tiny JSON elements.
 _STRUCTURE_BYTES = bytes.maketrans(bytes(range(256)),
                                    bytes(char if char in b'[]{},' else 0 for char in range(256)))
+_EARLY_STRUCTURE_WINDOW = 4096
 _COMMA = ord(",")
 #: 檢查「整段是合法 UTF-8」時每次解碼的區塊大小：不把整份內容解成 str（astral 字元會讓 str 變成 4 倍），暫存只有區塊大小。
 _UTF8_CHUNK = 1024 * 1024
@@ -58,21 +59,8 @@ def not_utf8(body: bytes) -> bool:
     return False
 
 
-def structure_violation(body: bytes, *, max_depth: int, max_elements: int) -> str | None:
-    """body（JSON 原始位元組）的容器巢狀深度或元素個數超過上限就回原因（英文短句，不含內容），否則 None（PaaS d7f5849）。
-
-    - 先拒收不是 UTF-8 的內容（not_utf8）；
-    - 快速路徑：整個 body 的 ``,``、``[``、``{`` 次數都沒超過上限就放行（三次 ``bytes.count``）；
-    - 否則先刪去完整字串，再逐一掃描結構字元，超過上限就停；
-    - 閉括號多於開括號（``depth < 0``）就停、不判違規：那不是合法 JSON，之後的解析本來就會拒絕；沒有這一條時 1,500 萬個
-      ``]`` 每個一次 Python 迴圈（PaaS 第三輪 P1-B：5.6 秒）；
-    - 遇到沒結束的字串就停、不判違規（不是合法 JSON）。"""
-    if not_utf8(body):
-        return NOT_UTF8_REASON
-    openers = body.count(b"[") + body.count(b"{")
-    if openers + body.count(b",") <= max_elements and openers <= max_depth:
-        return None
-    outside_strings = _COMPLETE_STRING.sub(b'', body)
+def _scan_structure(data: bytes, max_depth: int, max_elements: int) -> str | None:
+    outside_strings = _COMPLETE_STRING.sub(b'', data)
     # The original scanner still counted structure before an unterminated
     # string. Stop at its opening quote, but retain any earlier violation.
     outside_strings = outside_strings.split(b'"', 1)[0]
@@ -93,6 +81,26 @@ def structure_violation(body: bytes, *, max_depth: int, max_elements: int) -> st
         if elements > max_elements:
             return f"more than {max_elements} JSON elements"
     return None
+
+
+def structure_violation(body: bytes, *, max_depth: int, max_elements: int) -> str | None:
+    """body（JSON 原始位元組）的容器巢狀深度或元素個數超過上限就回原因（英文短句，不含內容），否則 None（PaaS d7f5849）。
+
+    The short prefix scan returns an already certain violation before copying a large
+    malformed body. A later closing bracket or string cannot undo an earlier limit.
+    The complete scan still counts only structure outside strings and retains the
+    original early stop on an unmatched quote or excess closing bracket.
+    """
+    if not_utf8(body):
+        return NOT_UTF8_REASON
+    if len(body) > _EARLY_STRUCTURE_WINDOW:
+        early = _scan_structure(body[:_EARLY_STRUCTURE_WINDOW], max_depth, max_elements)
+        if early is not None:
+            return early
+    openers = body.count(b"[") + body.count(b"{")
+    if openers + body.count(b",") <= max_elements and openers <= max_depth:
+        return None
+    return _scan_structure(body, max_depth, max_elements)
 
 
 # 沒解析的請求只看頭尾找 id（PaaS request_body._request_id；只認整個 JSON 物件最外層的兩種寫法，不撿參數裡的 "id"）。
