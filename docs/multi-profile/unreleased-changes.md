@@ -12,7 +12,9 @@
 - **怎麼更新**：
   1. 之後每個不受開關管的片，或任何改到映像行為、使用者看得到的修正，在自己的 PR 裡加一項（產品節或共通節）：PR 號、片名、看得到的變化、
      CHANGELOG 建議句子與出處。commit 寫合併 commit；還沒合併就寫「合併後補」，由合併的人或下一個改本檔的 PR 補上。
-  2. 受開關管、開關關時逐位元不變的片：只在第 4.2 節加一行說明，不寫 CHANGELOG 句子。
+  2. 受開關管、開關關時逐位元不變的片：只在第 4.2 節加一行說明，不寫 CHANGELOG 句子。例外：某個產品開通的功能 PR（HM-21～HM-26）
+     可以在該產品節加「開通時要寫」，只列那個產品自己的句子；每個產品開通都一樣的改變不在產品節重複，以契約第 1.4 節（計畫 §7.2
+     的完整清單，HM-18 定稿）與本檔第 7 節為準。
   3. 發版的 PR：句子寫進 CHANGELOG 之後，同一個 PR 改本檔：該產品節的「上次發版」換成新版號與升版 commit，寫進去的自身項目刪掉；
      共通項目在「已發」填產品與版號，適用的產品都發過才刪。
 - **基準**：`claude-delivery` `907bd39`（2026-11-17，#117 的合併）。查法、每項出處與沒列進來的變更見
@@ -136,6 +138,18 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 上次發版：0.4.14（同 Odoo）。
 - 要寫：A8、A9（第 1 節）。A1～A7、B1、B2、L1 HM-32 #113 已寫進 0.4.14；L1 照檔頭第 3 點刪除。
 - 發版時另外驗：第 5 節。
+- **開通時要寫（HM-21 交，PR 號合併後補）**：HM-21 是 LiteLLM 開通的功能 PR，沒有程式（計畫 §9：LiteLLM 不需要產品專屬程式），開關關時
+  沒有任何變化（第 4.2 節）。LiteLLM 的升版 PR 把 `litellm` 加進 `features.MULTI_PROFILE_PRODUCTS`、升 0.5.0 時，L2～L6 是 **LiteLLM 自己的**
+  句子，一行一個變化（檔頭第 2 點的例外；DOCS 與 `upgrade-notes.yaml` 要寫的見 `docs/provenance/ha-multiprofile-HM-21-20261119.md` 第 12 節）。
+  每個產品開通都一樣的改變（帳號選單與 `X-MCP-Profile`、8081 的每帳號准入、看門狗與健康檢查的容忍、還原、全部撤銷、Origin 清單、記憶體檢查、
+  8099 的兩個位元組變化等）不在這裡列，照檔頭第 2 點的單一來源（契約第 1.4 節、本檔第 7 節）寫；Odoo 首發（HM-19a）先寫了就照那裡的
+  句子對齊（審查 S-1）。L3 後半與 L6 是共通項（HM-12 新來源重填秘密、HM-20 loopback：契約第 1.4 節第 17、18 點）的 LiteLLM 寫法：
+  寫了它們，共通的那兩句就不再寫一次。數值以發版當時的契約第 5 節為準（HM-19c 量測前都是暫定）；PR 號照當時已合併的多帳號 PR 補。
+  - L2：`- LiteLLM can now serve up to three profiles besides the default one, as memory allows: each profile has its own MCP token on both connection methods (Bearer /mcp and /private_<token>/mcp), its own LiteLLM URL and key, its own tool policy and its own MCP child, and the token alone decides which profile a request reaches. A profile can do what its key allows, so give each profile its own key: a virtual key limited to that profile's models, or a proxy_admin_viewer user's key, not the master key.`
+  - L3：`- Changing a profile's LiteLLM key or URL keeps its MCP token and URLs, as before and as on the PaaS server; only that profile's MCP child restarts with the new values. New: moving the URL to another server (scheme, host or port) needs the key again: the panel asks for it before saving, and the server refuses the save without it (HTTP 422, CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN).`
+  - L4：`- Saving a profile's tool policy restarts only that profile's MCP child; the other profiles keep their sessions. As before, with every write grant revoked the child runs read-only (LITELLM_MCP_READONLY=true) and registers no write tool.`
+  - L5：`- Each profile's MCP child keeps its own pool of at most four backend connections to LiteLLM (four per child as before; the PaaS server allows 50): a fifth call at once on one profile waits for a free connection (up to 60 s), and a profile that keeps four calls busy does not delay another profile. The profile's health check needs one of these connections too: if four calls keep them busy through two health checks in a row (each check waits 5 s for one; checks come every 15 s; before, one such check was enough), the profile's new tool calls get -32603 Backend unreachable until a check passes, although LiteLLM itself is fine.`
+  - L6：`- A LiteLLM URL can no longer point at loopback (127.0.0.0/8, ::1, localhost): saving one is refused, and the MCP child refuses to connect to one (PR #102). Inside the add-on, loopback only ever reached the add-on's own ports; use the LiteLLM host's LAN address or name.`
 
 ### 3.6 Nextcloud
 
@@ -192,6 +206,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-12 面板 | #114 | `165dbaf` | 換 token 的提示、新來源重填秘密的表單 | 面板畫面、請求與提示不變（HM-12 面板筆記：216 個比較 0 差異） |
 | HM-13c（A9 以外） | #112 | `e108a12` | 全部撤銷、還原紀錄、核對、刪除隔離目錄的路由與面板的核對卡；8081 擋全部撤銷沒撤銷成功的權杖 | 沒有這些路由（`/api/profiles*` 照舊 404），面板不畫核對卡；只有 A9 的還原提示（2026-11-19 HM-18 補列） |
 | HM-27 | #116 | `fcd0b22` | 密鑰網址的服務層級 Origin 清單（預設 report-only）、`/api/origin-policy`、面板「瀏覽器來源檢查」卡片；還原時封存政策旁的收據 | 不讀不寫 `origin-policy.json`、`/api/origin-policy` 照舊 404、密鑰網址照舊不看 Origin、面板不畫卡片（2026-11-19 HM-18 補列） |
+| HM-21 LiteLLM 開通的功能 PR | 合併後補 | 合併後補 | 沒有程式：只有測試（`tests/test_litellm_multi_profile.py`）與文件；映像只多 `docs/provenance/` 的筆記 | 沒有任何變化；開通時的句子見第 3.5 節 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
@@ -266,3 +281,8 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
   （§7.2 要補的六點）、HM-13b 筆記第 13 節（還原會變的事）。
 - **發版時另外驗**：第 5 節，加上計畫 §10.6（Odoo 首發標準）與 `docs/operations/acceptance.md` 的多帳號驗收；容器驗收的多帳號階段第一次真跑是
   HM-19a 前的乾跑。
+
+
+### 2026-11-20 EMQX 子程式政策候選
+
+依使用者指示，EMQX 子程式每次列出或呼叫工具讀取並驗證本帳號 state，拒絕停用工具、操作與未授權寫入；state 不安全、損壞或身分不符時關閉。固定唯讀健康探測保留；政策儲存仍重啟本帳號子程式。未發布、未合併。

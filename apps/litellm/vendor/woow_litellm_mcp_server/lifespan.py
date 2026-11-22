@@ -52,7 +52,7 @@ def build_client() -> httpx.AsyncClient:
         # wait for the read timeout. Each request opens a fresh connection
         # instead (backend_policy resolves and checks the address again).
         # Nothing is retried, so an ambiguous write is never sent twice.
-        # backend_policy's transport builds its own pool with the same rule.
+        # The pinned transport also keeps no idle connections.
         max_keepalive_connections=0,
     )
     return async_client(
@@ -60,6 +60,8 @@ def build_client() -> httpx.AsyncClient:
         headers=headers,
         timeout=timeout,
         limits=limits,
+        max_backend_connections=50,
+        wait_for_resolver=True,
     )
 
 

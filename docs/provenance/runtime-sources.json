@@ -45,7 +45,9 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/server.py",
-    "upstream_sha256": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22"
+    "upstream_sha256": "e6ae5c32a62ae8942bdf2701f687dc7d840bc49745fd8b094e886f833c043c22",
+    "local_sha256": "f6cf87c5fd8806809fd711848e98feb9a64ace4443753958d6b10a101565c93b",
+    "modification": "HA launcher installs profile-bound live policy middleware and registers tools for dynamic policy filtering; standalone environment gate is retained."
   },
   {
     "product": "emqx",
@@ -78,14 +80,16 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/errors.py",
     "upstream_sha256": "c7e0035e810600c10db1bd5ff21f511f3023c4b1c0c57931b3487ba6d4611795",
-    "local_sha256": "ac012ba5c20e7bfdc446b3f993bee902051cf6e9bbad5e09259e788716a97c96",
-    "modification": "2026-10-30 HA047: preserve HTTP status_code for retained404 fallback and reject invalid JSON, with uncertain-write warning. 2026-10-31: align errors with PaaS source29fa; reject redirects, hide backend response bodies and request paths, wrap all httpx transport failures into bounded codes. The retained DELETE one-request rule and HA destination policy are unchanged. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
+    "local_sha256": "313642a43e2f82c2260d868385e9eb1e28839ff8decd955fdf4ba178a27758dc",
+    "modification": "2026-10-30 HA047: preserve HTTP status_code for retained404 fallback and reject invalid JSON, with uncertain-write warning. 2026-10-31: align errors with PaaS source29fa; reject redirects, hide backend response bodies and request paths, wrap all httpx transport failures into bounded codes. The retained DELETE one-request rule and HA destination policy are unchanged. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan. 2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): text_body, the plain-text counterpart of json_body (empty text, a 204 too, is EMQX_INVALID_RESPONSE), as PaaS 4b4fd16 (its docstring without the PaaS-only size and compression sentence)."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/deps.py",
-    "upstream_sha256": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3"
+    "upstream_sha256": "fa949b1f1b3577be7c848af5bb74a5b9d068d39cba265b93cdd4dde4a41529e3",
+    "local_sha256": "fef905c6b76e7b07e6a0c67264ae2981e0c4e2aaeb5ebf4a57927ed2eac95261",
+    "modification": "2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): EmqxHttp.request, the one door of every tool request, takes PaaS BrokerClient.request's rules (4b4fd16, 574c805) on backend_policy's client: only Accept application/json (the default) or text/plain and only the params, json, content and data options; a URL over 65,536 characters refused before anything looks at it; httpx.InvalidURL and UnicodeError from build_request refused; each as backend_policy.BackendDenied (EMQX_DESTINATION_DENIED in emqx_request) before any I/O."
   },
   {
     "product": "emqx",
@@ -98,16 +102,16 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/_common.py",
     "upstream_sha256": "ecf9b4f3ec95b059dcda81d0c5e77c294c14e48cc4f8adc423d455bcf5400ae5",
-    "local_sha256": "dcd2dacb0bd4b046ea7f6a85f39929c07d1491420fb5b1486f0bdcfe46fc4fba",
-    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
+    "local_sha256": "4498443ea16462a52621645b3b6625198fe0f20b12166fa7c7c9197557502b67",
+    "modification": "2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan. 2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): path_segment answers a value quote() cannot encode (a lone surrogate) with the fixed EMQX_DESTINATION_DENIED, as PaaS 574c805."
   },
   {
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/cluster.py",
     "upstream_sha256": "6ff36613848cacae7e414a04e776c37a588a21cfc7ccacef606ab91c5dbe65c8",
-    "local_sha256": "9b23d5bb1c62a2e3cd40549fbc4d6dc0755246963054d7b9d3a0a4a4dd1aeb4d",
-    "modification": "Reject malformed/generic/empty/error/duplicate node payloads before projection; require nonempty name@host identifiers without whitespace and actual version evidence. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan."
+    "local_sha256": "4504eeddaf71a69d87acdfb671202f706a20b0199472284bbaee529a83df5dea",
+    "modification": "Reject malformed/generic/empty/error/duplicate node payloads before projection; require nonempty name@host identifiers without whitespace and actual version evidence. 2026-11-06 (tool arguments in URL paths): an argument that becomes a URL path segment is percent-encoded as one segment and '', '.' and '..' are refused (httpx drops dot segments while it builds the URL: unban '..' became DELETE /banned, regenerate key '../../global/spend/reset?' became POST /global/spend/reset); EMQX and LiteLLM through tools/_common.path_segment (ToolError \"<field> must not be empty, '.' or '..'.\"; an EMQX node name keeps its '@'), OpenDesign by encoding project_id and file_path segments (backend_policy's clients refuse '.' and '..'). Policy refusals read EMQX_DESTINATION_DENIED (EMQX, as the PaaS server) and BACKEND_DESTINATION_DENIED (LiteLLM); EMQX reads a '', '.' or '..' retained topic through the listing scan. 2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): emqx_prometheus_stats asks for Accept: text/plain (EMQX answers the exposition text only to it) and reads the answer with text_body (empty text is EMQX_INVALID_RESPONSE), as PaaS 4b4fd16."
   },
   {
     "product": "emqx",
@@ -121,7 +125,9 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/topics.py",
-    "upstream_sha256": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353"
+    "upstream_sha256": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353",
+    "local_sha256": "d85843f135595d61abde92f7d8b0792df43d78e802149770fca93ed3853ba8cc",
+    "modification": "2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): emqx_list_subscriptions: the match_topic parameter description and the tool description say what the broker does (a wildcard search over the stored subscription filters, not a delivery lookup), word for word as PaaS cd1ed89; text only, the parameter and the result are unchanged."
   },
   {
     "product": "emqx",
@@ -171,7 +177,9 @@
     "product": "litellm",
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/server.py",
-    "upstream_sha256": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7"
+    "upstream_sha256": "85c3cb8f6d50bed817279754c16309919bdf419f8193b6291f47f08f80db89f7",
+    "local_sha256": "468d00f2f5827e383340000fc95e3b2fa549d3027a00241c941fc6c6d337b263",
+    "modification": "LiteLLM parity: a private checked client probes /v1/models separately from the tool pool; only the authenticated loopback child launcher registers the probe."
   },
   {
     "product": "litellm",
@@ -186,8 +194,8 @@
     "source": "WOOWTECH/Woow_litellm_mcp_server/4d4190369216a2d068d1100d53406a67a1d81609",
     "path": "woow_litellm_mcp_server/lifespan.py",
     "upstream_sha256": "907c15314463424da9bed2c029d6405cce922828a8ef6adac69a236b61446f06",
-    "local_sha256": "794973c7f076e32517684a1f3c389ec93c6120388c8aa987cd0b0052c0f505fe",
-    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures. HM-32 (PaaS #139 009dc99): ask for no idle connection (max_keepalive_connections 20 -> 0, keepalive_expiry 30 s dropped), so every request opens a fresh connection that backend_policy resolves and checks again; no retry is added. backend_policy's transport builds its own pool and already kept none, so the behaviour is unchanged. tests/test_fresh_backend_connections.py."
+    "local_sha256": "9b8b991ec2cdd01ac15360a1c2621b0ee9b65f8a49f4ecfc03406214415cb024",
+    "modification": "Use scoped DNS-pinned HTTPX transport; preserve redirect/proxy denial and sanitize transport failures. HM-32 (PaaS #139 009dc99): ask for no idle connection (max_keepalive_connections 20 -> 0, keepalive_expiry 30 s dropped), so every request opens a fresh connection that backend_policy resolves and checks again; no retry is added. backend_policy's transport builds its own pool and already kept none, so the behaviour is unchanged. tests/test_fresh_backend_connections.py. LiteLLM parity: explicit 50-slot checked transport and deadline-bounded resolver admission."
   },
   {
     "product": "litellm",

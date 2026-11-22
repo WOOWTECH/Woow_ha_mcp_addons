@@ -24,6 +24,9 @@ from test_ha_role import (
     test_queued_demotion_checks_after_lock,
 )
 from test_real_products import connection
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 SIX = ('odoo', 'odoo-manage', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud')  # 0.1.7: Nextcloud joins the same wiring
 

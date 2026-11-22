@@ -431,14 +431,22 @@ class PinnedSyncBackend(httpcore.NetworkBackend):
 
 
 class PinnedAsyncBackend(AnyIOBackend):
-    def __init__(self, destination):
+    def __init__(self, destination, wait_for_resolver=False):
         self.destination = destination
+        self.wait_for_resolver = wait_for_resolver
 
     async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
         self.destination.check_host(host, port)
         deadline = connection_deadline(timeout)
         try:
-            answers = connectable(await resolve_async(host, port, deadline))
+            while True:
+                try:
+                    answers = connectable(await resolve_async(host, port, deadline))
+                    break
+                except BackendBusy:
+                    if not self.wait_for_resolver:
+                        raise
+                    await asyncio.sleep(min(0.01, remaining(deadline)))
             for index, (_, address) in enumerate(answers):
                 budget = remaining(deadline) / (len(answers) - index)
                 try:
@@ -521,10 +529,10 @@ class SyncTransport(httpx.HTTPTransport):
 
 
 class AsyncTransport(httpx.AsyncHTTPTransport):
-    def __init__(self, base_url):
+    def __init__(self, base_url, *, max_connections=4, wait_for_resolver=False):
         self.destination = Destination(base_url)
-        super().__init__(trust_env=False, limits=httpx.Limits(max_connections=4, max_keepalive_connections=0))
-        self._pool._network_backend = PinnedAsyncBackend(self.destination)
+        super().__init__(trust_env=False, limits=httpx.Limits(max_connections=max_connections, max_keepalive_connections=0))
+        self._pool._network_backend = PinnedAsyncBackend(self.destination, wait_for_resolver)
 
     async def handle_async_request(self, request):
         self.destination.check_url(request.url)
@@ -580,9 +588,10 @@ def sync_client(*, base_url, **kwargs):
                          trust_env=False, follow_redirects=False, **kwargs)
 
 
-def async_client(*, base_url, **kwargs):
+def async_client(*, base_url, max_backend_connections=4, wait_for_resolver=False, **kwargs):
     kwargs.pop('limits', None)
-    return CheckedAsyncClient(base_url=base_url, transport=AsyncTransport(base_url),
+    return CheckedAsyncClient(base_url=base_url, transport=AsyncTransport(base_url, max_connections=max_backend_connections,
+                                                                       wait_for_resolver=wait_for_resolver),
                               trust_env=False, follow_redirects=False, **kwargs)
 
 

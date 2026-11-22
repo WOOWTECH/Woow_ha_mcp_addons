@@ -18,6 +18,9 @@ from mcp_admin_core.lifecycle import ChildSpec
 from mcp_admin_core.products import PROBES, BOUNDED_TOOLS as TOOLS  # 0.2.0: the 0.1.x bounded surface (local models); products serve the full child surface
 import test_six_hardening
 from test_six_hardening import Quiet, call, runtime, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-23, the switch these tests pin)
+
+pytestmark = pytest.mark.usefixtures('switched_off')  # HM-23: tests/switch_modes.py
 
 CANARY = 'DUMMY-LATE-RESPONSE-SECRET'
 from test_six_hardening import ERROR_REPLY  # noqa: E402
