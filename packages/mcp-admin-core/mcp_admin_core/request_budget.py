@@ -24,7 +24,8 @@ character 6 bytes, an emoji 12; a number in Python's own form), so the larger of
 charged (HM-08 review S-1; PaaS forwards the bytes it read). Not charged, never refused (PaaS): a small request (at most
 SMALL_REQUEST_BYTES both read and forwarded: notifications, the usual tool calls, initialize, GET, DELETE), so the
 notification reserve keeps its purpose; a body over the single-request ceiling (16 MiB, n8n 4 MiB), which is refused as
-too large anyway.
+too large anyway. Switched-on Odoo is stricter: every POST reserves at least 64 KiB before its first body read and
+keeps that charge until the response ends, so parsed small bodies are covered by the shared admission factor.
 
 The defaults (BudgetLimits.derive; constants provisional until HM-19c measures the target hardware, contract 5):
 
@@ -76,7 +77,9 @@ AMPLIFICATION = 20.0
 ODOO_ADMISSION_AMPLIFICATION = 64.0
 ODOO_REPLY_RESERVE_MIB = 512
 ODOO_REPLY_WORK_MIB = 221       # ceil(8 MiB * 27.6)
-ODOO_SMALL_BODY_MIB = 128      # uncharged bodies and other concurrent copies
+# Every Odoo POST holds at least this much of the shared body budget before parsing.
+# The 64x admission factor reserves 4 MiB for a <=64 KiB parsed body.
+ODOO_SMALL_MINIMUM_BYTES = SMALL_REQUEST_BYTES
 GATEWAY_BASELINE_MIB = 76      # the gateway's own baseline (PaaS sandbox 71-76 MiB)
 SAFETY_MARGIN_MIB = 150        # what is left for peaks (GC, a child growing, logs) with every budget full
 FALLBACK_TOTAL_BYTES = 32 * MiB
@@ -125,16 +128,26 @@ def default_total_bytes(ceiling_mib: int | None, *, accounts: int = 1,
 def odoo_switched_total_bytes(ceiling_mib: int | None, accounts: int, source: str) -> int:
     """Joint body/reply planning cap; cgroup also keeps the 256 MiB host reserve.
 
-    A tiny ceiling retains the 16 MiB protocol floor, but the reply gate cannot
-    make such a configuration a capacity pass. HM-19c validates 3 GiB and HAOS.
+    The caller checks odoo_switched_memory_fits before enabling multi-profile
+    admission: the 16 MiB floor alone cannot make a low ceiling safe.
     """
     if ceiling_mib is None:
         return MIN_BUDGET_BYTES
     available = (ceiling_mib - (HOST_RESERVE_MIB if source == 'cgroup' else 0)
                  - GATEWAY_BASELINE_MIB - accounts * 100 - SAFETY_MARGIN_MIB
-                 - ODOO_REPLY_RESERVE_MIB - ODOO_REPLY_WORK_MIB - ODOO_SMALL_BODY_MIB)
+                 - ODOO_REPLY_RESERVE_MIB - ODOO_REPLY_WORK_MIB)
     derived = int(max(0, available) * MiB / ODOO_ADMISSION_AMPLIFICATION)
     return min(MAX_BUDGET_BYTES, max(MIN_BUDGET_BYTES, derived))
+
+
+def odoo_switched_memory_fits(ceiling_mib: int | None, accounts: int, source: str) -> bool:
+    """The whole switched-on Odoo plan must fit before its 16 MiB body floor applies."""
+    if ceiling_mib is None or source not in ('cgroup', 'meminfo'):
+        return False
+    required = (HOST_RESERVE_MIB if source == 'cgroup' else 0) + GATEWAY_BASELINE_MIB + accounts * 100 + \
+        SAFETY_MARGIN_MIB + ODOO_REPLY_RESERVE_MIB + ODOO_REPLY_WORK_MIB + \
+        ODOO_ADMISSION_AMPLIFICATION * MIN_BUDGET_BYTES / MiB
+    return ceiling_mib >= required
 
 
 def default_per_profile_bytes(total: int) -> int:
@@ -159,11 +172,12 @@ class BudgetLimits:
     per_profile: int
     idle_seconds: float = BODY_IDLE_SECONDS
     source: str = 'given'
+    small_minimum: int = 0
 
     def __post_init__(self):
         if (type(self.total) is not int or type(self.per_profile) is not int or self.total < 1 or self.per_profile < 1
                 or isinstance(self.idle_seconds, bool) or not isinstance(self.idle_seconds, (int, float))
-                or not self.idle_seconds > 0):
+                or not self.idle_seconds > 0 or type(self.small_minimum) is not int or self.small_minimum < 0):
             raise ValueError('invalid request budget')
 
     @classmethod
@@ -174,7 +188,17 @@ class BudgetLimits:
                                          memory_limit=ceiling if source == 'cgroup' else None)
         total = (odoo_switched_total_bytes(ceiling, accounts, source) if switched_on and product == 'odoo'
                  else default_total_bytes(ceiling, accounts=accounts, child_memory_mib=child))
-        return cls(total=total, per_profile=default_per_profile_bytes(total), source=source)
+        return cls(total=total, per_profile=default_per_profile_bytes(total), source=source,
+                   small_minimum=ODOO_SMALL_MINIMUM_BYTES if switched_on and product == 'odoo' else 0)
+
+
+def odoo_switched_limits(ceiling_mib: int, accounts: int, source: str) -> BudgetLimits:
+    """Build an activated Odoo budget from the same reading used to check its floor and capacity."""
+    if not odoo_switched_memory_fits(ceiling_mib, accounts, source):
+        raise ValueError('Odoo multi-profile memory plan does not fit')
+    total = odoo_switched_total_bytes(ceiling_mib, accounts, source)
+    return BudgetLimits(total=total, per_profile=default_per_profile_bytes(total), source=source,
+                        small_minimum=ODOO_SMALL_MINIMUM_BYTES)
 
 
 class BudgetExceeded(Exception):
@@ -256,23 +280,32 @@ class Share:
 
 class Reservation:
     """What one request holds of the budget: the larger of its body as read (size; nothing once over the single-request
-    ceiling) and as forwarded (forwarded), once that is over SMALL_REQUEST_BYTES; charged, what is held now."""
-    __slots__ = ('share', 'size', 'forwarded', 'charged', 'over_cap', 'closed')
+    ceiling) and as forwarded (forwarded), once that is over SMALL_REQUEST_BYTES; Odoo may also hold a minimum before
+    parsing. charged is what is held now."""
+    __slots__ = ('share', 'size', 'forwarded', 'charged', 'over_cap', 'closed', 'small_reserved')
 
     def __init__(self, share: Share):
         self.share = share
         self.size = self.forwarded = self.charged = 0
         self.over_cap = self.closed = False
+        self.small_reserved = False
 
     def _settle(self):
         held = max(0 if self.over_cap else self.size, self.forwarded)
-        target = held if held > SMALL_REQUEST_BYTES else 0
+        minimum = self.share.budget.limits.small_minimum if self.small_reserved else 0
+        target = max(held, minimum) if held > SMALL_REQUEST_BYTES or minimum else 0
         share = self.share
         if target > self.charged:
             share.budget._charge(share.profile_id, target - self.charged, share.limit)
         elif target < self.charged:
             share.budget._refund(share.profile_id, self.charged - target)
         self.charged = target
+
+    def reserve_small(self) -> None:
+        """Reserve an Odoo POST's minimum before any body bytes are parsed."""
+        if not self.closed and not self.small_reserved:
+            self.small_reserved = True
+            self._settle()
 
     def grow(self, size: int, *, cap: int) -> None:
         """The body as read (or declared) is size bytes now (it only grows). Over cap it is not charged (refused as too
@@ -334,9 +367,10 @@ def registered(declared: int | None) -> bool:
 
 def watch(request, reservation: Reservation, *, cap: int, idle_seconds: float = BODY_IDLE_SECONDS):
     """Make request.stream charge reservation and watch for idleness (PaaS proxy._count_stream and _watch_idle), and
-    return the stream it replaced (a refused body is drained with it). Nothing changes for a small request: one that
+    return the stream it replaced (a refused body is drained with it). Normally nothing changes for a small request: one that
     declares at most SMALL_REQUEST_BYTES (declared_length: a Content-Length beside a Transfer-Encoding declares
     nothing, so a body framed chunked is a large request whatever its Content-Length says; HM-31 review MF-1).
+    Switched-on Odoo also wraps small POSTs to reserve their minimum before the parser sees a byte.
 
     - a declared Content-Length over SMALL_REQUEST_BYTES and at most cap is charged when the body's read begins, before
       a byte is read: BudgetExceeded (read False) if it does not fit;
@@ -347,11 +381,14 @@ def watch(request, reservation: Reservation, *, cap: int, idle_seconds: float = 
     - BodyIdleTimeout when no new byte came for idle_seconds (between two chunks, or before the first)."""
     original = request.stream
     declared = declared_length(request.headers.raw)
-    if not registered(declared):
+    reserve_small = getattr(request, 'method', None) == 'POST' and reservation.share.budget.limits.small_minimum > 0
+    if not registered(declared) and not reserve_small:
         return original
     precharged = declared is not None and declared <= cap
 
     async def stream():
+        if reserve_small:
+            reservation.reserve_small()
         if precharged:
             reservation.grow(declared, cap=cap)
         chunks = original().__aiter__()
