@@ -27,7 +27,7 @@ CURRENT_POST_SOURCE_BYTES = {
     'apps/litellm/vendor/woow_litellm_mcp_server/server.py': (
         'litellm', '468d00f2f5827e383340000fc95e3b2fa549d3027a00241c941fc6c6d337b263'),
     # HA EMQX child middleware registration; output schemas are unchanged.
-    'apps/emqx/vendor/emqx_mcp_server/server.py': ('emqx', 'f6cf87c5fd8806809fd711848e98feb9a64ace4443753958d6b10a101565c93b'),
+    'apps/emqx/vendor/emqx_mcp_server/server.py': ('emqx', '96bfac5d9c1cbe74d2df6d74eaebb65af64b9ced39354471bd3540d874d4bc89'),
     'packaging/unit.sh': ('n8n', '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'),
     # The SQL-test tool's public write hint changed; its output pin did not.
     'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': (

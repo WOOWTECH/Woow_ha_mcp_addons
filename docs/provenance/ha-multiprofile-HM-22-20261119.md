@@ -1,6 +1,9 @@
 # HA 多帳號 HM-22 provenance：Nextcloud 開通的功能片（換 url／username 換 token、存政策只重啟該帳號、探測退避）（2026-11-19）
 
-> 2026-11-20 parity 候選更新：本文是 HM-22 當時的歷史紀錄；其中「貼上的頁面路徑換 token」及「每次存政策都重啟」已由 `docs/multi-profile/nextcloud-paas-parity-20261120.md` 取代。單帳號也受正規化與政策行為變更影響，發版交接見 `unreleased-changes.md` NC1。
+> **被 2026-11-20 取代（火車 A 審查 F-4，2026-11-23 校正）**：本文是 HM-22 當時（11/19）的歷史紀錄。11/20 的 PaaS 對齊（`docs/multi-profile/nextcloud-paas-parity-20261120.md`、`unreleased-changes.md` NC1）改了下列三處，以該文為準；本文相應段落已加「11/20 起」註記或改正：
+> 1. **網址正規化**：存檔（`backend`、`backend/patch`）會切掉貼上的頁面路徑（`index.php`、`remote.php`、`ocs`、`apps`、`login`、`settings`）、去前後空白、小寫 scheme 與 host、去預設 port 與結尾斜線；與存檔值只差寫法時沿用存檔的寫法。因此 §1、§3.2 的「HA 不切路徑」「前後空白 400」「照新寫法存」不再成立；`gateway.py` 也在 11/20 被動到（網址正規化、`policy_changed`），§2 的「沒改 `gateway.py`」只適用於 11/19 的 HM-22 本身。
+> 2. **存政策的重啟規則**：收緊與沒變不重啟、放寬且子程式在執行或啟動中才重啟、停著不啟動（下次啟動用新政策），閘道立刻擋已開的 session；還原舊政策同一規則。§3.3 的「每次存政策都重啟」不再成立。這個行為**單帳號、沒開通也一樣**（不受多帳號開關管）。
+> 3. **帳密驗證**：使用者名稱不可含 `:`、帳密不可含控制字元（`products.NextcloudConnection`）；以前的版本本來就只收 `Name`／可印 ASCII，所以已存的 state 照常載入（`tests/test_upgrade_zero_rewrite.py` 的 F-3 案例）。
 
 ## 結論
 
@@ -10,13 +13,13 @@
 - **開通的 Nextcloud，token 綁它的帳號**（DQ-40 ⑩ (a)；對齊 PaaS #154 `0f94aa4`；契約第 3.1 節、§8.8 #40、#131）：`products.IDENTITY_BOUND`
   加 `nextcloud`。存檔（`backend`、`backend/patch`）讓 url 或 username 改了，就照 HM-12 的順序換 token：先停舊子程式、一次寫入新連線＋
   新 token＋一筆 `rotate` 歷史、發布、在新帳號上起子程式。舊 token 兩條入口都拒（Bearer 401、密鑰網址 404）。只換 app password、
-  初次設定、token 已撤銷不換；清空連線會換。HM-12 的換身分流程本來就不分產品，本片沒有改 `gateway.py`。
+  初次設定、token 已撤銷不換；清空連線會換。HM-12 的換身分流程本來就不分產品，本片沒有改 `gateway.py`（11/20 起不同：見檔頭的取代說明）。
 - **網址照它指的伺服器比**（`products.same_identity`、`identity_fields.SAME_SERVER_URLS`；§8.8 #131）：scheme、host 不分大小寫，寫不寫
   預設 port 都一樣，再比存的路徑（結尾斜線本來就去掉，大小寫算）。只差這些寫法不換 token，對齊 PaaS 的 `normalize_base_url`。路徑不同就換，
-  包括大小寫不同與貼上的頁面路徑：HA 存檔不切路徑，存的網址就是子程式的根網址（PaaS 會切掉，這是差異）。username 逐字比（同 PaaS）。
+  包括大小寫不同；貼上的頁面路徑在 11/19 當時算另一個網址（HA 不切；**11/20 起 HA 與 PaaS 一樣先切掉再比，不換 token**，見檔頭）。username 逐字比（同 PaaS）。
   Odoo 照舊逐字比（同 PaaS #131）。
-- **存政策只重啟該帳號**（T-07；FM-47）：HM-10 起就是每帳號自己的 `backend_changed`，本片補 Nextcloud 的測試（程序內三個帳號；兩個真子程式
-  的 PID）。HA 每次存政策都重啟該帳號的子程式，沒變也重啟（PaaS 只在放寬時重啟；§8.8 #54、#132）。
+- **存政策只動該帳號**（T-07；FM-47；11/20 起收緊不重啟，見 §3.3）：HM-10 起就是每帳號自己的 `backend_changed`，本片補 Nextcloud 的測試（程序內三個帳號；兩個真子程式
+  的 PID）。11/19 當時 HA 每次存政策都重啟該帳號的子程式，沒變也重啟；**11/20 起改成和 PaaS 一樣只在放寬時重啟**（§8.8 #54、#132 已隨之改寫）。
 - **探測退避**：`health.py` 不用改。HM-09 已經把 Nextcloud 的 401 與 429 文字算成「認證被拒」，退避 15→30→60→120→300 秒；Nextcloud 子程式
   自己的 auth latch 讓同一組錯誤帳密在子程式重起前只登入失敗一次。本片用兩個真的 Nextcloud 子程式驗：錯密碼的帳號只退避自己，檢查再多次
   後端也只看到一次失敗登入，另一個帳號照常；存對的密碼後退避歸零、恢復可連。**Nextcloud 的節流單位沒有實測（UC-12）**，留給 HAOS 驗收（第 12 節）。
@@ -104,12 +107,12 @@
 | scheme、host 大小寫不同 | 同一個（存檔小寫） | 同一個（`backend_edit.origin`）；存新寫法 |
 | 寫出預設 port（`:443`、`:80`） | 同一個（存檔去掉） | 同一個；存新寫法 |
 | 結尾斜線 | 同一個（存檔去掉） | 同一個（`http_url` 本來就去掉） |
-| 前後空白 | 去掉後同一個 | 400（`http_url` 本來就拒絕；什麼都不寫） |
-| 貼上的頁面路徑（`/index.php/…`、`/remote.php/…` 等） | 切掉後同一個 | 另一個網址，換 token（HA 不切；子程式用的就是存的那條） |
+| 前後空白 | 去掉後同一個 | 11/19：400（什麼都不寫）；**11/20 起：去掉後同一個，與 PaaS 相同** |
+| 貼上的頁面路徑（`/index.php/…`、`/remote.php/…` 等） | 切掉後同一個 | 11/19：另一個網址，換 token；**11/20 起：切掉後同一個，不換 token，與 PaaS 相同**（切法偏寬的邊界見 `nextcloud-paas-parity-20261120.md`） |
 | 路徑大小寫不同 | 換（寧可多換一次） | 換 |
 | 另一個 host、scheme、port、路徑 | 換 | 換（換 host、scheme、port 時 `backend/patch` 還要重填 app password：DQ-40 ⑨） |
 | username 不同（含只差大小寫） | 換 | 換 |
-| 存檔值只差寫法 | 沿用存檔的寫法 | 照新寫法存（下一次存回舊寫法也不換） |
+| 存檔值只差寫法 | 沿用存檔的寫法 | 11/19：照新寫法存；**11/20 起：沿用存檔的寫法，與 PaaS 相同** |
 
 - 為什麼只放 Nextcloud：PaaS 的 Odoo 走核心的逐字比對（#131），HA 的 Odoo 照它；Nextcloud 在 PaaS 先正規化再比。兩個產品各自對齊 PaaS。
   Odoo、Hermes 要不要也照伺服器比，是另一個決定（第 15 節）。
@@ -122,8 +125,10 @@
   8099 分派器選帳號）。本片的測試：B 存政策只有 B 的 `starts` 加一、子程式環境的 `NEXTCLOUD_MCP_DISABLED_TOOLS` 換成 B 的政策；預設帳號與 C
   的 state、環境、`starts` 與已開的 session 都不變；預設帳號存政策時反過來。兩個真子程式那案：B 存政策後 B 的 PID 換了、預設帳號的沒換，
   預設帳號的 session 照用，B 的舊 session 隨舊子程式消失（404），新 session 的工具清單照 B 的政策。
-- HA 每次存政策都重啟（收緊 #54、沒變 #132 都重啟）。PaaS 只在放寬而且子程式在跑時重啟。HA 沒有管理員停掉子程式的操作，所以 PaaS
-  「停著時放寬不啟動」沒有對應。
+- **11/20 起（取代 11/19 的「每次存政策都重啟」）**：Nextcloud 的政策存檔對齊 PaaS（`apps/nextcloud/nextcloud_mcp_admin/tool_policy.py` 的 `apply_after_update`：只在「開啟的工具比之前多」且子程式在跑時重啟）。HA 的實作是 `profile_runtime.policy_changed`：
+  - 收緊或沒變：**不重啟**。已開的 session 與子程式環境維持舊的較寬 `NEXTCLOUD_MCP_DISABLED_TOOLS`，閘道（`authorize`、`filter_list`）立刻擋；`manager.spec` 會換成新政策，所以之後的崩潰重啟或明確啟動用的是收緊後的環境（`tests/test_nextcloud_multi_profile.py::test_a_tightened_policy_is_what_the_next_launch_of_a_running_child_uses`）。
+  - 放寬且子程式在 running 或 starting：重啟該帳號的子程式；停著、blocked、failed、backoff：不啟動，下次啟動用新政策。
+  - 為什麼取這個而不是「照 11/19 每次都重啟」：(1) 使用者 11/20 要求對齊 PaaS，PaaS 的理由是重啟會讓所有現有 MCP session 失效（#1384）；(2) 收緊後子程式只剩舊環境這一段，仍被閘道擋住，直接打子程式要有 child token，且同 uid 本來就不構成邊界（DQ-37）；(3) 放寬一定重啟，才不會出現「面板打開了、子程式沒註冊」。**代價（威脅模型已記）**：收緊後到子程式下次啟動前，子程式本身仍註冊著被關掉的工具，只靠閘道這一層；若要兩層即時一致，改回每次重啟是一行的事，但會斷 session。這個行為不受多帳號開關管，沒開通的 0.4.x 使用者也一樣。
 
 ### 3.4 探測退避與節流單位（UC-12）
 
