@@ -6,12 +6,82 @@ import json
 import httpx
 import pytest
 
-from mcp_admin_core import gateway, profile_router, profiles, reply_memory, request_budget
 from multi_profile_runtime import Children, multi_profile_runtime
+from mcp_admin_core import gateway, profile_router, profiles, reply_memory, request_budget
 from test_profile_runtime import ProfileChild
 from test_single_profile_golden import ACCEPT, configure, initialize_message
+from switched_gateway import B, PRODUCT, Exchange, GatewayChild, bearer, call, ping, setup, session_of, until, watch
+from log_scan import log_scan  # noqa: F401 (fixture)
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.mark.usefixtures('log_scan')
+@pytest.mark.parametrize('profile_id,cap', [('default', 3), (B, 1)])
+async def test_real_gateway_stream_cap_is_ticket_backed_429(tmp_path, log_scan, profile_id, cap):
+    data = setup(tmp_path)
+    children = Children()
+    children.add(3000, GatewayChild('default', PRODUCT, data))
+    children.add(18000, GatewayChild('p' + B[:4], PRODUCT, profiles.Layout(data).profile(B)))
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        async with runtime.mcp() as client:
+            token = runtime.token(profile_id)
+            session = await session_of(client, token)
+            headers = {**bearer(token), 'Mcp-Session-Id': session}
+            streams = [Exchange(runtime.mcp_app, 'GET', '/mcp', list(headers.items())).start()
+                       for _ in range(cap)]
+            await until(lambda: all(b': open' in stream.content for stream in streams))
+            assert runtime.manager.reply_memory.by_profile[profile_id] == cap
+            denied = await client.get('/mcp', headers=headers)
+            assert denied.status_code == 429 and denied.headers['retry-after'] == '30'
+            assert denied.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
+                'code': -32003, 'message': profile_router.streams_text(cap, ticketed=True)}}
+            # Bounded controls remain available even when all stream tickets are held.
+            control = await client.post('/mcp', headers=headers, json=ping(20))
+            assert control.status_code == 200 and control.json()['result'] == {}
+            children.by_port[3000 if profile_id == 'default' else 18000].free.set()
+            await asyncio.wait_for(asyncio.gather(*(stream.task for stream in streams)), 5)
+        assert runtime.manager.reply_memory.held == 0
+
+
+@pytest.mark.usefixtures('log_scan')
+@pytest.mark.parametrize('ending', ['reply', 'cancel'])
+async def test_second_real_child_call_gets_ticket_busy_then_runs_after_first_ends(tmp_path, log_scan, ending):
+    """The one-ticket extra cap refuses a write before child dispatch, then releases on send or cancellation."""
+    data = setup(tmp_path)
+    children = Children()
+    children.add(3000, GatewayChild('default', PRODUCT, data))
+    child = children.add(18000, GatewayChild('p' + B[:4], PRODUCT, profiles.Layout(data).profile(B)))
+    child.hold_calls = True
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        async with runtime.mcp() as client:
+            token = runtime.token(B)
+            headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
+            first = asyncio.create_task(client.post('/mcp', headers=headers, json=call(101)))
+            await until(lambda: child.waiting == 1)
+            assert runtime.manager.reply_memory.held == reply_memory.TICKET_BYTES
+            refused = await client.post('/mcp', headers=headers, json=call(102))
+            assert refused.status_code == 200 and refused.headers['retry-after'] == '5'
+            assert refused.json() == {'jsonrpc': '2.0', 'id': 102, 'error': {
+                'code': -32003, 'message': profile_router.global_reply_text()}}
+            assert child.client_calls() == [101], 'the busy write was dispatched to the child'
+            if ending == 'reply':
+                child.free.set()
+                answer = await asyncio.wait_for(first, 5)
+                assert answer.status_code == 200 and 'result' in answer.json()
+            else:
+                first.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await first
+                await until(lambda: child.waiting == 0)
+                child.free.set()
+            await until(lambda: runtime.manager.reply_memory.held == 0)
+            retried = await client.post('/mcp', headers=headers, json=call(103))
+            assert retried.status_code == 200 and 'result' in retried.json()
+            assert child.client_calls() == [101, 103]
+        assert runtime.manager.reply_memory.held == 0
 
 
 def gate(profile_id, shared):

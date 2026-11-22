@@ -448,7 +448,7 @@ async def test_the_stream_cap_answers_429_at_once_and_posts_still_work(tmp_path,
             loop = asyncio.get_running_loop()
             started = loop.time()
             busy(await client.get('/mcp', headers=headers), status=429, retry_after=30, ident=None,
-                 text=router().streams_text(cap))
+                 text=router().streams_text(cap, ticketed=True))
             assert loop.time() - started < .5
             response = await client.post('/mcp', headers=headers, json=call(70))
             assert response.status_code == 200 and 'result' in response.json()

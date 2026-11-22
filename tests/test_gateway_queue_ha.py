@@ -361,17 +361,17 @@ async def test_request_abandoned_while_queued_never_reaches_the_child_on_a_real_
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token, url)}
             held = [asyncio.create_task(client.post(url, headers=headers, json=ping(1000 + n))) for n in range(2)]
             await until(lambda: child.waiting == 2)
-            patient = asyncio.create_task(client.post(url, headers=headers, json=ping(88)))
+            patient = asyncio.create_task(client.post(url, headers=headers, json=call(88)))
             await until(lambda: any(lane_.waiting == 1 for lane_ in lanes_of(runtime, B)))
             with pytest.raises(httpx.TimeoutException):
-                await client.post(url, headers=headers, json=ping(77), timeout=.5)
+                await client.post(url, headers=headers, json=call(77), timeout=.5)
             await until(lambda: sum(lane_.waiting for lane_ in lanes_of(runtime, B)) == 1, 5)
-            assert 77 not in child.client_pings()
+            assert 77 not in child.client_calls()
             child.free.set()
             assert [response.status_code for response in await asyncio.gather(*held)] == [200, 200]
             served = await asyncio.wait_for(patient, 10)
             assert served.status_code == 200 and served.json()['id'] == 88
-    assert 77 not in child.client_pings() and 88 in child.client_pings(), 'the abandoned write reached the child'
+    assert 77 not in child.client_calls() and 88 in child.client_calls(), 'the abandoned write reached the child'
     warnings = router_warnings(log_scan)
     abandoned = [r for r in warnings if 'closed its connection while its request waited' in r.getMessage()]
     assert len(abandoned) == 1 and 'profile=' + B[:8] in abandoned[0].getMessage()
@@ -399,7 +399,7 @@ async def test_clients_leaving_the_queue_are_noticed_at_once_and_take_nothing(tm
             await until(lambda: child.waiting == 2)
             leavers = []
             for n in range(5):
-                request_headers, body = json_body(token, ping(200 + n), session)
+                request_headers, body = json_body(token, call(200 + n), session)
                 leavers.append(Exchange(runtime.mcp_app, 'POST', '/mcp', request_headers, body).start())
             stream_headers = [(k, v) for k, v in bearer(token).items()] + [('mcp-session-id', session)]
             leavers.append(Exchange(runtime.mcp_app, 'GET', '/mcp', stream_headers).start())
@@ -418,7 +418,7 @@ async def test_clients_leaving_the_queue_are_noticed_at_once_and_take_nothing(tm
             child.hold_ping = False
             after = await client.post('/mcp', headers=headers, json=call(9))
             assert after.status_code == 200 and after.json()['id'] == 9 and 'result' in after.json()
-        assert not [i for i in child.client_pings() if 200 <= i < 205], 'an abandoned request reached the child'
+        assert not [i for i in child.client_calls() if 200 <= i < 205], 'an abandoned write reached the child'
         assert [method for method, *_ in child.seen].count('GET') == 0
         notes = [r.getMessage() for r in router_warnings(log_scan)]
         assert len([line for line in notes if 'closed its connection' in line]) == 1, notes
@@ -498,21 +498,21 @@ async def test_one_profiles_full_queue_never_refuses_another_profiles_waiting_re
             refused = await client.post('/mcp', headers=headers[full], json=call(4))
             assert refused.status_code == 200 and refused.json() == {'jsonrpc': '2.0', 'id': 4, 'error': {
                 'code': -32003, 'message': profile_router.queue_text(1, 1)}}
-            waiting = asyncio.create_task(client.post('/mcp', headers=headers[other], json=ping(5)))
+            waiting = asyncio.create_task(client.post('/mcp', headers=headers[other], json=call(5)))
             await until(lambda: lanes[other].waiting == 1 or waiting.done(), 5)
             assert not waiting.done(), "another profile's full queue refused this request"
             for kid in kids.values():
                 kid.free.set()
             answers = [response.json() for response in await asyncio.gather(*held, queued, waiting)]
         assert [answer['id'] for answer in answers] == [1, 2, 3, 5] and all('result' in a for a in answers), answers
-        assert 4 not in kids[full].client_calls() and 5 in kids[other].client_pings()
+        assert 4 not in kids[full].client_calls() and 5 in kids[other].client_calls()
 
 
 async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, log_scan, monkeypatch):
     """One ticketed GET keeps its ordinary slot and admission while 15 bounded ping calls fill the other slots.
 
-    The one-ticket extra-profile memory limit prevents eight simultaneous GETs; the nominal stream cap is tested
-    separately at the gate. A POST and another GET must still wait for an ordinary slot and get its busy answer.
+    The one-ticket extra-profile memory limit makes its effective stream cap one. A POST still waits for an ordinary
+    slot; the next GET receives the stream-cap 429 before taking a forwarding slot.
     """
     data, children, child = holding_runtime(tmp_path, monkeypatch, forward_wait_seconds=.3)
     numbers = profiles.EXTRA_PROFILE_QUOTA
@@ -534,9 +534,9 @@ async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, lo
             assert busy.status_code == 200 and busy.json() == {'jsonrpc': '2.0', 'id': 999, 'error': {
                 'code': -32003, 'message': profile_router.forward_text(numbers.forward_slots, .3)}}
             stream = await client.get('/mcp', headers=headers)
-            assert stream.status_code == 503 and stream.headers['retry-after'] == '5'
+            assert stream.status_code == 429 and stream.headers['retry-after'] == '30'
             assert stream.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
-                'code': -32003, 'message': profile_router.forward_text(numbers.forward_slots, .3)}}
+                'code': -32003, 'message': profile_router.streams_text(1, ticketed=True)}}
             child.free.set()
             assert [response.status_code for response in await asyncio.gather(*held)] == [200] * room
             await asyncio.wait_for(asyncio.gather(*(exchange.task for exchange in streams)), 5)
