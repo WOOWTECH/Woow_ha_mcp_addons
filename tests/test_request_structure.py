@@ -17,6 +17,7 @@ The 16 MiB bodies are made one at a time, when a test runs (no module-level corp
 import asyncio
 import base64
 import json
+import statistics
 import time
 import tracemalloc
 
@@ -322,6 +323,36 @@ def test_near_limit_object_burst_counts_only_structure_outside_escaped_strings()
     assert len(within) < MiB and json.loads(within)
     assert violation(within) is None
     assert 'elements' in violation(body(100_000))
+
+
+def test_near_limit_object_guard_does_not_dominate_decode_cpu():
+    """HM-19c: 64 of these bodies saturated the J6412 gateway before child work.
+
+    Keep the authenticated structure guard cheaper than decoding the same
+    accepted body. CPU time compares two production functions on this runner,
+    avoiding a machine-specific wall-clock deadline in the unit test.
+    """
+    from mcp_admin_core.config import strict_json
+
+    message = {'jsonrpc': '2.0', 'id': 100, 'method': 'tools/call',
+               'params': {'name': 'list_models', 'arguments': {
+                   'limit': 1, 'padding': [{'a': 1}] * 99_990}}}
+    body = json.dumps(message, ensure_ascii=False, separators=(',', ':')).encode()
+    assert len(body) == 800_036
+    guard = lambda: request_limits.McpRequestLimits(N, DEFAULT_MAX_TOTAL_ELEMENTS).check_structure(body)
+    decode = lambda: strict_json(body)
+    guard()
+    decode()
+
+    def median_cpu(operation):
+        samples = []
+        for _ in range(5):
+            started = time.process_time()
+            operation()
+            samples.append(time.process_time() - started)
+        return statistics.median(samples)
+
+    assert median_cpu(guard) < .9 * median_cpu(decode)
 
 
 def test_unterminated_string_keeps_earlier_structure_refusal():
