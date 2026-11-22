@@ -544,8 +544,20 @@ class ProfileManager:
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
         # HM-31: the add-on's request body budget, every profile's share of it (derived now: at startup)
-        self.budget = request_budget.RequestBudget(request_budget.BudgetLimits.derive(product, switched_on=True))
-        self.reply_memory = ReplyMemory() if product == 'odoo' else None
+        self.odoo_memory_enabled = True
+        initial_limits = None
+        if product == 'odoo':
+            ceiling, source = request_budget.memory_ceiling()
+            accounts, _ = request_budget.runtime_inputs(product, switched_on=True,
+                                                         memory_limit=ceiling if source == 'cgroup' else None)
+            self.odoo_memory_enabled = request_budget.odoo_switched_memory_fits(ceiling, accounts, source)
+            if self.odoo_memory_enabled:
+                initial_limits = request_budget.odoo_switched_limits(ceiling, accounts, source)
+        self.budget = request_budget.RequestBudget(initial_limits or request_budget.BudgetLimits.derive(
+            product, switched_on=self.odoo_memory_enabled))
+        self.reply_memory = ReplyMemory() if product == 'odoo' and self.odoo_memory_enabled else None
+        if not self.odoo_memory_enabled:
+            self.reply_worker = None  # default profile keeps its prior reply path
         self.shared = self.index = self.mcp_app = None
         self.mcp_listener_limit = 64
         self.orphan_secrets = frozenset()
@@ -941,6 +953,20 @@ class ProfileManager:
             raise RuntimeError('profile manager already open')
         self._stack = AsyncExitStack()
         try:
+            if self.product == 'odoo':
+                # Recheck before wiring the default app to a budget: readings may change since construction.
+                ceiling, source = request_budget.memory_ceiling()
+                accounts, _ = request_budget.runtime_inputs(self.product, switched_on=True,
+                                                             memory_limit=ceiling if source == 'cgroup' else None)
+                if self.odoo_memory_enabled and request_budget.odoo_switched_memory_fits(ceiling, accounts, source):
+                    self.budget = request_budget.RequestBudget(
+                        request_budget.odoo_switched_limits(ceiling, accounts, source))
+                else:
+                    self.odoo_memory_enabled = False
+                    self.budget = request_budget.RequestBudget(request_budget.BudgetLimits.derive(
+                        self.product, switched_on=False))
+                    self.reply_memory = self.reply_worker = None
+                self.memory_limit = ceiling if source == 'cgroup' else None
             self.shared = SharedAdmin(AdminAuthority(self.app_options.get('verify_admin')))
             if origin_policy.applies(self.app_options):
                 # HM-27: one policy for every profile; read once now (an unusable file: its WARNING), never written here
@@ -966,8 +992,13 @@ class ProfileManager:
             served = self.files_for_extras = raise_open_file_limit(needed, target)
             if served:
                 self.mcp_listener_limit = profiles.mcp_listener_limit(self.product)
-            self.memory_limit = profiles.memory_limit_mib()
+            if self.product != 'odoo':
+                self.memory_limit = profiles.memory_limit_mib()
             self.capacity = profiles.capacity(self.product, self.memory_limit)
+            if self.product == 'odoo' and not self.odoo_memory_enabled:
+                # Keep the manager's authenticated capacity-denial route and dormant tokens, but start no extra child.
+                self.capacity = profiles.ProfileCapacity(self.capacity.policy_limit, self.memory_limit, 100, 0)
+                self.mcp_listener_limit = 64
             listed = (self.index.entries if served and not self.unusable and profiles.supports_profiles(self.product)
                       else ())
             await self._open_listed(listed, scan)
