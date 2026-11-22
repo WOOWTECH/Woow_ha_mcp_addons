@@ -735,3 +735,31 @@ def test_plan_owner_restore_refuses_legacy_or_foreign_input():
         with pytest.raises(MigrationError):
             plan_owner_restore(current, product, bad)
     assert plan_owner_restore(current, product, record).report['disabled_added'] == ['hermes_skill']
+
+
+async def test_nextcloud_restore_uses_policy_handler(tmp_path):
+    _migrated(tmp_path, 'schema3-nextcloud-v0.1.14-fresh.json')
+    transitions = []
+
+    async def verify(_):
+        return True
+
+    async def policy_changed(before, after):
+        transitions.append((before, after))
+
+    async def unexpected_restart(_):
+        raise AssertionError('Nextcloud restore must use policy handler')
+
+    with closing(ProductStore(tmp_path, 'nextcloud')) as store:
+        child = httpx.AsyncClient(trust_env=False)
+        admin, _ = make_apps(store, TOOLS['nextcloud'], child, verify_admin=verify,
+                             backend_changed=unexpected_restart, policy_changed=policy_changed)
+        client = httpx.AsyncClient(transport=httpx.ASGITransport(admin, client=('172.30.32.2', 1)),
+                                   base_url='http://admin')
+        async with client, child:
+            boot = await client.get('/api/bootstrap', headers=IDENTITY)
+            reply = await client.post('/api/owner-defaults/restore', headers={
+                **IDENTITY, 'x-csrf-token': boot.json()['csrf'], 'if-match': boot.headers['etag']})
+            assert reply.status_code == 200, reply.text
+            assert len(transitions) == 1 and transitions[0][1] == store.load()
+            assert transitions[0][0] != transitions[0][1]
