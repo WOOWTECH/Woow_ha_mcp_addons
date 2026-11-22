@@ -130,7 +130,8 @@ GATEWAY_BUSY = -32003
 BUSY_RETRY_AFTER = 5
 STREAM_RETRY_AFTER = 30
 # HM-31 (contract 2.2 point 4, 2.4, 5; PaaS #155): the request state's name for the request's request_budget.Reservation
-# (AnyMethod opens one for every MCP request of make_apps' body_budget and closes it when the request ends: its answer
+# (AnyMethod opens one for ordinary MCP requests of make_apps' body_budget; a profile's admission gate may hand in
+# one it already opened. Its owner closes it when the request ends: its answer
 # sent in full, an event stream's last byte included, or its client gone). serve() charges it once the token is checked:
 # the body as read (a declared Content-Length before a byte is read) and as forwarded to the child (HM-08 review MF-1,
 # S-1). It replaces HM-08's FORWARDED_BODY: one budget, switched on or off.
@@ -626,7 +627,8 @@ class AnyMethod:
     """An ASGI endpoint, so Starlette hands every method to the handler: the Bearer check comes first, then 405.
 
     HM-31: budget (a request_budget.Share), when given, opens the request's reservation (the request's state,
-    BODY_RESERVATION) and closes it when the request ends, however it ends: nothing it held stays charged."""
+    BODY_RESERVATION) and closes it when the request ends. An admission gate can pass its existing reservation;
+    that gate owns its close after the full ASGI send or cancellation. Nothing it held stays charged."""
     def __init__(self, handler, budget=None):
         self.app = request_response(handler)
         self.budget = budget
@@ -634,13 +636,25 @@ class AnyMethod:
     async def __call__(self, scope, receive, send):
         if self.budget is None:
             return await self.app(scope, receive, send)
-        reservation = self.budget.open()
+        # The profile admission gate may have read a small POST before handing
+        # a notification here. Reuse its charge rather than opening a second
+        # reservation for the same body. The gate owns that reservation until
+        # the outer ASGI send/cancellation finishes.
+        reservation = scope.get("state", {}).get(BODY_RESERVATION)
+        borrowed = reservation is not None
+        if borrowed:
+            if (not isinstance(reservation, request_budget.Reservation)
+                    or reservation.share is not self.budget or reservation.closed):
+                raise RuntimeError("invalid inherited body reservation")
+        else:
+            reservation = self.budget.open()
         # A copy of the request's state, so nothing is written into the server's own dict.
         scope = {**scope, "state": {**scope.get("state", {}), BODY_RESERVATION: reservation}}
         try:
             await self.app(scope, receive, send)
         finally:
-            reservation.close()
+            if not borrowed:
+                reservation.close()
 
 
 async def body(request: Request):
