@@ -28,11 +28,14 @@ monitor and start_all's readiness wait (settle) stop as asked. Only a stop chang
 """
 import asyncio
 import re
+import time
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 import httpx
 
 from . import redact
+from .capacity_metrics import active_metrics
 from .config import ConfigError, strict_json
 from .lifecycle import CHILD_URL
 
@@ -135,6 +138,17 @@ class HealthMonitor:
         self._generation = None
         self._reachable = None  # the child start whose last answered check found the backend reachable
         self._wake = asyncio.Event()
+        self._capacity_metrics = active_metrics()
+        if self._capacity_metrics is not None:
+            try:
+                child_port = urlsplit(str(child_url)).port
+            except ValueError:
+                child_port = None
+            self._capacity_slot = self._capacity_metrics.register_health_monitor(child_port)
+        else:
+            self._capacity_slot = None
+        self._capacity_phase = 0
+        self._capacity_timeout = False
 
     def snapshot(self):
         return {"management": self.management, "child": self.process.health(), "backend": self.backend}
@@ -149,15 +163,33 @@ class HealthMonitor:
         return {"child": status, "ready": bool(current and settled[1]),
                 "backend": settled[2] if current else "unknown", "reason": settled[3] if current else None}
 
-    async def check(self):
+    async def check(self, *, capacity_scheduled_at_ns=None):
         # HM-09 follow-up (module docstring): asyncio.timeout and anyio undo their own cancel() requests, so a count above
         # the one at the start is a stop asked of this task that the check did not get as CancelledError.
         task = asyncio.current_task()
         asked = 0 if task is None else task.cancelling()
-        async with self._check_lock:
-            await self._check_saved()
-        if task is not None and task.cancelling() > asked:
-            raise asyncio.CancelledError
+        started_at_ns = None
+        outcome = 4
+        try:
+            async with self._check_lock:
+                if capacity_scheduled_at_ns is not None:
+                    started_at_ns = time.monotonic_ns()
+                    self._capacity_phase = 0
+                    self._capacity_timeout = False
+                found = await self._check_saved()
+            if task is not None and task.cancelling() > asked:
+                raise asyncio.CancelledError
+            # Use the check's raw finding, not the tolerated settled verdict.
+            outcome = (2 if self._capacity_timeout else
+                       0 if found is not None and found[2] == 'reachable' else 1)
+        except asyncio.CancelledError:
+            outcome = 3
+            raise
+        finally:
+            if capacity_scheduled_at_ns is not None:
+                self._capacity_metrics.on_scheduled_health_check(
+                    self._capacity_slot, capacity_scheduled_at_ns,
+                    started_at_ns, self._capacity_phase if started_at_ns is not None else 0, outcome)
 
     async def settle(self):
         """HM-09 (ProfileManager.start_all waits for a starting child with it): the outcome of the check running now when
@@ -287,6 +319,8 @@ class HealthMonitor:
         headers = {"Authorization": "Bearer " + state.child_token, "Accept": "application/json, text/event-stream"}
         session = None
         try:
+            if self._capacity_metrics is not None:
+                self._capacity_phase = 1
             async with asyncio.timeout(8):
                 async with self.client.stream("POST", self.child_url, headers=headers, json={
                     "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
@@ -316,6 +350,8 @@ class HealthMonitor:
                         raise ValueError("invalid ping")
                 self.process.ready = self.process.status == "running"
             if configured:
+                if self._capacity_metrics is not None:
+                    self._capacity_phase = 2
                 # Use the SAME API client, destination validation and DNS-pinned
                 # connection as tools. Never perform a second Python network path.
                 async with asyncio.timeout(5):
@@ -340,6 +376,8 @@ class HealthMonitor:
             # the backend unreachable; it must never stop the monitor, which would stop the add-on.
             if reason is None and isinstance(error, TimeoutError):
                 reason = "BACKEND_TIMEOUT: the health check got no answer within 5 s"
+            if self._capacity_metrics is not None and isinstance(error, TimeoutError):
+                self._capacity_timeout = True
         finally:
             if session:
                 try:
@@ -350,13 +388,21 @@ class HealthMonitor:
                     pass
         return reason
 
+    async def _scheduled_check(self):
+        if self._capacity_metrics is None:
+            await self.check()
+            return
+        scheduled_at_ns = time.monotonic_ns()
+        self._capacity_metrics.on_health_check_scheduled(self._capacity_slot, scheduled_at_ns)
+        await self.check(capacity_scheduled_at_ns=scheduled_at_ns)
+
     async def run(self):
         if not self.paced:
             while True:
-                await self.check()
+                await self._scheduled_check()
                 await asyncio.sleep(15)
         if self.first_check_after:
             await self._pause(self.first_check_after)
         while True:
-            await self.check()
+            await self._scheduled_check()
             await self._pause(self.next_interval())
