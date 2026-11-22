@@ -1,7 +1,7 @@
 """Opt-in runtime evidence wiring without a host or network service."""
 
 import asyncio
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 import os
 from pathlib import Path
@@ -10,10 +10,11 @@ import tempfile
 import time
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from mcp_admin_core.capacity_metrics import (
-    CapacityMetrics, activate, deactivate, write_evidence,
+    CapacityMetrics, LagSample, activate, deactivate, write_evidence,
 )
 from mcp_admin_core.health import HealthMonitor
 from mcp_admin_core.reply_worker import ReplyWorker
@@ -82,7 +83,7 @@ async def test_scheduled_health_check_and_registered_zero_check_slot(monkeypatch
     await asyncio.gather(task, return_exceptions=True)
     snap = await probe.stop()
     assert snap.health_monitors_registered == 2
-    assert snap.health_monitor_child_ports == (3000, 3000)
+    assert not hasattr(snap, 'health_monitor_child_ports')
     assert snap.health_checks_by_slot == (1, 0)
     assert snap.health_inflight_by_slot == (0, 0)
     assert snap.health_checks_scheduled == 1
@@ -93,6 +94,7 @@ async def test_scheduled_health_check_and_registered_zero_check_slot(monkeypatch
     assert row.duration_ns == row.ended_at_monotonic_ns - row.scheduled_at_monotonic_ns
     assert row.execution_ns == row.ended_at_monotonic_ns - row.started_at_monotonic_ns
     assert second._capacity_slot == 1
+    assert 'health_monitor_child_ports' not in asdict(snap)
 
 
 @pytest.mark.asyncio
@@ -128,10 +130,11 @@ async def test_inflight_health_check_is_counted_before_it_completes(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_scheduled_health_timeout_records_initialization_phase(monkeypatch):
+@pytest.mark.parametrize('error_type', [TimeoutError, httpx.ConnectTimeout, httpx.ReadTimeout])
+async def test_scheduled_health_timeout_records_initialization_phase(monkeypatch, error_type):
     class TimedOutClient:
         def stream(self, *args, **kwargs):
-            raise TimeoutError
+            raise error_type('transport timed out')
 
     probe = CapacityMetrics(enabled=True)
     probe.start()
@@ -155,6 +158,35 @@ async def test_scheduled_health_timeout_records_initialization_phase(monkeypatch
     snap = await probe.stop()
     assert snap.health_samples[0].phase == 1
     assert snap.health_samples[0].outcome == 2
+
+
+@pytest.mark.asyncio
+async def test_lag_bound_and_50ms_gate_include_sampling_interval():
+    probe = CapacityMetrics(enabled=True, interval_seconds=0.01)
+    probe.start()
+    assert probe.snapshot().lag_50ms_gate_pass is None
+    at = time.monotonic_ns()
+    probe._lag_max = 45_000_000
+    probe._lag_max_at = at
+    probe._lag_samples.append(LagSample(at, 45_000_000))
+    snap = probe.snapshot()
+    assert snap.lag_max_ns == 45_000_000
+    assert snap.lag_pause_bound_ns == 55_000_000
+    assert snap.lag_50ms_gate_pass == 0
+    path = Path('/tmp') / f'hm19c-capacity-metrics-test-{os.getpid()}-{time.monotonic_ns()}.json'
+    try:
+        write_evidence(snap, path)
+        data = json.loads(path.read_text())
+        assert data['lag_pause_bound_ns'] == 55_000_000
+        assert data['lag_50ms_gate_pass'] == 0
+        assert 'health_monitor_child_ports' not in data
+    finally:
+        path.unlink(missing_ok=True)
+    probe._lag_max = 39_000_000
+    probe._lag_samples.clear()
+    probe._lag_samples.append(LagSample(at, 39_000_000))
+    assert probe.snapshot().lag_50ms_gate_pass == 1
+    await probe.stop()
 
 
 @pytest.mark.asyncio
