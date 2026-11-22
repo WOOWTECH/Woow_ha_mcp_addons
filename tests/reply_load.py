@@ -34,6 +34,7 @@ import httpx
 
 from multi_profile_runtime import Children, create_profile, ids, multi_profile_runtime, stored
 from mcp_admin_core import gateway, profiles
+from mcp_admin_core.profile_router import global_reply_text
 from test_profile_runtime import ProfileChild
 from test_single_profile_golden import ACCEPT, configure, initialize_message
 
@@ -277,8 +278,22 @@ async def starved(tmp_path, log_scan, monkeypatch, *, large=16, small=16, child=
             run = Starved(runtime, work, LoopLag().start(), LoopLag())
             phases = None
             try:
-                run.a_tasks = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(ident)))
-                               for ident in sizes]
+                async def offer_until_admitted(ident):
+                    # All 32 callers offer their request at once. The 512 MiB reply
+                    # reservation admits at most three default-profile replies at a
+                    # time; a safe busy answer means the child never saw this offer.
+                    # Retry only that exact answer, so every synthetic reply still
+                    # reaches the worker and every existing fairness assertion runs.
+                    async with asyncio.timeout(60):
+                        while True:
+                            response = await client.post('/mcp', headers=headers, json=call(ident))
+                            if response.status_code != 200 or response.json() != {
+                                'jsonrpc': '2.0', 'id': ident,
+                                'error': {'code': -32003, 'message': global_reply_text()}}:
+                                return response
+                            await asyncio.sleep(0.01)
+
+                run.a_tasks = [asyncio.create_task(offer_until_admitted(ident)) for ident in sizes]
                 phases = asyncio.create_task(_phases(run, children.by_port[3000], len(sizes)))
                 await until(lambda: children.by_port[3000].started.is_set(), 30)
                 yield run
