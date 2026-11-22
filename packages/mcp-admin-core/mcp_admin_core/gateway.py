@@ -2424,10 +2424,10 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if "error" in value:
                     value = redact.redact_secrets(value, masks(store.load()))
                 response_headers["content-type"] = "text/event-stream"
-                body = b"data: " + json.dumps(value, separators=(",", ":")).encode() + b"\n\n"
-                if len(body) > UNTICKETED_CONTROL_RESPONSE:
+                ping_body = b"data: " + json.dumps(value, separators=(",", ":")).encode() + b"\n\n"
+                if len(ping_body) > UNTICKETED_CONTROL_RESPONSE:
                     raise BadRequest(502)
-                return Response(body, status_code=200, headers=response_headers)
+                return Response(ping_body, status_code=200, headers=response_headers)
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
             request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
