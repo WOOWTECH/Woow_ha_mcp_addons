@@ -311,6 +311,25 @@ def test_the_element_boundary_is_exactly_the_limit_on_the_slow_path():
     assert 'elements' in violation(make(limit + 1))
 
 
+def test_near_limit_object_burst_counts_only_structure_outside_escaped_strings():
+    # HM-19c's 0.8 MiB burst shape: accepting it must not turn the next,
+    # over-limit shape into a parser allocation or count punctuation in text.
+    item = b'{"a":1}'
+    def body(count):
+        return envelope(b'{"padding":[' + b','.join([item] * count)
+                        + b'],"noise":"\\\"[[[,,,\\\""}')
+    within = body(99_990)
+    assert len(within) < MiB and json.loads(within)
+    assert violation(within) is None
+    assert 'elements' in violation(body(100_000))
+
+
+def test_unterminated_string_keeps_earlier_structure_refusal():
+    body = b'[' + b'0,' * (DEFAULT_MAX_TOTAL_ELEMENTS + 1) + b'"' + b'\\,' * 1000
+    assert 'elements' in violation(body)
+    assert violation(b'"' + b',' * 300_000) is None
+
+
 # ---- the corpora under the guard: what parsing still costs (HM-08's measurement, HM-19c measures on the hardware) ----
 
 PARSE_UNITS = {'dicts': b'{},', 'lists': b'[],', 'kv': b'{"a":1},', 'floats': b'1.5,', 'small-ints': b'1,'}

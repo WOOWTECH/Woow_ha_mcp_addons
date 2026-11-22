@@ -652,7 +652,19 @@ async def body(request: Request):
     return bytes(content)
 
 
-async def json_body(request, guard=None):
+def _parse_json_body(raw, guard, escaped_only=False):
+    if guard is not None:
+        guard.check_structure(raw)
+    value = strict_json(raw)
+    # A lone surrogate can only enter through a JSON \u escape: raw unescaped
+    # UTF-8 surrogates are rejected by the guard. Avoid serializing the entire
+    # object graph when no escape can have created one.
+    if not escaped_only or b"\\u" in raw:
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+    return value
+
+
+async def json_body(request, guard=None, parse_slot=None):
     """HM-31: guard (an McpRequestLimits; the MCP path gives STRUCTURE_LIMITS) checks the body's structure and encoding
     before it is parsed: request_limits.too_complex (a RequestLimitError) when it is too deep, has too many elements or
     is not UTF-8. The management API gives none."""
@@ -660,12 +672,24 @@ async def json_body(request, guard=None):
         raise BadRequest(415)
     try:
         raw = await body(request)
-        if guard is not None:
-            guard.check_structure(raw)
-        value = strict_json(raw)
-        # A lone surrogate (e.g. an id "\ud800") parses but cannot be encoded back into a reply.
-        json.dumps(value, ensure_ascii=False).encode("utf-8")
-        return value
+        if parse_slot is None:
+            return _parse_json_body(raw, guard)
+        # One parser per profile bounds the live object graph and keeps other
+        # profiles' event loops responsive during object-heavy JSON validation.
+        async with parse_slot:
+            worker = asyncio.create_task(anyio.to_thread.run_sync(_parse_json_body, raw, guard, True))
+            try:
+                return await asyncio.shield(worker)
+            finally:
+                # A revoked token or disconnected caller must not release the
+                # profile slot while its thread is still parsing the body.
+                joined = asyncio.gather(worker, return_exceptions=True)
+                with anyio.CancelScope(shield=True):
+                    while not joined.done():
+                        try:
+                            await asyncio.shield(joined)
+                        except asyncio.CancelledError:
+                            pass
     except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
         raise BadRequest() from None
 
@@ -1097,6 +1121,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     configuration = configuration or ConfigurationState(store)
     operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(FORWARD_SLOTS if forward_slots is None else forward_slots)
+    ingress_parse_slot = asyncio.Semaphore(1) if slot_busy is not None else None
     # HM-14: a switched-on profile's two lanes (the ordinary slots and the reserved ones); switched off: slots, as before
     lanes = None if slot_busy is None else {
         ORDINARY_LANE: Lane(ORDINARY_LANE, FORWARD_SLOTS if forward_slots is None else forward_slots),
@@ -2135,7 +2160,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise BadRequest(408) from None
                 else:
                     try:
-                        message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS))
+                        message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS, ingress_parse_slot))
                     except RequestLimitError as error:
                         return refused_body(error)  # HM-31: the structure guard (too deep, too many elements, not UTF-8)
                     except BadRequest as error:
