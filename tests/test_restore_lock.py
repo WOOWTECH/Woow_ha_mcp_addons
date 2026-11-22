@@ -1095,6 +1095,8 @@ REVIEWED = {
         "the store's .writer.lock, through its descriptor",
     ('packages/mcp-admin-core/mcp_admin_core/config.py', 'Store.load', 'fchmod'):
         "the store's state.json, through the descriptor it reads",
+    ('packages/mcp-admin-core/mcp_admin_core/capacity_metrics.py', 'write_evidence', 'fchmod'):
+        'the opt-in capacity snapshot temporary file in /tmp, mode 0600 before atomic replacement; never /data/mcp',
     ('packages/mcp-admin-core/mcp_admin_core/operations.py', 'OperationJournal._read', 'fchmod'):
         'the operation journal, through the descriptor it reads',
     # HM-27 (merged after HM-13b and HM-13c): exactly 0600 whatever the umask, before the rename puts it in place
