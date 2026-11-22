@@ -244,6 +244,12 @@
   面板與 log 都沒有另外的提示；面板「連線與權杖」頁的卡片顯示的是目前的模式，管理員還原後要看一次（HM-18 已寫進 `docs/operations/guide.md` 與
   `docs/operations/update-backup-rollback.md`）。備份裡的政策檔不能用或是目錄時，還原後密鑰網址一律 503（目錄只能再還原別份備份）。
   收據檔照索引旁的封存，還原前的存檔重送一律 410，不會把備份之後的設定再寫一次。
+- Nextcloud 政策收緊不重啟子程式（11/20 起，對齊 PaaS `tool_policy.py`；不受多帳號開關管，沒開通的使用者也一樣；火車 A 審查 F-2）：
+  收緊後到該帳號子程式下次啟動前，子程式環境（`NEXTCLOUD_MCP_DISABLED_TOOLS`、`READONLY`、`ALLOW_DELETE`）仍是舊的較寬政策，
+  被關掉的工具在子程式裡仍註冊著；擋住它們的只有閘道（`authorize`、`filter_list`，立刻生效，已開的 session 也擋）。能直接打子程式要有
+  該帳號的 child token，而且同 uid 的程序本來就不構成邊界（DQ-37），所以接受這段視窗；`manager.spec` 在存檔時就換成新政策，崩潰重啟
+  或明確啟動不會用舊環境（`tests/test_nextcloud_multi_profile.py::test_a_tightened_policy_is_what_the_next_launch_of_a_running_child_uses`）。
+  放寬一律重啟（子程式在 running 或 starting）。若要收緊也即時兩層一致，代價是斷開該帳號所有現有 session。
 - Nextcloud 的暴力破解防護推定以來源位址計（FM-91；UC-12 未實測）：add-on 的每個帳號從同一個位址連 Nextcloud，一個帳號的錯誤
   app password 可能讓同一台 Nextcloud 上別的帳號登入也被延遲，延遲夠長時回 429。子程式的 auth latch 讓同一組錯誤帳密在子程式重起前
   只登入失敗一次（HM-22 的測試：檢查再多次也只一次），監看照 15→300 秒退避；子程式每重起一次（存檔、面板重啟、看門狗）就再試一次。

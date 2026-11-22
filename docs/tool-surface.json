@@ -63,7 +63,7 @@
     "apps/emqx/vendor/emqx_mcp_server/lifespan.py": "acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b",
     "apps/emqx/vendor/emqx_mcp_server/models.py": "0d247d845738f37d2673fd0e50203cc8c4f3c4cf6a2d3b10db7bd2a0b9740801",
     "apps/emqx/vendor/emqx_mcp_server/registry.py": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652",
-    "apps/emqx/vendor/emqx_mcp_server/server.py": "f6cf87c5fd8806809fd711848e98feb9a64ace4443753958d6b10a101565c93b",
+    "apps/emqx/vendor/emqx_mcp_server/server.py": "96bfac5d9c1cbe74d2df6d74eaebb65af64b9ced39354471bd3540d874d4bc89",
     "apps/emqx/vendor/emqx_mcp_server/settings.py": "7c4ad8c7d6c56c8a9d3ef62634a4a875bbb9ee25992e6ac0aaf972aaf32a3598",
     "apps/emqx/vendor/emqx_mcp_server/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "apps/emqx/vendor/emqx_mcp_server/tools/_common.py": "4498443ea16462a52621645b3b6625198fe0f20b12166fa7c7c9197557502b67",

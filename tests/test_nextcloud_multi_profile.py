@@ -544,6 +544,28 @@ async def test_policy_widening_does_not_start_a_stopped_child(tmp_path, log_scan
         assert 'read_text_file' not in supervisor.spec.env['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
 
 
+async def test_a_tightened_policy_is_what_the_next_launch_of_a_running_child_uses(tmp_path, log_scan):
+    """Train A review F-2 (the 11/20 PaaS-aligned rule, woow-mcp-server apps/nextcloud/nextcloud_mcp_admin/tool_policy.py):
+    a tightening save does not restart the running child, so its environment keeps the wider DISABLED_TOOLS until it
+    next launches; the gateway refuses the tool at once (previous test). The stale window must close by itself:
+    a crash restart or a later explicit start (supervisor.start) builds its environment from the tightened policy,
+    never from the one the child first started with."""
+    data, children = setup(tmp_path)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        supervisor = runtime.manager.get(B).runtime.supervisor
+        started_with = supervisor.spec.env['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
+        assert 'read_text_file' not in started_with
+        starts = supervisor.starts
+        saved = await save(runtime, B, 'policy', {'writes_enabled': True, 'disabled': ['read_text_file']})
+        assert saved.status_code == 200, saved.text
+        assert supervisor.starts == starts  # tightening does not restart (PaaS apply_after_update: widened only)
+        await supervisor.stop()
+        await supervisor.start()
+        assert supervisor.starts == starts + 1
+        assert 'read_text_file' in supervisor.spec.env['NEXTCLOUD_MCP_DISABLED_TOOLS'].split(',')
+
+
 async def test_switched_off_a_policy_save_restarts_the_only_child_as_today(tmp_path, log_scan, switched_off):
     """The single-profile mode also preserves its child on tightening; the answer has no echo."""
     data = tmp_path / 'data'

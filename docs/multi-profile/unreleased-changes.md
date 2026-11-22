@@ -296,3 +296,5 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
 ### 2026-11-20 EMQX 子程式政策候選
 
 依使用者指示，EMQX 子程式每次列出或呼叫工具讀取並驗證本帳號 state，拒絕停用工具、操作與未授權寫入；state 不安全、損壞或身分不符時關閉。固定唯讀健康探測保留；政策儲存仍重啟本帳號子程式。未發布、未合併。
+
+**火車 A 審查 F-1（2026-11-23）修正**：帶 `EMQX_MCP_STATE_PATH` 時，子程式**不再**改用空的 `ToolGate`。環境閘（`EMQX_MCP_READONLY`、`EMQX_MCP_DISABLED_TOOLS`）在每個模式都照常生效，`PolicyMiddleware` 是疊在上面的第二層（即時讀 state），不是取代。所以 `child_spec` 設的兩個環境變數仍然有作用，防線維持閘道＋子程式環境閘＋子程式即時政策三層。單帳號、沒開通的行為不變（`tests/contract/child_spec_default.json` 的環境本來就含這兩個變數）。測試：`tests/test_emqx_child_gate.py` 在 EMQX 自己的 venv 以映像相同的 `PYTHONPATH` 起 server，證明有 state path 時 READONLY 與 DISABLED_TOOLS 仍擋住註冊，同時證明該 venv 能 import `mcp_admin_core.products` 與 `emqx_child_policy`（`apps/emqx/Dockerfile` 複製 `packages/mcp-admin-core` 並把它放進 `PYTHONPATH`）。
