@@ -3,9 +3,13 @@
 import asyncio
 import json
 
+import httpx
 import pytest
 
 from mcp_admin_core import gateway, profile_router, profiles, reply_memory, request_budget
+from multi_profile_runtime import Children, multi_profile_runtime
+from test_profile_runtime import ProfileChild
+from test_single_profile_golden import ACCEPT, configure, initialize_message
 
 pytestmark = pytest.mark.asyncio
 
@@ -56,15 +60,29 @@ async def test_slow_readers_hold_tickets_and_pending_bytes_then_release():
     await asyncio.sleep(0)
     assert shared.held == 4 * reply_memory.TICKET_BYTES
     assert default.reply_bytes == 3000 and extra.reply_bytes == 1000
-    # Nominal default slots remain 32; the memory gate refuses its fourth call.
+    # Nominal default slots remain 32; all 29 further offers are safely busy
+    # while the first three default-profile replies hold their tickets.
     assert default.quota.forward_slots == 32 and extra.quota.forward_slots == 16
-    await default.serve(app, scope(), receive, send)
-    assert seen[-1]['type'] == 'http.response.body'
-    refused = json.loads(seen[-1]['body'])
-    assert refused['id'] == 7 and refused['error']['code'] == -32003
-    assert any(item['type'] == 'http.response.start' and item['status'] == 200 and
-               (b'retry-after', b'5') in [(k.lower(), v) for k, v in item['headers']]
-               for item in seen)
+    async def offer_while_held():
+        events = []
+
+        async def capture(message):
+            events.append(message)
+
+        await default.serve(app, scope(), receive, capture)
+        return events
+
+    busy_offers = await asyncio.gather(*(offer_while_held() for _ in range(29)))
+    for events in busy_offers:
+        assert len(events) == 2
+        start, body = events
+        assert start['type'] == 'http.response.start' and start['status'] == 200
+        headers = [(k.lower(), v) for k, v in start['headers']]
+        assert (b'retry-after', b'5') in headers
+        assert (b'cache-control', b'no-store') in headers
+        assert body['type'] == 'http.response.body'
+        refused = json.loads(body['body'])
+        assert refused['id'] == 7 and refused['error']['code'] == -32003
     assert shared.held == 4 * reply_memory.TICKET_BYTES
     tasks[0].cancel()  # token-revocation / disconnected-client cancellation path
     with pytest.raises(asyncio.CancelledError):
@@ -119,3 +137,84 @@ async def test_no_large_child_reply_route_can_bypass_the_pre_forward_ticket():
         {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
     assert not gateway.reply_may_hold_large_child_output('DELETE', None)
     # The local /health route has neither an MCP body nor this forwarding path.
+
+
+async def test_switched_on_odoo_sse_ping_is_bounded_and_sanitized(tmp_path):
+    class PingChild(ProfileChild):
+        ping_body = None
+        ping_status = 200
+
+        async def __call__(self, request):
+            response = await super().__call__(request)  # bearer, session, and child request recording
+            message = json.loads(request.content) if request.content else {}
+            if message.get('method') == 'ping' and response.status_code == 200 and self.ping_body is not None:
+                return httpx.Response(self.ping_status, headers={'content-type': 'text/event-stream'},
+                                      content=self.ping_body)
+            return response
+
+    def event(value):
+        return b'data: ' + json.dumps(value, separators=(',', ':')).encode() + b'\n\n'
+
+    data = tmp_path / 'data'
+    configure(data, 'odoo')
+    children = Children()
+    child = children.add(3000, PingChild('default', 'odoo', data))
+    async with multi_profile_runtime('odoo', data, children=children) as runtime:
+        assert runtime.manager.reply_memory is not None
+        token = runtime.token('default')
+        async with runtime.mcp() as client:
+            headers = {**ACCEPT, 'Authorization': 'Bearer ' + token}
+            opened = await client.post('/mcp', headers=headers, json=initialize_message())
+            assert opened.status_code == 200
+            headers['Mcp-Session-Id'] = opened.headers['mcp-session-id']
+            ping = {'jsonrpc': '2.0', 'id': 7, 'method': 'ping'}
+
+            # A child can send other events first; none of them or its own
+            # top-level fields may reach this unticketed control reply.
+            child.ping_body = (event({'jsonrpc': '2.0', 'method': 'notifications/progress',
+                                      'params': {'progress': 'child-only'}})
+                               + event({'jsonrpc': '2.0', 'id': 7, 'result': {'child-only': True}}))
+            response = await client.post('/mcp', headers=headers, json=ping)
+            assert response.status_code == 200 and response.headers['content-type'] == 'text/event-stream'
+            assert response.content == event({'jsonrpc': '2.0', 'id': 7, 'result': {}})
+            assert runtime.manager.reply_memory.held == 0
+
+            child.ping_body = b'data: ' + b'x' * gateway.UNTICKETED_CONTROL_RESPONSE + b'\n\n'
+            oversized = await client.post('/mcp', headers=headers, json=ping)
+            assert oversized.status_code == 502 and b'x' * 100 not in oversized.content
+
+            child.ping_body = event({'jsonrpc': '2.0', 'id': 8, 'result': {}})
+            wrong_id = await client.post('/mcp', headers=headers, json=ping)
+            assert wrong_id.status_code == 502
+
+            child.ping_body = event({'jsonrpc': '2.0', 'id': 7,
+                                     'error': {'code': -32000, 'message': token}})
+            masked = await client.post('/mcp', headers=headers, json=ping)
+            assert masked.status_code == 200 and token.encode() not in masked.content
+            assert b'[REDACTED]' in masked.content
+
+            # An SSE-framed child error on HTTP 500 must keep the existing
+            # status mapping; a matching JSON-RPC ID cannot turn it into 200.
+            child.ping_status = 500
+            child.ping_body = event({'jsonrpc': '2.0', 'id': 7,
+                                     'error': {'code': -32000, 'message': 'child-only-500'}})
+            failed = await client.post('/mcp', headers=headers, json=ping)
+            assert failed.status_code == 500
+            assert failed.headers['content-type'] == 'application/json'
+            assert failed.json() == {'jsonrpc': '2.0', 'id': 7,
+                                     'error': {'code': -32000, 'message': 'Internal Server Error'}}
+            assert b'child-only-500' not in failed.content
+            child.ping_status = 200
+
+            # A UTF-8 child error can expand when the gateway JSON-escapes it.
+            # The unticketed bound applies to the serialized response too.
+            child.ping_body = (b'data: ' + json.dumps({'jsonrpc': '2.0', 'id': 7,
+                                'error': {'code': -32000, 'message': '中' * 11_000}},
+                                ensure_ascii=False).encode() + b'\n\n')
+            expanded = await client.post('/mcp', headers=headers, json=ping)
+            assert expanded.status_code == 502
+
+            before = len(child.requests)
+            denied = await client.post('/mcp', headers={**headers, 'Authorization': 'Bearer wrong'}, json=ping)
+            assert denied.status_code == 401 and len(child.requests) == before
+            assert runtime.manager.reply_memory.held == 0

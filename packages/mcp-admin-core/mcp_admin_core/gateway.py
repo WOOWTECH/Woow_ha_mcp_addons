@@ -2408,10 +2408,26 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(502)  # the child refused the gateway's own token or Host: not a client credential issue
             media = upstream.headers.get("content-type", "").split(";")[0].strip().lower()
             is_sse = media == "text/event-stream"
-            # A child ping normally returns tiny JSON. An SSE ping could keep
-            # producing events without a reply ticket, so fail closed here.
-            if reserve_reply is not None and method == "ping" and is_sse:
-                raise BadRequest(502)
+            # A ping has no reply ticket. The real Odoo child frames even its
+            # small ping as SSE: take only its matching reply under the same
+            # fixed control limit as a JSON ping, then close the child stream.
+            if reserve_reply is not None and method == "ping" and is_sse and upstream.status_code == 200:
+                outcome, value, _ = await initialize_reply(
+                    owner, lease, True, message.get("id"), UNTICKETED_CONTROL_RESPONSE)
+                if not still_authorized(state.token):
+                    raise refused()
+                if lanes is not None and owner.interrupted is not None:
+                    return await interrupted_answer(owner, request, message, owner.interrupted)
+                if outcome != "ok":
+                    raise BadRequest(502)
+                value = gateway_reply(value, "ping")
+                if "error" in value:
+                    value = redact.redact_secrets(value, masks(store.load()))
+                response_headers["content-type"] = "text/event-stream"
+                body = b"data: " + json.dumps(value, separators=(",", ":")).encode() + b"\n\n"
+                if len(body) > UNTICKETED_CONTROL_RESPONSE:
+                    raise BadRequest(502)
+                return Response(body, status_code=200, headers=response_headers)
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
             request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
