@@ -30,7 +30,7 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response, Strea
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
-from . import odoo_methods, owner_defaults, redact, request_budget, ui
+from . import odoo_methods, owner_defaults, redact, request_budget, request_envelope, ui
 from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 
 from . import VERSION
@@ -40,7 +40,8 @@ from .lifecycle import CHILD_URL
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
-from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, RequestLimitError
+from .request_limits import (DEFAULT_MAX_DEPTH, DEFAULT_MAX_TOTAL_ELEMENTS, ID_WINDOW, McpRequestLimits,
+                             RequestLimitError, head_tail_id, too_complex)
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
 from .reply_worker import WorkerStopped, breathe, encoded
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
@@ -69,6 +70,11 @@ N8N_REQUEST_LIMITS = McpRequestLimits(N8N_MAX_REQUEST, N8N_MAX_ARGUMENT_ELEMENTS
 # limits run the same guard first (McpRequestLimits.parse_and_check). Only check_structure is used of it: the body's
 # bytes stay bounded by MAX_REQUEST in body().
 STRUCTURE_LIMITS = McpRequestLimits(MAX_REQUEST, DEFAULT_MAX_TOTAL_ELEMENTS)
+# HM-19c: a switched-on product reads a request body larger than this by its envelope only (request_envelope.py): no object
+# graph is built for it in the gateway and its bytes go to the child as they came. At most this size the body is parsed and
+# checked as before. The limits are the structure guard's (depth, elements); max_containers_per_kib None: no density limit.
+ENVELOPE_BYTES = 64 * 1024
+ENVELOPE_LIMITS = request_envelope.EnvelopeLimits(DEFAULT_MAX_DEPTH, DEFAULT_MAX_TOTAL_ELEMENTS)
 BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120
@@ -699,25 +705,69 @@ async def json_body(request, guard=None, parse_slot=None):
         raise BadRequest(415)
     try:
         raw = await body(request)
-        if parse_slot is None:
-            return _parse_json_body(raw, guard)
-        # One parser per profile bounds the live object graph and keeps other
-        # profiles' event loops responsive during object-heavy JSON validation.
-        async with parse_slot:
-            worker = asyncio.create_task(anyio.to_thread.run_sync(_parse_json_body, raw, guard, True))
-            try:
-                return await asyncio.shield(worker)
-            finally:
-                # A revoked token or disconnected caller must not release the
-                # profile slot while its thread is still parsing the body.
-                joined = asyncio.gather(worker, return_exceptions=True)
-                with anyio.CancelScope(shield=True):
-                    while not joined.done():
-                        try:
-                            await asyncio.shield(joined)
-                        except asyncio.CancelledError:
-                            pass
+        return await _parse_raw(raw, guard, parse_slot)
     except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
+        raise BadRequest() from None
+
+
+async def _parse_raw(raw, guard, parse_slot):
+    if parse_slot is None:
+        return _parse_json_body(raw, guard)
+    # One parser per profile bounds the live object graph and keeps other
+    # profiles' event loops responsive during object-heavy JSON validation.
+    async with parse_slot:
+        worker = asyncio.create_task(anyio.to_thread.run_sync(_parse_json_body, raw, guard, True))
+        try:
+            return await asyncio.shield(worker)
+        finally:
+            # A revoked token or disconnected caller must not release the
+            # profile slot while its thread is still parsing the body.
+            joined = asyncio.gather(worker, return_exceptions=True)
+            with anyio.CancelScope(shield=True):
+                while not joined.done():
+                    try:
+                        await asyncio.shield(joined)
+                    except asyncio.CancelledError:
+                        pass
+
+
+def envelope_refusal(raw):
+    """HM-19c: a request body above ENVELOPE_BYTES that is not a tools/call. The answer shape is too_complex's: 200 and the
+    request's id when its head or tail shows it, else 413."""
+    ident = head_tail_id(raw[:ID_WINDOW], raw[-ID_WINDOW:])
+    return RequestLimitError(
+        f"MCP request body was refused because it is larger than {ENVELOPE_BYTES} bytes and only a tools/call may be that "
+        "large; it was not processed. (MCP 請求內容超過 %d 位元組，只有 tools/call 可以這麼大；未處理。)" % ENVELOPE_BYTES,
+        status=413 if ident is None else 200, code=-32602, rpc_id=ident, kind="structure",
+        log_reason=f"body over {ENVELOPE_BYTES} bytes and not a tools/call")
+
+
+async def enveloped_json_body(request, parse_slot, keys_for):
+    """HM-19c (switched-on products): (message, forward). A body of at most ENVELOPE_BYTES is parsed as json_body does and
+    forward is None (the caller serializes the message as before). A larger one gets only its envelope read, a bounded
+    step at a time on the event loop (request_envelope.scan), under the profile's parse slot: message is what policy needs
+    (no object per element of the arguments) and forward the bytes for the child. Answers match json_body's: 400 for
+    JSON the scan reads that is not valid, 403 for an invalid _meta, too_complex for the structure guard's limits.
+    A call to a tool that reads its arguments (keys_for gives None) takes the full parse."""
+    if request.headers.get("content-type", "").split(";")[0] != "application/json":
+        raise BadRequest(415)
+    try:
+        raw = await body(request)
+        if len(raw) <= ENVELOPE_BYTES:
+            return await _parse_raw(raw, STRUCTURE_LIMITS, parse_slot), None
+        try:
+            async with parse_slot:
+                found = await request_envelope.scan(raw, ENVELOPE_LIMITS, keys_for, asyncio.sleep)
+        except request_envelope.NeedsFullParse:
+            return await _parse_raw(raw, STRUCTURE_LIMITS, parse_slot), None
+        except request_envelope.EnvelopeRefused as refused:
+            raise too_complex(raw, refused.reason) from None
+        except request_envelope.EnvelopeDenied:
+            raise BadRequest(403) from None
+        if found.message.get("method") != "tools/call":
+            raise envelope_refusal(raw)
+        return found.message, found.forward
+    except (ValueError, RecursionError):  # EnvelopeInvalid is a ValueError
         raise BadRequest() from None
 
 
@@ -1149,6 +1199,16 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(FORWARD_SLOTS if forward_slots is None else forward_slots)
     ingress_parse_slot = asyncio.Semaphore(1) if slot_busy is not None else None
+
+    def envelope_keys(name):
+        """HM-19c: what policy reads of params.arguments for this tool: its operation selector, if it has one; None when it
+        reads the whole arguments (a tool that is not the child's own, or n8n's argument rewriting)."""
+        tool = tools.get(name)
+        if tool is None:
+            return ()  # unknown: refused before its arguments are read
+        if not tool.child_schema or tool.n8n_arguments or tool.exposure_write_tool:
+            return None
+        return (tool.selector,) if tool.selector else ()
     # HM-14: a switched-on profile's two lanes (the ordinary slots and the reserved ones); switched off: slots, as before
     lanes = None if slot_busy is None else {
         ORDINARY_LANE: Lane(ORDINARY_LANE, FORWARD_SLOTS if forward_slots is None else forward_slots),
@@ -2159,6 +2219,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         if request.url.query:
             raise BadRequest()
         method = message = refusal = None
+        envelope_forward = None
         content = b""
         # HM-31 (contract 2.4): the token is checked; a large body is read under the request body budget from here on
         reservation = getattr(request.state, BODY_RESERVATION)
@@ -2187,7 +2248,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise BadRequest(408) from None
                 else:
                     try:
-                        message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS, ingress_parse_slot))
+                        if ingress_parse_slot is None:
+                            message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS, ingress_parse_slot))
+                        else:  # HM-19c: switched on: a large body is read by its envelope only
+                            message, envelope_forward = await lease.run(
+                                lambda: enveloped_json_body(request, ingress_parse_slot, envelope_keys))
                     except RequestLimitError as error:
                         return refused_body(error)  # HM-31: the structure guard (too deep, too many elements, not UTF-8)
                     except BadRequest as error:
@@ -2337,11 +2402,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     if answer is not None:
                         return answer
                 forwarded = message
-                if method == "initialize" and isinstance(message.get("params"), dict):
+                if envelope_forward is not None:
+                    pass  # HM-19c: forwarded as it came (a tools/call; its params._meta already cut out of the bytes)
+                elif method == "initialize" and isinstance(message.get("params"), dict):
                     # The gateway answers no server-to-client requests (sampling, elicitation, roots): the
                     # child must not expect any, whatever the real client declared.
                     forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
-                content = json.dumps(forwarded, separators=(",", ":")).encode()
+                content = envelope_forward if envelope_forward is not None else json.dumps(
+                    forwarded, separators=(",", ":")).encode()
                 try:
                     # HM-08 review MF-1, S-1; HM-31: what the child is sent stays charged until the request ends (this
                     # serialization can be larger than what was read: ASCII escapes make a CJK character 6 bytes and an
