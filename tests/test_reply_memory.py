@@ -17,8 +17,9 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.mark.usefixtures('log_scan')
-@pytest.mark.parametrize('profile_id,cap', [('default', 3), (B, 1)])
-async def test_real_gateway_stream_cap_is_ticket_backed_429(tmp_path, log_scan, profile_id, cap):
+@pytest.mark.parametrize('profile_id,cap', [('default', 24), (B, 8)])
+async def test_real_gateway_stream_cap_is_the_ordinary_429_and_takes_no_ticket(tmp_path, log_scan, profile_id, cap):
+    """0.5.1 (F1): a GET stream holds no reply ticket; its cap is the profile's ordinary 24 / 8 (it was 3 / 1 in 0.5.0)."""
     data = setup(tmp_path)
     children = Children()
     children.add(3000, GatewayChild('default', PRODUCT, data))
@@ -32,14 +33,18 @@ async def test_real_gateway_stream_cap_is_ticket_backed_429(tmp_path, log_scan, 
             streams = [Exchange(runtime.mcp_app, 'GET', '/mcp', list(headers.items())).start()
                        for _ in range(cap)]
             await until(lambda: all(b': open' in stream.content for stream in streams))
-            assert runtime.manager.reply_memory.by_profile[profile_id] == cap
+            assert cap == (profiles.DEFAULT_PROFILE_QUOTA if profile_id == 'default'
+                           else profiles.EXTRA_PROFILE_QUOTA).get_streams
+            assert runtime.manager.reply_memory.held == 0 and runtime.manager.reply_memory.by_profile == {}
             denied = await client.get('/mcp', headers=headers)
             assert denied.status_code == 429 and denied.headers['retry-after'] == '30'
             assert denied.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
-                'code': -32003, 'message': profile_router.streams_text(cap, ticketed=True)}}
-            # Bounded controls remain available even when all stream tickets are held.
+                'code': -32003, 'message': profile_router.streams_text(cap)}}
+            # Every stream is open and a request (POST) still works: a tools/call takes its ticket as before.
             control = await client.post('/mcp', headers=headers, json=ping(20))
             assert control.status_code == 200 and control.json()['result'] == {}
+            work = await client.post('/mcp', headers=headers, json=call(21))
+            assert work.status_code == 200 and 'result' in work.json(), work.text
             children.by_port[3000 if profile_id == 'default' else 18000].free.set()
             await asyncio.wait_for(asyncio.gather(*(stream.task for stream in streams)), 5)
         assert runtime.manager.reply_memory.held == 0
@@ -183,7 +188,7 @@ async def test_ticket_caps_a_streamed_reply_and_releases_on_error():
     owner = gate('default', shared)
 
     async def app(request_scope, recv, send):
-        assert request_scope['state'][gateway.REPLY_RESERVE](None) is None  # GET's ticket
+        assert request_scope['state'][gateway.REPLY_RESERVE](None) is None  # a POST's ticket
         await send({'type': 'http.response.start', 'status': 200, 'headers': []})
         await send({'type': 'http.response.body', 'body': b'x' * 1025})
 
@@ -191,7 +196,7 @@ async def test_ticket_caps_a_streamed_reply_and_releases_on_error():
     async def send(message):
         sent.append(message)
     with pytest.raises(gateway.BadRequest):
-        await owner.serve(app, {**scope(), 'method': 'GET'}, receive, send)
+        await owner.serve(app, scope(), receive, send)
     assert shared.held == 0 and owner.reply_bytes == 0
     assert not any(item['type'] == 'http.response.body' for item in sent)
 
@@ -202,7 +207,7 @@ async def test_no_large_child_reply_route_can_bypass_the_pre_forward_ticket():
         assert gateway.reply_may_hold_large_child_output('POST', {**request, 'method': method})
     for method in ('initialize', 'ping'):
         assert not gateway.reply_may_hold_large_child_output('POST', {**request, 'method': method})
-    assert gateway.reply_may_hold_large_child_output('GET', None)  # SSE
+    assert not gateway.reply_may_hold_large_child_output('GET', None)  # 0.5.1 (F1): a GET stream takes no ticket
     assert not gateway.reply_may_hold_large_child_output('POST',
         {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
     assert not gateway.reply_may_hold_large_child_output('DELETE', None)

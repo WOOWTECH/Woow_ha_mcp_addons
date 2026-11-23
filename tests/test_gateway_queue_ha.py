@@ -509,10 +509,9 @@ async def test_one_profiles_full_queue_never_refuses_another_profiles_waiting_re
 
 
 async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, log_scan, monkeypatch):
-    """One ticketed GET keeps its ordinary slot and admission while 15 bounded ping calls fill the other slots.
-
-    The one-ticket extra-profile memory limit makes its effective stream cap one. A POST still waits for an ordinary
-    slot; the next GET receives the stream-cap 429 before taking a forwarding slot.
+    """0.5.1 (F1): the GET streams of an additional profile fill its stream cap (8) and hold an ordinary slot each for
+    their whole life, but no reply ticket; 8 bounded ping calls fill the other slots. A POST still waits for an
+    ordinary slot; the next GET receives the stream-cap 429 before taking a forwarding slot.
     """
     data, children, child = holding_runtime(tmp_path, monkeypatch, forward_wait_seconds=.3)
     numbers = profiles.EXTRA_PROFILE_QUOTA
@@ -523,10 +522,12 @@ async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, lo
             session = await session_of(client, token)
             headers = {**bearer(token), 'Mcp-Session-Id': session}
             stream_headers = [(k, v) for k, v in bearer(token).items()] + [('mcp-session-id', session)]
-            streams = [Exchange(runtime.mcp_app, 'GET', '/mcp', stream_headers).start()]
+            streams = [Exchange(runtime.mcp_app, 'GET', '/mcp', stream_headers).start()
+                       for _ in range(numbers.get_streams)]
             await until(lambda: all(b': open' in stream.content for stream in streams))
+            assert runtime.manager.reply_memory.held == 0, 'a GET stream took a reply ticket'
             room = numbers.forward_slots - len(streams)
-            assert (numbers.forward_slots, numbers.get_streams, room) == (16, 8, 15)
+            assert (numbers.forward_slots, numbers.get_streams, room) == (16, 8, 8)
             held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(100 + n))) for n in range(room)]
             await until(lambda: child.waiting == room)
             assert lanes_of(runtime, B)[0].semaphore.locked() and runtime.gate(B).active == numbers.forward_slots
@@ -536,7 +537,7 @@ async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, lo
             stream = await client.get('/mcp', headers=headers)
             assert stream.status_code == 429 and stream.headers['retry-after'] == '30'
             assert stream.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
-                'code': -32003, 'message': profile_router.streams_text(1, ticketed=True)}}
+                'code': -32003, 'message': profile_router.streams_text(numbers.get_streams)}}
             child.free.set()
             assert [response.status_code for response in await asyncio.gather(*held)] == [200] * room
             await asyncio.wait_for(asyncio.gather(*(exchange.task for exchange in streams)), 5)

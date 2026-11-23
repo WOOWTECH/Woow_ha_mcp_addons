@@ -119,6 +119,7 @@ class GatewayChild(ProfileChild):
         self.hold_calls = self.hold_initialized = self.streaming = False
         self.waiting = 0
         self.hold_ping = False
+        self.get_events = ()      # byte strings a GET stream sends after its first comment, before it waits for free
         self.fail = None          # an httpx error class: a tools/call breaks before any header
         self.broken = None        # 'json' or 'sse': a tools/call's answer breaks after its first bytes
         self.on_break = None
@@ -161,10 +162,12 @@ class GatewayChild(ProfileChild):
         self.seen.append((request.method, method, message.get('id')))
         if request.method == 'GET':
             self.requests.append(request)
-            free = self.free
+            free, extra = self.free, tuple(self.get_events)
 
             async def events():
                 yield b': open\n\n'
+                for event in extra:
+                    yield event
                 await free.wait()
             if self.broken == 'sse' or self.fail is not None:
                 if self.fail is not None:

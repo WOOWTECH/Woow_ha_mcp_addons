@@ -154,13 +154,25 @@ REPLY_RESERVE = "reply_reserve"
 UNTICKETED_CONTROL_RESPONSE = 64 * 1024
 
 
-def reply_may_hold_large_child_output(http_method, message):
-    """GET streams and every identified POST may hold a large child reply.
+# 0.5.1 (F1; contract 2.4, 5): the request state's name for a switched-on Odoo GET stream's own bound (profile_router puts
+# it there; a GET stream takes no reply ticket). The value is (event_bytes, exceeded): the most a child's event may be
+# before the gateway ends the stream, and the gate's call to log that (it names the cause, never content).
+STREAM_GUARD = "stream_guard"
 
-    Notifications and DELETE have no relayed body; health never enters serve.
+
+class StreamLimit(Exception):
+    """Raised by a switched-on profile's gate through the app's send once a GET stream held more than its byte bound:
+    the gate has already ended the response and catches this itself, so it never reaches the server."""
+
+
+def reply_may_hold_large_child_output(http_method, message):
+    """Only an identified POST may hold a large child reply (it takes a reply ticket).
+
+    0.5.1 (F1): a GET event stream takes none: it relays no tools/call reply and holds its own small bound instead
+    (STREAM_GUARD). Notifications and DELETE have no relayed body; health never enters serve.
     """
-    return http_method == "GET" or (http_method == "POST" and isinstance(message, dict)
-                                    and "id" in message and message.get("method") not in ("initialize", "ping"))
+    return http_method == "POST" and isinstance(message, dict) and "id" in message \
+        and message.get("method") not in ("initialize", "ping")
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -1889,7 +1901,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         outcome = reply(value)
         return ("ok", value, None) if outcome == "ok" else ("invalid" if outcome else "missing", None, None)
 
-    async def stream(owner, lease, request=None, seconds=None):
+    async def stream(owner, lease, request=None, seconds=None, guard=None):
         """Relay a child's SSE 200 (the only stream the caller hands over). request is the (id, method) of the POST
         this stream answers, None for a GET stream; seconds bounds it (chunks)."""
         # Every event is rebuilt from the lines the gateway understood (sse_frame), so nothing it did not filter
@@ -1899,6 +1911,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
             pending.extend(chunk)
             while match := EVENT_BOUNDARY.search(pending, start):
+                if guard is not None and match.start() > guard[0]:
+                    guard[1]("a child event")  # a GET stream relays notifications: a larger event ends the stream
+                    return
                 if reply_worker is not None and match.start() > WORKER_FRAME_BYTES:
                     # HM-30 D1: a large event is framed, processed and built on the reply worker, in this profile's
                     # turn (relayed_frame: the steps below, the same bytes); the state for a POST stream's reply is read
@@ -1957,6 +1972,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # after it adds no -32005; when the token changed as the server took it, Ending sees the event)
                     owner.answered = True
                     return  # a duplicate reply or anything after it is never relayed
+            if guard is not None and len(pending) > guard[0]:
+                guard[1]("a child event")  # 0.5.1 (F1): an event still unfinished past the bound ends the stream too
+                return
         # A truncated SSE event is intentionally not dispatched.
         if slot_busy is not None and owner.interrupted is not None:
             # HM-14 (contract 2.5): the child's connection broke after the stream started. A POST's reply that did not
@@ -2545,7 +2563,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if request_id:
                 owner.reply = (message.get("id"),)  # HM-14: the id an Ending's -32005 event answers
             response = OwnedStreamingResponse(stream(owner, lease, (message.get("id"), method) if request_id else None,
-                                                     call_seconds),
+                                                     call_seconds,
+                                                     None if request_id else getattr(request.state, STREAM_GUARD, None)),
                                               owner=owner, status_code=200, headers=response_headers)
             # This answer hands any session id it carries over to the client, so the end of its stream must never
             # DELETE that session (an initialize never streams today: it is answered or refused above).
