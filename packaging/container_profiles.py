@@ -686,6 +686,28 @@ def record_odoo_outage(path):
     ODOO_OUTAGE_CHECKS.append(time.monotonic())
 
 
+# The wait for readiness to turn 503 once a switched-on product's backend is offline. Its monitor has tolerance 2 (HM-09,
+# DQ-25): two failed checks in a row, HEALTH_INTERVAL (15 s) apart, so the verdict comes 15 to 30 s after the outage, and
+# a 503 seen while the first check runs is only a snapshot of that check, not the verdict. A product that is not
+# switched on keeps the probe's own 22 s and one 503 (tolerance 1). Owner decision 2026-11-24 (train A candidate
+# failure: litellm, nextcloud and emqx timed out at the 22 s wait): up to 40 s, and three 503 in a row, .25 s apart.
+# Odoo's stage (odoo_outage) runs before this one and is unchanged: afterwards the 503 is already stable.
+OUTAGE_SWITCHED_SECONDS = 40
+OUTAGE_SWITCHED_STABLE = 3
+
+
+async def wait_unready(probe, client, ready_url=MCP + '/health/ready'):
+    stable = 0
+    try:
+        async with asyncio.timeout(OUTAGE_SWITCHED_SECONDS):
+            while stable < OUTAGE_SWITCHED_STABLE:
+                stable = stable + 1 if (await client.get(ready_url)).status_code == 503 else 0
+                await asyncio.sleep(.25)
+    except TimeoutError:
+        raise AssertionError(f'{probe.APP}: expected {OUTAGE_SWITCHED_STABLE} HTTP 503 in a row within '
+                             f'{OUTAGE_SWITCHED_SECONDS} s of the backend going offline') from None
+
+
 async def odoo_outage(probe, client, ready_url=MCP + '/health/ready'):
     """Check HM-09's two-failure contract, not an arbitrary phase of its 15 s clock.
 

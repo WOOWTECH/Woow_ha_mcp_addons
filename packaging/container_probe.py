@@ -505,6 +505,9 @@ async def run():
             if features.enabled(APP) and APP == 'odoo':
                 await container_profiles.odoo_outage(sys.modules[__name__], client)
             OFFLINE.set()
+            if features.enabled(APP):
+                # A switched-on monitor needs two failed checks (HM-09 tolerance 2): the wait below is then a formality.
+                await container_profiles.wait_unready(sys.modules[__name__], client)
             async with asyncio.timeout(22):
                 while (await client.get('http://127.0.0.1:8081/health/ready')).status_code != 503:
                     await asyncio.sleep(.25)

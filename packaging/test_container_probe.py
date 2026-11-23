@@ -142,7 +142,9 @@ BASE = 'd922d3c'
 # handing over to it: mock_bind_host, fixture_snapshot, run). A slice that adds one for a switched-on product lists it.
 # Release 44971234030: Odoo's switched-on two-failure outage contract.
 # Both new branches delegate to container_profiles; the legacy path is unchanged.
-ADDED_BEYOND_BASE = ('branch', 'branch')
+# Owner decision 2026-11-24: a third, the longer wait for a switched-on product's two-check outage verdict
+# (container_profiles.wait_unready); the statements of the product that is not switched on stay BASE's.
+ADDED_BEYOND_BASE = ('branch', 'branch', 'branch')
 
 
 def is_switched_on_branch(node):
@@ -231,7 +233,7 @@ class SingleProfilePathTests(unittest.TestCase):
         run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
                    if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
         branches = [node for node in ast.walk(run) if is_switched_on_branch(node)]
-        self.assertEqual(len(branches), 2)
+        self.assertEqual(len(branches), 3)  # Odoo outage, the switched-on outage wait, the stage
         branch = branches[-1]
         self.assertEqual(ast.unparse(branch.test), 'features.enabled(APP)')
         self.assertEqual([ast.unparse(statement) for statement in branch.body],
@@ -811,6 +813,51 @@ class GuardLogTests(unittest.TestCase):
                 left = probe.container_profiles.tree_snapshot(data)
             self.assertLessEqual({profiles.ORIGIN_POLICY_NAME, profiles.ORIGIN_POLICY_OPERATIONS_NAME, archive.name},
                                  set(left))
+
+
+
+
+class OutageWaitTests(unittest.TestCase):
+    """The wait for the 503 after the mock backend goes offline. A switched-on product's monitor needs two failed checks
+    15 s apart (HM-09, DQ-25: tolerance 2), so container_profiles.wait_unready gives it 40 s and needs three 503 in a
+    row (a 503 seen while a check runs is no verdict); a product that is not switched on keeps the probe's 22 s and one
+    (the probe's own statements, pinned to BASE)."""
+
+    class Client:
+        def __init__(self, codes):
+            self.codes, self.calls = list(codes), 0
+
+        async def get(self, url):
+            self.calls += 1
+            return Mock(status_code=self.codes.pop(0) if self.codes else 200)
+
+    def run_wait(self, codes):
+        client = self.Client(codes)
+        real_sleep = asyncio.sleep
+        with patch.object(probe.container_profiles.asyncio, 'sleep', new=lambda seconds: real_sleep(0)):
+            asyncio.run(probe.container_profiles.wait_unready(probe, client))
+        return client.calls
+
+    def test_the_numbers(self):
+        self.assertEqual((probe.container_profiles.OUTAGE_SWITCHED_SECONDS,
+                          probe.container_profiles.OUTAGE_SWITCHED_STABLE), (40, 3))
+        self.assertGreaterEqual(probe.container_profiles.OUTAGE_SWITCHED_SECONDS, 2 * 15 + 10)
+
+    def test_three_503_in_a_row(self):
+        self.assertEqual(self.run_wait([200, 503, 200, 503, 503, 503]), 6)
+
+    def test_a_lone_503_is_not_enough(self):
+        with patch.object(probe.container_profiles, 'OUTAGE_SWITCHED_SECONDS', .05), self.assertRaises(AssertionError):
+            self.run_wait([503, 200] * 100000)
+
+    def test_the_probe_waits_there_only_for_a_switched_on_product(self):
+        run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
+                   if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
+        calls = [node for node in ast.walk(run) if is_switched_on_branch(node)
+                 and 'wait_unready' in ast.unparse(node)]
+        self.assertEqual([ast.unparse(node.test) for node in calls], ['features.enabled(APP)'])
+        # the wait of a product that is not switched on stays 22 s and one 503, as BASE has it
+        self.assertIn('asyncio.timeout(22)', ast.unparse(run))
 
 
 if __name__ == '__main__':
