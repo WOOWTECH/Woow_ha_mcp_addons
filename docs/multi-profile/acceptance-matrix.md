@@ -84,7 +84,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 | `tests/test_profile_index.py` | HM-07 | 已有 | 索引規則（含 PaaS 對照）、簽章含 ctime／nlink |
 | `tests/test_profile_store.py` | HM-07 | 已有 | 只開既有、建立每一步故障注入、mode／owner 在 uid 10001 子程序驗 |
 | `tests/test_profile_consistency.py` | HM-07 | 已有 | 孤兒、撞號、`profile_unavailable` |
-| `tests/test_upgrade_zero_rewrite.py` | HM-07 | 已有 | bb48449 寫出的 schema 4 state 零改寫；開關正好是 `SWITCHED_ON`（HM-19a 起 `{'odoo'}`），開通的產品要能有帳號、版號至少 0.5.0 |
+| `tests/test_upgrade_zero_rewrite.py` | HM-07 | 已有 | bb48449 寫出的 schema 4 state 零改寫；開關正好是 `SWITCHED_ON`（HM-19a 起 `{'odoo'}`，火車 A 的 0.5.0 起 `{'odoo', 'emqx', 'litellm', 'nextcloud'}`），開通的產品要能有帳號、版號至少 0.5.0 |
 | `tests/test_identity_fields.py` | HM-07 | 已有 | 身分欄位與秘密欄位分類；新欄位沒分類就失敗。HM-12 面板：面板的網址↔秘密表（`urlSecrets`）、`identityBound` 與來源的算法（`urlOrigin`，逐案）要和後端一致。HM-22：照伺服器比的網址表（`SAME_SERVER_URLS`）只放綁身分產品的網址；開通的 Odoo 網址照打的字比（主機大寫、寫出 `:443` 都換，同 PaaS #131；HM-22 審查 S-2） |
 | `tests/test_profile_routing.py` | HM-08 | 已有 | 路由矩陣、零命中逐位元、撞號 503、兩個交叉案例 |
 | `tests/test_router_passthrough.py` | HM-08 | 已有 | 開關關時分派器不掛、回應逐位元相同 |

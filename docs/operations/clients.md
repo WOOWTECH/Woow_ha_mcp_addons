@@ -112,7 +112,7 @@ Gateway 在這條路徑上的行為：
 
 ## 多帳號（產品開通後）
 
-這一節寫產品開通多帳號之後的接法。**Odoo 從 0.5.0 起開通**（HM-19a；`MULTI_PROFILE_PRODUCTS` 只有 `odoo`），其他產品還沒開通；之後哪一版、哪個產品
+這一節寫產品開通多帳號之後的接法。**Odoo、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通**（HM-19a、火車 A；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），其他產品還沒開通；之後哪一版、哪個產品
 開通，以該產品的 CHANGELOG 為準。沒開通的產品照上面兩種接法，回應一個位元組都不變。完整規則見多帳號契約 `docs/multi-profile/contract.md` 第 2 節；管理與故障
 處理見[操作指南](guide.md#多帳號產品開通後)。
 

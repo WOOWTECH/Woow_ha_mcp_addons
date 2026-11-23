@@ -85,7 +85,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
 **狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。Odoo 0.5.0 的升版 PR（HM-19a）把 `odoo` 加進 `MULTI_PROFILE_PRODUCTS`；
-映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.0 發佈紀錄](release-decision-odoo-0.5.0.md)）。其他產品還沒開通。
+映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.0 發佈紀錄](release-decision-odoo-0.5.0.md)）。LiteLLM、Nextcloud、EMQX 的 0.5.0（火車 A）也開通，各自的發佈紀錄（`release-decision-litellm-0.5.0.md`、`release-decision-nextcloud-0.5.0.md`、`release-decision-emqx-0.5.0.md`）寫明展示機真後端驗收還沒做；其他產品還沒開通。
 
 - **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
   的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。

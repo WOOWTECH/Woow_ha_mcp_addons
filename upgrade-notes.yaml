@@ -2,6 +2,154 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  # LiteLLM, Nextcloud and EMQX 0.5.0 switch multiple profiles on for these three products (train A; multi-profile plan
+  # R2, docs/multi-profile/contract.md section 1.4 is the complete list of what the default profile sees change).
+  # Hermes, Headscale and n8n keep their versions and stay switched off.
+  - to_version: "0.5.0"
+    from_version: "0.4.14"
+    addons: [woow_mcp_litellm, woow_mcp_nextcloud, woow_mcp_emqx]
+    summary: >-
+      Multiple profiles: the default profile plus up to three more, each with its own backend connection, MCP token
+      and both of its URLs, tool policy and child; only the token decides the profile. An installation that never adds
+      a profile keeps its token, both URLs, state.json byte for byte, its policy and its child (port 3000). No option,
+      port, architecture, image name, tool name or state schema change.
+    breaking_changes:
+      - id: admin-api-profile-header
+        affects: Scripts that call the admin API (port 8099) directly; the bundled panel and the P9 kit are updated together.
+        change: >-
+          Every profile-scoped admin request needs exactly one X-MCP-Profile header (default or a profile id): missing
+          400 profile_id_required, repeated or malformed 400 profile_id_invalid, unknown 404 profile_not_found, never
+          the default profile instead. Answers carry the profile echo (the bootstrap adds profile, profiles_supported
+          and profile_index_state). The administrator check runs before any profile state is read.
+        migration: Send X-MCP-Profile on every profile-scoped request and ignore the added fields, or use the bundled panel.
+      - id: nextcloud-identity-change-rotates-token
+        affects: "Nextcloud only: clients of a profile whose Nextcloud URL (another scheme, host, port or path) or username is changed in the panel."
+        change: >-
+          Such a save (clearing the connection included) issues a new MCP token at once; both old URLs stop working and
+          the answer carries "token_rotated":true. An app password change, a first save, a revoked token, or the same
+          server written differently (host case, default port, trailing slash, a pasted page path) keep the token.
+          LiteLLM and EMQX keep their token when the key or URL changes.
+        migration: After such a save copy the new token or URL from the panel into every client.
+      - id: backend-origin-change-needs-secret
+        affects: Anyone moving a profile's backend URL to another scheme, host or port.
+        change: >-
+          The save needs the secret that URL is sent to (LiteLLM key, Nextcloud app password, EMQX API key and secret)
+          in the same save, otherwise 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN and nothing is saved. A
+          loopback backend URL (127.0.0.0/8, ::1, localhost) is refused (400); one saved earlier still reads back but
+          the child cannot connect to it.
+        migration: Enter the secret again when moving to another server; use a reachable, non-loopback backend URL.
+      - id: restore-revokes-profiles
+        affects: Restoring a backup that has additional profiles.
+        change: >-
+          Before anything is served the token of every profile, the default profile's included, is revoked, every
+          child token renewed and restore-record.json written; a profile gets a new token only after it is checked on
+          the default profile's review card (token/rotate 409 restore_review_required before), and operation ids from
+          before the restore answer 410 operation_restored. Unreadable profiles are moved to a quarantine directory.
+        migration: >-
+          Review each profile on the card, issue new tokens and update clients. A backup without additional profiles
+          revokes nothing (next section). The protection covers backups made with 0.5.0 or later only.
+      - id: litellm-active-tools-need-create
+        affects: "LiteLLM only: automation that calls litellm_health, litellm_token_counter or litellm_spend_calculate through a read-only policy."
+        change: >-
+          The three tools can run provider probes or fetch images and tokenizers, so they now need the create
+          permission: read-only mode exposes 15 tools instead of 18; the full surface stays at 40 tools and the 25 write
+          grants and defaults are unchanged. A saved read restriction still applies to them; no saved policy is rewritten.
+        migration: >-
+          Review such automation before explicitly allowing active work. Before going back to a version that treats
+          them as reads, disable the three tools by name in that version and keep a configuration backup.
+    behavior_changes:
+      - id: admin-panel-profiles
+        change: >-
+          A profile menu (also with only the default profile) adds, renames, deletes and switches profiles; new global
+          routes list, add, rename and delete profiles, revoke all, show and review the restore record, quarantine an
+          unusable index, delete a quarantine directory and keep the secret URL's Origin policy. The panel's first
+          bootstrap carries no profile header on purpose, so the browser console shows one 400.
+        migration: None needed.
+      - id: admin-two-byte-level-changes
+        change: >-
+          A PATCH or DELETE request that fails the identity check (for example without CSRF) gets 403
+          {"error":"request denied"} (400 with the same body for a malformed X-Ingress-Path) instead of 405, because
+          the identity check now runs before the method check. A method other than GET, HEAD, POST, PUT, PATCH and
+          DELETE still gets 405, but its Allow header lists six methods instead of four (PATCH and DELETE added; the
+          order was never fixed).
+        migration: None needed for clients that send the panel's headers.
+      - id: mcp-busy-answers-and-interruptions
+        change: >-
+          Admission per profile on 8081: over 64 requests of the default profile get JSON-RPC -32003 with
+          Retry-After 5 (200 for a small body with an id, else 503) instead of a plain-text 503; at most 32 wait and
+          a forwarding slot not free within 1 second gives -32003. Each additional profile has 32 and 8 streams of its
+          own (the default profile 24); a further stream of the same profile gets 429, -32003 and Retry-After 30; the
+          outer bound is 160 connections. Pending replies are capped at 32 MiB per profile (soft). A token changed
+          during an answer gives -32005, a child lost during one -32004, without a log traceback. Replies are processed
+          on one worker thread, profile by profile. The 64 MiB reply tickets of Odoo 0.5.0 do not apply to these products.
+        migration: Retry -32003 after Retry-After; check the backend before retrying a write after -32004; reconnect with the new token after -32005.
+      - id: child-watchdog-and-health
+        change: >-
+          The child watchdog backs off 2 to 300 seconds without a limit on attempts (reset after 120 seconds up), a
+          failed spawn included; the backend is unreachable after two failed checks in a row; refused credentials back
+          the monitor off 15 to 300 seconds; port 3000 is checked before spawn; lifecycle warnings name a profile by
+          the first 8 characters of its id. The soft open-file limit is raised to about 530 at start; when it cannot
+          be, only the default profile is served and adding one answers 409 profile_limit_reached (limit 0). Adding a
+          profile (or starting its child for the first time) needs 256 MiB plus 160 MiB of MemAvailable, else 409
+          profile_memory_insufficient or a blocked child (memory_capacity).
+        migration: None needed.
+      - id: secret-url-origin-report-only
+        change: >-
+          The secret URL checks one Origin list for the whole add-on, by default https://claude.ai in report-only mode:
+          an Origin outside it is served as before and logged once (decision=would_deny). The panel can switch to
+          enforce (403 outside the list). An unusable policy file makes every profile's secret URL answer 503 until a
+          new policy is saved; a restore brings back the backup's policy without a notice. Bearer /mcp with an Origin
+          stays 403; no CORS header is added.
+        migration: Read the would_deny lines before switching to enforce; check the policy after a restore.
+      - id: new-files-and-restore-notice
+        change: >-
+          The first start adds .instance-sentinel and .instance-record (no secrets) to /data/mcp. A restore is detected
+          by the restore marker (0.4.14 leaves it; this version removes it) or the sentinel. Without additional profiles
+          nothing is revoked: one log line, restore-record.json with the default profile kept, the receipts beside the
+          index and the Origin policy renewed (earlier operation ids 410), restore-notice.json and the bootstrap field
+          restore_notice until the default token is rotated or revoked; the panel shows the notice.
+        migration: Rotate the default token when it may have leaked after the backup.
+      - id: litellm-connection-pool-and-url
+        change: >-
+          LiteLLM only: each child allows 50 concurrent backend connections (was 4) with no idle connection kept, and
+          its health check uses a private connection of its own; an origin-root /v1 suffix of the LiteLLM URL is
+          removed when read (a mount such as /proxy/v1 is kept). A URL saved before is not rewritten.
+        migration: None needed.
+      - id: nextcloud-normalization-and-policy-restart
+        change: >-
+          Nextcloud only: a saved server URL is normalized (pasted page path cut, scheme and host lower-cased, default
+          port and trailing slash dropped, the saved spelling kept when only the spelling differs) and username and
+          app password lose leading and trailing blanks; a policy save that tightens or does not change the policy no
+          longer restarts the child (the gateway refuses at once, the child follows at its next start), and widening
+          restarts it only while it is running or starting.
+        migration: None needed.
+      - id: emqx-child-policy-and-field-fixes
+        change: >-
+          EMQX only: the child checks its own profile's saved state on every tool list and call (third layer behind
+          the gateway and its environment gate; fail closed except the fixed read-only health probe);
+          emqx_list_subscriptions' match_topic text says it is a wildcard search over stored filters;
+          emqx_prometheus_stats asks for and returns Prometheus text; identifiers that are longer than 65,536
+          characters once encoded or cannot be encoded fail with the fixed code EMQX_DESTINATION_DENIED.
+        migration: None needed.
+    preserved:
+      - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-litellm, -nextcloud, -emqx), amd64 only, ports 8081/tcp and Ingress 8099, manifest options and privileges.
+      - The default profile's token, both URLs, state.json bytes (state schema 4), policy, child port 3000 and working directory, receipt key and format.
+      - Tool names and counts (except the three LiteLLM tools' permission above), annotations, write grants and the full-functionality defaults; the 15-second health interval.
+      - Hermes, Headscale and n8n keep their versions and stay switched off.
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        Home Assistant cannot install an older version over a newer one. Roll back by restoring that backup: the old
+        image and data come back, profiles added since, rotations and revocations are lost, and the default token is
+        the backup's (nothing is revoked). After upgrading again press "revoke all" and issue new tokens.
+      - >-
+        Switching profiles off again is a release with a higher version (about a working day: build, acceptance, GHCR,
+        merge, Store sync); additional profiles then become dormant (tokens revoked, data kept). Meanwhile stop the
+        add-on, or revoke or delete a profile, or press "revoke all" in the panel.
+      - >-
+        The restore protection covers backups made with 0.5.0 or later. After restoring an older backup, or a VM or
+        disk snapshot (no restore signal), update to the latest version and press "revoke all". See
+        docs/operations/update-backup-rollback.md. Downgrades and rollback drills are pending (real-backend acceptance).
   # Odoo 0.5.0 switches multiple profiles on for Odoo only (multi-profile plan R1, HM-19a; docs/multi-profile/contract.md
   # section 1.4 is the complete list of what the default profile sees change). Other products keep their versions.
   - to_version: "0.5.0"

@@ -174,7 +174,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
 
 ## 多帳號（產品開通後）
 
-**狀態（2026-11-19）：Odoo 從 0.5.0 起開通**（HM-19a；`MULTI_PROFILE_PRODUCTS` 只有 `odoo`），其他產品還沒開通。這一節寫開通之後的行為；之後哪一版、
+**狀態（2026-11-23）：Odoo、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通**（HM-19a、火車 A；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），其他產品還沒開通。這一節寫開通之後的行為；之後哪一版、
 哪個產品開通，以該產品的 CHANGELOG 為準。連線與網址見 [client 文件](clients.md#多帳號產品開通後)；還原、回退與緊急關閉見 [更新、備份與回復](update-backup-rollback.md)。
 完整規則在多帳號契約 `docs/multi-profile/contract.md`（開通後預設帳號會變的事：第 1.4 節）；威脅模型與已知限制在 `docs/multi-profile/threat-model.md`。
 
