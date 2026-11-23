@@ -65,6 +65,12 @@ def _scan_structure(data: bytes, max_depth: int, max_elements: int) -> str | Non
     # string. Stop at its opening quote, but retain any earlier violation.
     outside_strings = outside_strings.split(b'"', 1)[0]
     structural = outside_strings.translate(_STRUCTURE_BYTES).replace(b'\x00', b'')
+    return _walk_structure(structural, max_depth, max_elements)
+
+
+def _walk_structure(structural: bytes, max_depth: int, max_elements: int) -> str | None:
+    """The depth and element check over the structural bytes (``[]{},`` outside strings, in order). Split out of
+    _scan_structure (HM-19c) so request_guard.scan, which strips the strings in pieces, walks the same bytes the same way."""
     # Collapse balanced empty pairs in C before walking structural bytes in
     # Python. A near-limit body can have ~100,000 flat objects; the Python
     # walk otherwise holds the GIL for every bracket and comma. Removing commas

@@ -18,6 +18,7 @@ import json
 import logging
 import re
 import secrets
+import threading
 import time
 from typing import Awaitable, Callable, Iterable
 
@@ -30,7 +31,7 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response, Strea
 from starlette.routing import Route, request_response
 from starlette.middleware import Middleware
 
-from . import odoo_methods, owner_defaults, redact, request_budget, ui
+from . import odoo_methods, owner_defaults, redact, request_budget, request_guard, ui
 from .access import AccessChanged, LeasedResponse, TokenAccess, masked_token
 
 from . import VERSION
@@ -40,7 +41,7 @@ from .lifecycle import CHILD_URL
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
-from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, McpRequestLimits, RequestLimitError
+from .request_limits import DEFAULT_MAX_TOTAL_ELEMENTS, ID_WINDOW, McpRequestLimits, RequestLimitError
 from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as OPERATION_RESULTS, TTL_MS
 from .reply_worker import WorkerStopped, breathe, encoded
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
@@ -691,32 +692,60 @@ def _parse_json_body(raw, guard, escaped_only=False):
     return value
 
 
-async def json_body(request, guard=None, parse_slot=None):
+async def json_body(request, guard=None, parse_slot=None, place=None):
     """HM-31: guard (an McpRequestLimits; the MCP path gives STRUCTURE_LIMITS) checks the body's structure and encoding
     before it is parsed: request_limits.too_complex (a RequestLimitError) when it is too deep, has too many elements or
-    is not UTF-8. The management API gives none."""
+    is not UTF-8. The management API gives none.
+
+    HM-19c (request_guard): with a parse_slot (a switched-on profile) a body over request_guard.LARGE_REQUEST_BYTES
+    that may be heavy to parse (many elements) first takes the add-on's one large-parse place without waiting
+    (request_guard.ParseBusy when it is taken: the caller answers the busy shape), is scanned in pieces, estimated
+    (parsed memory over 20 times its size, or an uncuttable stretch too long: the same refusal shape as the structure
+    guard) and parsed on the thread with breaths. Every other body, and a switched-off product's, is parsed as before."""
     if request.headers.get("content-type", "").split(";")[0] != "application/json":
         raise BadRequest(415)
     try:
         raw = await body(request)
         if parse_slot is None:
             return _parse_json_body(raw, guard)
-        # One parser per profile bounds the live object graph and keeps other
-        # profiles' event loops responsive during object-heavy JSON validation.
-        async with parse_slot:
-            worker = asyncio.create_task(anyio.to_thread.run_sync(_parse_json_body, raw, guard, True))
-            try:
-                return await asyncio.shield(worker)
-            finally:
-                # A revoked token or disconnected caller must not release the
-                # profile slot while its thread is still parsing the body.
-                joined = asyncio.gather(worker, return_exceptions=True)
-                with anyio.CancelScope(shield=True):
-                    while not joined.done():
-                        try:
-                            await asyncio.shield(joined)
-                        except asyncio.CancelledError:
-                            pass
+        large = len(raw) > request_guard.LARGE_REQUEST_BYTES
+        if large:
+            setattr(request.state, request_guard.LARGE_BODY, True)  # the forwarded bytes are written off the loop too
+        place = request_guard.PLACE if place is None else place
+        heavy = taken = False
+        if large:
+            # the counts are C calls over the whole body: off the loop once it is big
+            heavy = (await anyio.to_thread.run_sync(request_guard.classify, raw) if len(raw) > (1 << 20)
+                     else request_guard.classify(raw))
+            if heavy:
+                if not place.take():
+                    raise request_guard.ParseBusy(request_budget.head_tail_id(raw[:ID_WINDOW], raw[-ID_WINDOW:]))
+                taken = True
+        try:
+            # One parser per profile bounds the live object graph and keeps other
+            # profiles' event loops responsive during object-heavy JSON validation.
+            async with parse_slot:
+                if large:
+                    breath = request_guard.Breath(asyncio.get_running_loop(), threading.get_ident())
+                    work = functools.partial(request_guard.parse_large, raw, guard, breath, heavy)
+                else:
+                    work = functools.partial(_parse_json_body, raw, guard, True)
+                worker = asyncio.create_task(anyio.to_thread.run_sync(work))
+                try:
+                    return await asyncio.shield(worker)
+                finally:
+                    # A revoked token or disconnected caller must not release the
+                    # profile slot while its thread is still parsing the body.
+                    joined = asyncio.gather(worker, return_exceptions=True)
+                    with anyio.CancelScope(shield=True):
+                        while not joined.done():
+                            try:
+                                await asyncio.shield(joined)
+                            except asyncio.CancelledError:
+                                pass
+        finally:
+            if taken:
+                place.give()  # after the thread ended: the worker was joined above, however the request ended
     except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
         raise BadRequest() from None
 
@@ -2190,6 +2219,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS, ingress_parse_slot))
                     except RequestLimitError as error:
                         return refused_body(error)  # HM-31: the structure guard (too deep, too many elements, not UTF-8)
+                    except request_guard.ParseBusy as busy:
+                        # HM-19c (contract 2.4): another large request is in its parse (the add-on has one place for
+                        # them); not queued: the busy shape (200, -32003 under its id, Retry-After 5, no-store), else 503
+                        budget_share.warn("parse-busy", "answered a large request busy (another large request is "
+                                                        "being parsed; the add-on parses one at a time)")
+                        return busy_reply(request_budget.unread_message(busy.ident), request_guard.busy_text())
                     except BadRequest as error:
                         if error.status == 413:
                             budget_share.warn("body-too-large", "refused a request body (too-large, HTTP 413): body "
@@ -2341,7 +2376,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # The gateway answers no server-to-client requests (sampling, elicitation, roots): the
                     # child must not expect any, whatever the real client declared.
                     forwarded = {**message, "params": {**message["params"], "capabilities": {}}}
-                content = json.dumps(forwarded, separators=(",", ":")).encode()
+                large_body = getattr(request.state, request_guard.LARGE_BODY, False)
+                if large_body:
+                    # HM-19c: a large request's forwarded bytes, the same bytes (reply_worker.encoded is json.dumps
+                    # byte for byte), written in pieces with breaths on a thread: one json.dumps of 16 MiB holds the loop
+                    breath = request_guard.Breath(asyncio.get_running_loop(), threading.get_ident())
+                    content = await anyio.to_thread.run_sync(request_guard.encode_forward, forwarded, breath)
+                else:
+                    content = json.dumps(forwarded, separators=(",", ":")).encode()
                 try:
                     # HM-08 review MF-1, S-1; HM-31: what the child is sent stays charged until the request ends (this
                     # serialization can be larger than what was read: ASCII escapes make a CJK character 6 bytes and an
