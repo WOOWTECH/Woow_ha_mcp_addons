@@ -1,5 +1,7 @@
 # Odoo 0.5.0（多帳號首發 R1）發佈紀錄（草稿）
 
+> **2026-11-23 註記：0.5.0 已推到 GHCR 但從未上架 Store（Store 上是 0.4.14），已由 0.5.1 取代**（HM-19b 驗收重現 F1，負責人決定修好再發 0.5.1）。這份草稿保留作歷史；現行紀錄見 [release-decision-odoo-0.5.1.md](release-decision-odoo-0.5.1.md)。
+
 狀態：**升版 PR 準備中（HM-19a）：本機兩個 commit，等獨立審查後才推送、開 PR；映像還沒建置**。這是 Odoo 一個產品的發版：Odoo 開通多帳號、
 版號 0.4.14 → 0.5.0；其他產品（n8n、Hermes、EMQX、LiteLLM、Nextcloud、Headscale）的版號與開關都不動，OpenDesign 不跟著升來源版本。
 合併升版 PR 就是發佈到 WOOW App Store：下面計畫 §11.3 的第 3～11 步（建置、量測、推 GHCR、HAOS 驗收、合併）每一步都**待負責人批准**。

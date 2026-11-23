@@ -113,7 +113,7 @@ Root owns deployment, live verification and version changes.
 
 ## 多帳號（產品開通後）的管理路由與能力
 
-這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫；**Odoo、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通（HM-19a、火車 A），其他產品還沒開通**。沒開通的產品照上面各節：`/api/profiles*` 與
+這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫；**Odoo 從 0.5.1 起、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通（HM-19a、火車 A），其他產品還沒開通**。沒開通的產品照上面各節：`/api/profiles*` 與
 `/api/origin-policy` 是未知操作（角色檢查之後 404），不要求、不看 `X-MCP-Profile`，每個回應一個位元組都不變。下面是摘要，逐條以契約為準。
 
 **全域路由**（不看 `X-MCP-Profile`；契約第 3.1 節）：

@@ -2,7 +2,7 @@
 
 七個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud、Headscale。**歷史版本 0.3.3：六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-**Odoo 0.5.0** 是多帳號首發（R1）的候選：Odoo 開通多帳號（預設帳號＋最多 5 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），LiteLLM、Nextcloud、EMQX 隨火車 A 一起開通（見下一段），Hermes、Headscale、n8n 維持沒開通。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見 [Odoo CHANGELOG](addons/odoo/CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。映像尚未建置；GitHub 託管機器的建置與候選關卡、目標硬體的容量量測、推 GHCR、HAOS 驗收與合併各自另有關卡，都等負責人批准，見 [0.5.0 發佈紀錄草稿](docs/operations/release-decision-odoo-0.5.0.md)。
+**Odoo 0.5.1** 是多帳號首發（R1）的候選：Odoo 開通多帳號（預設帳號＋最多 5 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），其他產品維持沒開通。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見 [Odoo CHANGELOG](addons/odoo/CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。映像尚未建置；GitHub 託管機器的建置與候選關卡、目標硬體的容量量測、推 GHCR、HAOS 驗收與合併各自另有關卡，都等負責人批准，見 [0.5.1 發佈紀錄草稿](docs/operations/release-decision-odoo-0.5.1.md)。
 
 **LiteLLM、Nextcloud、EMQX 0.5.0**（多帳號第一批 train A）是候選：這三個產品開通多帳號（預設帳號＋最多 3 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），Hermes、Headscale、n8n 維持沒開通、版號不動。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見各產品的 [LiteLLM](addons/litellm/CHANGELOG.md)、[Nextcloud](addons/nextcloud/CHANGELOG.md)、[EMQX](addons/emqx/CHANGELOG.md) CHANGELOG 與 [upgrade-notes.yaml](upgrade-notes.yaml)。映像尚未建置；GitHub 託管機器的建置與候選關卡、展示機（J6412）真後端驗收、推 GHCR 與合併各自另有關卡，都等負責人批准，見 [LiteLLM](docs/operations/release-decision-litellm-0.5.0.md)、[Nextcloud](docs/operations/release-decision-nextcloud-0.5.0.md)、[EMQX](docs/operations/release-decision-emqx-0.5.0.md) 發佈紀錄草稿。
 
@@ -48,7 +48,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
 提供工具數、連線欄位、風險與更新狀態（工具數以[工具表](docs/tool-surface.md)各產品段落為準）。一台 HA 可分別選裝，每個 Add-on
-獨立 token／資料／版本。Odoo 0.5.0 起同一個 Add-on 可開預設帳號＋最多 5 個額外帳號，LiteLLM、Nextcloud、EMQX 的 0.5.0 起可開預設帳號＋最多 3 個額外帳號（每個帳號一組後端、一把權杖；同產品可多帳號，
+獨立 token／資料／版本。Odoo 0.5.1 起同一個 Add-on 可開預設帳號＋最多 5 個額外帳號，LiteLLM、Nextcloud、EMQX 的 0.5.0 起可開預設帳號＋最多 3 個額外帳號（每個帳號一組後端、一把權杖；同產品可多帳號，
 但不宣稱多租戶，也不宣稱子程式之間隔離：所有帳號的子程式是同一個系統帳號）；其他產品仍是每個 Add-on 一組後端。
 
 ## 管理功能與範圍

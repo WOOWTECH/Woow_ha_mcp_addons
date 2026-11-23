@@ -87,7 +87,7 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 格式不符的通知不顯示任何內容（`ownerDefaultsView` 整個拒絕），改在每一頁顯示固定的「升級通知無法顯示」卡片
 （不含伺服器送來的值、沒有動作，請重新整理或更新 add-on），不再整個隱藏。名稱一律以文字節點顯示，時間照伺服器的 UTC 顯示。
 
-## 多帳號（HM-11；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 起開通）
+## 多帳號（HM-11；Odoo 0.5.1 起、LiteLLM、Nextcloud、EMQX 的 0.5.0 起開通）
 
 伺服器沒開通多帳號時，面板的畫面、請求與收據和以前完全一樣。開通後（bootstrap 帶 `profiles_supported`）：
 
@@ -122,7 +122,7 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   `tests/browser/profile-api-parity.spec.mjs` 讓 fixture 跑同一份案例、比同一份 `expect`。改了任何一邊，兩個測試之一會紅；
   真後端變了，先重錄 `expect`（照 Python 測試失敗時印出的形狀改），再改 fixture 與面板。
 
-## 換後端身分與新來源（HM-12；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 起開通）
+## 換後端身分與新來源（HM-12；Odoo 0.5.1 起、LiteLLM、Nextcloud、EMQX 的 0.5.0 起開通）
 
 伺服器沒開通時，這些回應不會出現，面板的畫面與請求照舊。開通後：
 
@@ -147,7 +147,7 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   HM-25 才上帳號 runtime，真後端形狀比對跑不了：fixture 這邊由 `backend-identity.spec.mjs` 守，add-on 這邊由
   `tests/test_new_origin_secret.py` 守（HM-12 面板審查 S-6）。
 
-## 瀏覽器來源檢查（HM-27；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 起開通）
+## 瀏覽器來源檢查（HM-27；Odoo 0.5.1 起、LiteLLM、Nextcloud、EMQX 的 0.5.0 起開通）
 
 伺服器沒開通（`api.profile` 是 null）時，面板不畫這張卡片、也不送 `/api/origin-policy`，畫面與請求照舊。開通後
 （Headscale 除外：它照舊只放 `https://claude.ai`，沒有這份設定），「連線與權杖」頁多一張卡片「瀏覽器來源檢查（全 add-on 共用）」：

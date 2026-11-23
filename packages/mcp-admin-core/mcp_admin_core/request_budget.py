@@ -56,7 +56,7 @@ from typing import Callable
 
 from starlette.requests import ClientDisconnect
 
-from . import profiles
+from . import profiles, reply_memory
 from .capacity_metrics import active_metrics
 from .request_limits import ID_WINDOW, head_tail_id  # noqa: F401  (head_tail_id: the gateway's)
 
@@ -78,6 +78,11 @@ AMPLIFICATION = 20.0
 ODOO_ADMISSION_AMPLIFICATION = 64.0
 ODOO_REPLY_RESERVE_MIB = 512
 ODOO_REPLY_WORK_MIB = 221       # ceil(8 MiB * 27.6)
+# 0.5.1 (F1): event streams (GET) take no reply ticket; each is bounded by reply_memory.STREAM_BYTES instead. The most
+# that can be open at once: the default profile's 24 plus every additional profile's 8 (profiles.*_PROFILE_QUOTA).
+ODOO_MAX_STREAMS = (profiles.DEFAULT_PROFILE_QUOTA.get_streams
+                    + profiles.EXTRA_PROFILE_LIMITS['odoo'] * profiles.EXTRA_PROFILE_QUOTA.get_streams)
+ODOO_STREAM_RESERVE_MIB = -(-ODOO_MAX_STREAMS * reply_memory.STREAM_BYTES // MiB)   # 64 streams x 2 MiB = 128
 # Every Odoo POST holds at least this much of the shared body budget before parsing.
 # The 64x admission factor reserves 4 MiB for a <=64 KiB parsed body.
 ODOO_SMALL_MINIMUM_BYTES = SMALL_REQUEST_BYTES
@@ -136,7 +141,7 @@ def odoo_switched_total_bytes(ceiling_mib: int | None, accounts: int, source: st
         return MIN_BUDGET_BYTES
     available = (ceiling_mib - (HOST_RESERVE_MIB if source == 'cgroup' else 0)
                  - GATEWAY_BASELINE_MIB - accounts * 100 - SAFETY_MARGIN_MIB
-                 - ODOO_REPLY_RESERVE_MIB - ODOO_REPLY_WORK_MIB)
+                 - ODOO_REPLY_RESERVE_MIB - ODOO_REPLY_WORK_MIB - ODOO_STREAM_RESERVE_MIB)
     derived = int(max(0, available) * MiB / ODOO_ADMISSION_AMPLIFICATION)
     return min(MAX_BUDGET_BYTES, max(MIN_BUDGET_BYTES, derived))
 
@@ -146,7 +151,7 @@ def odoo_switched_memory_fits(ceiling_mib: int | None, accounts: int, source: st
     if ceiling_mib is None or source not in ('cgroup', 'meminfo'):
         return False
     required = (HOST_RESERVE_MIB if source == 'cgroup' else 0) + GATEWAY_BASELINE_MIB + accounts * 100 + \
-        SAFETY_MARGIN_MIB + ODOO_REPLY_RESERVE_MIB + ODOO_REPLY_WORK_MIB + \
+        SAFETY_MARGIN_MIB + ODOO_REPLY_RESERVE_MIB + ODOO_REPLY_WORK_MIB + ODOO_STREAM_RESERVE_MIB + \
         ODOO_ADMISSION_AMPLIFICATION * MIN_BUDGET_BYTES / MiB
     return ceiling_mib >= required
 

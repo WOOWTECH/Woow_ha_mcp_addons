@@ -26,7 +26,7 @@ VERSION = '0.4.14'
 # Products on a version line of their own; every other product ships VERSION. A version bump changes this data and the
 # files validate() binds to it (manifest, Dockerfile default, inputs.json, core PRODUCT_VERSIONS). The workflows'
 # version expressions are generated from it (version_expression) and compared verbatim (HM-17).
-VERSION_OVERRIDES = {'odoo': '0.5.0', 'emqx': '0.5.0', 'litellm': '0.5.0', 'nextcloud': '0.5.0', 'headscale': '0.4.19'}
+VERSION_OVERRIDES = {'odoo': '0.5.1', 'emqx': '0.5.0', 'litellm': '0.5.0', 'nextcloud': '0.5.0', 'headscale': '0.4.19'}
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
 # The app a builder workflow builds: ci.yaml's matrix, release.yaml's dispatch input.
 SELECTORS = {'ci': 'matrix.app', 'release': 'inputs.app'}

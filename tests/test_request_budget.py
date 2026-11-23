@@ -219,7 +219,7 @@ def test_switched_off_counts_one_account_and_switched_on_the_products_capacity(m
     ceiling(monkeypatch, 4096)
     off, on = module.BudgetLimits.derive('odoo'), module.BudgetLimits.derive('odoo', switched_on=True)
     assert off.total == int((4096 - 76 - 100 - 150) * MiB / 20)
-    assert on.total == int((4096 - 256 - 76 - 600 - 150 - 512 - 221) * MiB
+    assert on.total == int((4096 - 256 - 76 - 600 - 150 - 512 - 221 - 128) * MiB
                            / module.ODOO_ADMISSION_AMPLIFICATION) < off.total
     assert off.small_minimum == 0
     assert module.BudgetLimits.derive('n8n', switched_on=True).small_minimum == 0
@@ -231,7 +231,7 @@ def test_odoo_reply_and_body_reservations_fit_three_gib_without_relaxing_release
     assert module.AMPLIFICATION == 20  # the §5 release gate, distinct from conservative admission
     assert module.ODOO_ADMISSION_AMPLIFICATION == 64
     assert limits.total >= 16 * MiB and limits.per_profile == 16 * MiB
-    accounted = (256 + 76 + 600 + 150 + 512 + 221
+    accounted = (256 + 76 + 600 + 150 + 512 + 221 + 128  # 0.5.1: 64 GET streams x 2 MiB
                  + limits.total / MiB * module.ODOO_ADMISSION_AMPLIFICATION)
     assert accounted <= 3072
     assert limits.small_minimum == 64 * 1024
@@ -243,14 +243,14 @@ def test_odoo_reply_and_body_reservations_fit_three_gib_without_relaxing_release
 def test_odoo_host_memavailable_is_reserved_once_and_switched_off_is_unchanged(monkeypatch):
     module = ceiling(monkeypatch, 5970, 'meminfo')  # memory_ceiling already removed 256 MiB
     on = module.BudgetLimits.derive('odoo', switched_on=True)
-    assert on.total == int((5970 - 76 - 600 - 150 - 512 - 221) * MiB / 64)
+    assert on.total == int((5970 - 76 - 600 - 150 - 512 - 221 - 128) * MiB / 64)
     off = module.BudgetLimits.derive('odoo', switched_on=False)
     assert off.total == int((5970 - 76 - 100 - 150) * MiB / 20)
 
 
 @pytest.mark.parametrize('ceiling_mib,source,fits', [
-    (2048, 'cgroup', False), (2838, 'cgroup', False), (2839, 'cgroup', True),
-    (3072, 'cgroup', True), (2582, 'meminfo', False), (2583, 'meminfo', True),
+    (2048, 'cgroup', False), (2966, 'cgroup', False), (2967, 'cgroup', True),  # 0.5.1: 2,839 + 128 stream MiB
+    (3072, 'cgroup', True), (2710, 'meminfo', False), (2711, 'meminfo', True),
     (None, 'none', False),
 ])
 def test_odoo_activation_requires_joint_floor(ceiling_mib, source, fits):

@@ -35,7 +35,7 @@ Which profile (plan 5.1; I1, I2; DQ-01 (a), DQ-09, DQ-12):
 
 Every profile's own limits (ProfileGate; plan 5.2; contract 5; I8; DQ-07 (a)): before a request's body is read, its
 profile's admission (64 for the default profile, 32 for an additional one; a request with no candidate or no match
-takes none). A GET (an event stream) takes one of the profile's stream places (nominally 24, 8; ticket-backed Odoo 3, 1).
+takes none). A GET (an event stream) takes one of the profile's stream places (24, 8; 0.5.1: no reply ticket, only a small byte bound of its own).
 A GET past the stream cap: 429 +
 -32003 id null + Retry-After 30, at once. The profile's app answers a forwarding slot that stays busy for a second with
 the PaaS busy shapes (ProfileGate.slot_busy, make_apps slot_busy). Each limit writes one WARNING per profile and
@@ -113,6 +113,7 @@ import os
 
 from dataclasses import dataclass
 
+from starlette.requests import ClientDisconnect
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Match, Route
 
@@ -184,12 +185,7 @@ def global_reply_text() -> str:
             "(外掛的回覆記憶體額度已滿，這個請求沒有送出，請稍後再試。)")
 
 
-def streams_text(streams: int, *, ticketed: bool = False) -> str:
-    if ticketed:
-        return (f"This MCP URL already has {streams} open event streams (GET), the limit of its profile. Close MCP "
-                "clients that are no longer used, or retry later; requests needing a large reply may also be busy. "
-                f"(這個 MCP 網址已經開著 {streams} 條事件串流（GET），是這個帳號的上限；請關閉不再使用的 MCP 用戶端或稍後再試；"
-                "需要大型回覆的請求也可能忙碌。)")
+def streams_text(streams: int) -> str:
     return (f"This MCP URL already has {streams} open event streams (GET), the limit of its profile. Close MCP clients "
             "that are no longer used, or retry later; requests (POST) still work. "
             f"(這個 MCP 網址已經開著 {streams} 條事件串流（GET），是這個帳號的上限；請關閉不再使用的 MCP 用戶端或稍後再試，"
@@ -289,19 +285,15 @@ class ProfileGate:
     async def serve(self, app, scope, receive, send):
         quota = self.quota
         stream = scope['method'] == 'GET'
-        # A stream holds one reply ticket until its ASGI send ends. Enforce the
-        # ticket-backed stream cap as a stream cap, before taking admission: an
-        # extra Odoo profile can hold only one 64 MiB ticket at a time.
+        # 0.5.1 (F1): a GET stream takes no reply ticket (the ticket bounds only a POST that may carry a large reply), so
+        # its limit is the profile's ordinary one (quota.get_streams: 24 default, 8 additional) and a POST still gets
+        # its ticket and its forwarding slot while every stream is open. What a stream holds is bounded by its own
+        # small numbers instead (reply_memory.STREAM_BYTES, STREAM_EVENT_BYTES).
         stream_cap = quota.get_streams
-        if self.reply_memory is not None:
-            tickets = (reply_memory.DEFAULT_TICKETS if self.profile_id == 'default'
-                       else reply_memory.EXTRA_TICKETS)
-            stream_cap = min(stream_cap, tickets)
         if stream and self.streams >= stream_cap:
             self.warn('streams', f'{stream_cap} event streams (GET) were open, its limit; new ones were '
                                  'answered 429')
-            return await gateway.stream_busy_reply(streams_text(stream_cap, ticketed=self.reply_memory is not None))(
-                scope, receive, send)
+            return await gateway.stream_busy_reply(streams_text(stream_cap))(scope, receive, send)
         if self.active >= quota.admission:
             return await self.beyond_admission(app, scope, receive, send)
         self.active += 1
@@ -312,6 +304,8 @@ class ProfileGate:
         # are handed over or the request ends).
         started = framed = ticket = False
         held = early = 0
+        # 0.5.1 (F1): a switched-on Odoo's GET stream (no ticket) is bounded by its own bytes.
+        bounded = stream and self.reply_memory is not None
 
         def reserve_reply(message):
             nonlocal ticket
@@ -342,6 +336,22 @@ class ProfileGate:
                 return await hand_over(message)
             await send(message)
 
+        def stream_over(what):
+            self.warn('stream_bytes', f'an event stream (GET) held more than {what} and was ended; its client '
+                                      'reconnects')
+
+        async def cut_stream():
+            """0.5.1 (F1): end this GET stream cleanly (its client reconnects): one last empty body so the response is
+            complete, within gateway.ENDING_SECONDS for a client that reads nothing, then StreamLimit stops the app's
+            relay (serve() catches it). The log line names the cause, never a token or content."""
+            stream_over(f'{reply_memory.STREAM_BYTES // 1024} KiB of replies the server had not taken')
+            try:
+                async with asyncio.timeout(gateway.ENDING_SECONDS):
+                    await send({'type': 'http.response.body', 'body': b'', 'more_body': False})
+            except (TimeoutError, OSError, ClientDisconnect):
+                pass
+            raise gateway.StreamLimit
+
         async def hand_over(message):
             """HM-30: an answer's body, charged to the profile's answers not received yet until the server took it (the
             module docstring): what was handed over before it is taken once the server took this message. What the app
@@ -352,6 +362,8 @@ class ProfileGate:
             covered = min(early, len(body))
             if ticket and held + len(body) + early - covered > self.reply_memory.TICKET_BYTES:
                 raise BadRequest(502)
+            if bounded and held + len(body) + early - covered > reply_memory.STREAM_BYTES:
+                await cut_stream()
             held += len(body)
             early -= covered
             self.reply_bytes += len(body) - covered
@@ -372,9 +384,16 @@ class ProfileGate:
                  gateway.PENDING_CHARGE: charge}
         if self.reply_memory is not None:
             state[gateway.REPLY_RESERVE] = reserve_reply
+            if bounded:
+                event_limit = reply_memory.STREAM_EVENT_BYTES
+                state[gateway.STREAM_GUARD] = (
+                    event_limit, lambda what: stream_over(f'{event_limit // 1024} KiB in {what}'))
         scope = {**scope, 'state': state}
         try:
-            await app(scope, receive, counted_send)
+            try:
+                await app(scope, receive, counted_send)
+            except* gateway.StreamLimit:
+                pass  # cut_stream ended the response; nothing for the server to see
         finally:
             self.active -= 1
             self.streams -= stream

@@ -36,6 +36,7 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import (Children, RealChild, create_profile, ids, multi_profile_runtime, stored)
 from mcp_admin_core import gateway, profiles, reply_memory
 from mcp_admin_core.products import PROBES
+from switched_gateway import Exchange
 from test_profile_runtime import ProfileChild
 from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, GENUINE_CLIENT, NOT_FOUND, answer, configure,
                                         initialize_message, probe_name, settle)
@@ -213,7 +214,8 @@ def mock_child_ready(runtime, profile_id):
 
 
 async def test_full_reply_reservation_keeps_other_profile_controls_available(tmp_path, log_scan):
-    """Full A/other tickets cannot hide B's control probes or admit a large listing."""
+    """Full A/other tickets cannot hide B's control probes or admit a large listing; they cannot refuse a GET stream either
+    (0.5.1, F1: a stream holds no ticket)."""
     data = setup(tmp_path)
     children = holding_children(data)
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -237,8 +239,12 @@ async def test_full_reply_reservation_keeps_other_profile_controls_available(tmp
                 listed = await client.post('/mcp', headers=headers,
                     json={'jsonrpc': '2.0', 'id': 10, 'method': 'tools/list'})
                 busy(listed, status=200, retry_after=5, ident=10)
-                streamed = await client.get('/mcp', headers=headers)
-                busy(streamed, status=503, retry_after=5, ident=None)
+                # 0.5.1 (F1): a GET stream takes no ticket, so full tickets cannot refuse it (it was 503 + -32003 before)
+                stream = Exchange(runtime.mcp_app, 'GET', '/mcp', list(headers.items())).start()
+                await until(lambda: stream.status == 200)
+                assert memory.held == len(holders) * reply_memory.TICKET_BYTES
+                children.by_port[18000].free.set()
+                await asyncio.wait_for(stream.task, 5)
         finally:
             for name in holders:
                 memory.give(name)
@@ -427,7 +433,6 @@ async def test_a_busy_forwarding_slot_answers_as_the_paas_table(tmp_path, log_sc
 
 @pytest.mark.parametrize('profile_id', ['default', B])
 async def test_the_stream_cap_answers_429_at_once_and_posts_still_work(tmp_path, log_scan, monkeypatch, profile_id):
-    isolate_reply_memory_from_other_quota_tests(monkeypatch)
     """A profile's open GET streams reach its cap (the default profile 24, an additional one 8; PaaS 32 < 64): the
     next GET gets 429 + -32003 id null + Retry-After 30 at once (no wait), while its POSTs are still answered (PaaS
     test_stream_limit_refuses_immediately_and_posts_still_work)."""
@@ -448,7 +453,7 @@ async def test_the_stream_cap_answers_429_at_once_and_posts_still_work(tmp_path,
             loop = asyncio.get_running_loop()
             started = loop.time()
             busy(await client.get('/mcp', headers=headers), status=429, retry_after=30, ident=None,
-                 text=router().streams_text(cap, ticketed=True))
+                 text=router().streams_text(cap))
             assert loop.time() - started < .5
             response = await client.post('/mcp', headers=headers, json=call(70))
             assert response.status_code == 200 and 'result' in response.json()

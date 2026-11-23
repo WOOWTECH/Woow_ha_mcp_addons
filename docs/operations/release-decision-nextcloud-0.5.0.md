@@ -1,7 +1,7 @@
 # Nextcloud 0.5.0（多帳號 train A）發佈紀錄（草稿）
 
 狀態：**升版分支準備完成、尚未建 PR、映像尚未建置；所有關卡都還是待做**。這是 `woow_mcp_nextcloud` 一個產品的發版：Nextcloud 開通多帳號、版號 0.4.14 → 0.5.0，與 train A 的另外兩個產品同一批（LiteLLM、Nextcloud、EMQX；train A，一個升版 PR、各產品各自 `release.yaml`）。
-Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升來源版本；Odoo 0.5.0 是更早一個、獨立的發版（[Odoo 發佈紀錄](release-decision-odoo-0.5.0.md)）。
+Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升來源版本；Odoo 0.5.0 是更早一個、獨立的發版（[Odoo 發佈紀錄](release-decision-odoo-0.5.0.md)）。（Odoo 後來改發 0.5.1，見 [Odoo 0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)；本紀錄下面寫的 `odoo` 0.5.0 是併入 0.5.1 之前的現況，合併後 `VERSION_OVERRIDES` 與六路運算式裡的 `odoo` 是 0.5.1。）
 合併升版 PR 就是發佈到 WOOW App Store：下面每一步都**待批准**。這份草稿**不宣稱映像、HAOS、真後端或商店驗收**；那些要先過關卡，再取證，再把本檔改成最終紀錄（HM-17：readiness 只認推送之後寫的、並寫明版本與 slug 的發佈紀錄）。
 
 ## 範圍
