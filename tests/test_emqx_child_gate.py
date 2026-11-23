@@ -53,4 +53,3 @@ def test_readonly_and_disabled_tools_still_block_registration(tmp_path, state_pa
 def test_a_state_path_changes_nothing_about_which_tools_the_environment_registers(tmp_path):
     policy = {'EMQX_MCP_READONLY': 'true', 'EMQX_MCP_DISABLED_TOOLS': 'emqx_list_topics'}
     assert registered(tmp_path, True, **policy) == registered(tmp_path, False, **policy)
-
