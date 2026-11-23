@@ -72,9 +72,11 @@ N8N_REQUEST_LIMITS = McpRequestLimits(N8N_MAX_REQUEST, N8N_MAX_ARGUMENT_ELEMENTS
 STRUCTURE_LIMITS = McpRequestLimits(MAX_REQUEST, DEFAULT_MAX_TOTAL_ELEMENTS)
 # HM-19c: a switched-on product reads a request body larger than this by its envelope only (request_envelope.py): no object
 # graph is built for it in the gateway and its bytes go to the child as they came. At most this size the body is parsed and
-# checked as before. The limits are the structure guard's (depth, elements); max_containers_per_kib None: no density limit.
+# checked as before. The limits are the structure guard's (depth, elements); max_containers_per_kib: ENVELOPE_MAX_CONTAINERS_PER_KIB (HM-19c: bounds the child's parsed memory).
 ENVELOPE_BYTES = 64 * 1024
-ENVELOPE_LIMITS = request_envelope.EnvelopeLimits(DEFAULT_MAX_DEPTH, DEFAULT_MAX_TOTAL_ELEMENTS)
+ENVELOPE_MAX_CONTAINERS_PER_KIB = 40
+ENVELOPE_LIMITS = request_envelope.EnvelopeLimits(DEFAULT_MAX_DEPTH, DEFAULT_MAX_TOTAL_ELEMENTS,
+                                                  ENVELOPE_MAX_CONTAINERS_PER_KIB)
 BODY_SECONDS = 60
 MAX_RESPONSE = 8 * 1024 * 1024
 STREAM_SECONDS = 120

@@ -1882,7 +1882,9 @@ def raw_post(port, token, session, message):
 # forwarded as about 12 MiB; two answers then pass the 32 MiB (the soft limit: the second one is handed over whole).
 SLOW_READS = {
     'ascii': ('s', ((41, False), (42, False), (43, True), (44, True)), 2 * 4 * MiB),
-    'emoji': (EMOJI, ((41, False), (43, True)), 3 * 4 * MiB),
+    # HM-19c (contract 2.4.1): a request above 64 KiB is forwarded as the bytes that came, not re-escaped (4 MiB of emoji
+    # arguments stay about 4 MiB, not 12): the open stream holds what was actually forwarded.
+    'emoji': (EMOJI, ((41, False), (43, True)), 1 * 4 * MiB),
 }
 
 
