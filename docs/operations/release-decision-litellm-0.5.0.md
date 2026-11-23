@@ -69,7 +69,8 @@ Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升�
 
 ## 本機檢查（一般使用者；以 GitHub CI 為準）
 
-- 見提交時的紀錄：`scripts/secret_precheck.py`、`scripts/ledger_precheck.py`、`packaging/validate.py`、`packaging/test_validate.py` 與受影響的 pytest；結果與未跑到的案例寫在推送時的報告，不在本檔宣稱 CI 綠。
+- 2026-11-23，分支 head 推送前，一般使用者、Python 3.13、`/tmp/ha-mp-*` 短 TMPDIR（用完刪除）：`scripts/secret_precheck.py` 0 命中、`scripts/ledger_precheck.py` OK（0 漂移）、`packaging/validate.py` 通過；`packaging` unittest 371 案過（5 skip）；面板 Node 測試 119 過、建置與 closure 檢查過；全套 pytest 分兩輪（第一輪中途短 TMPDIR 被外部清掉，之後的案例重跑）加受影響檔案的最後一輪：沒有開關相關的失敗，唯一因為開通而紅的案例（LiteLLM 真子程式的錯誤本體測試讀到開著的開關）已改成自己指定 `switched_off`。
+- 本機沒跑到或不能算的案例（以 CI 為準，root、CPython 3.12.3、Node 26、Chromium、0 skip）：需要 root 的（`test_restore_detection` 的 root 案例、`test_owned_executable`、`test_profile_store` 的 uid 10001 案例）；需要 Chromium 與 playwright 的（`test_owned_browser*`、`test_owned_ui`）；n8n 的 better-sqlite3 原生模組在本機 Node 22 回退成 sql.js 的兩個案例（`test_boundary`、`test_n8n_catalog_copy`，CI 用 Node 26）；`test_request_structure` 的 CPU 比較案例（Odoo 發版頭的測試，本機負載高時 guard 比 decode 慢，兩次都 0.0354 對 0.0318 秒）。這些不宣稱 CI 綠。
 
 ## 發佈前的預期
 
