@@ -433,3 +433,43 @@ def test_profiles_never_write_the_default_state(tmp_path, log_scan):
     assert set(after) - set(before) == {'profiles.json', 'profiles', *(
         f'profiles/{i}{suffix}' for i in made for suffix in ('', '/.writer.lock', '/state.json'))}
     store.close()
+
+
+# Train A review F-3: the 11/20 Nextcloud validators (no ':' in the username, no control characters) sit on the connection
+# model, which a saved state also passes through when it loads. Every release before 11/20 (0.1.7 on) typed the username
+# as Name (^[A-Za-z0-9_@. -]+$, so a ':' was never storable) and the app password as Credential (printable ASCII, 32..126,
+# which includes ':'). So every state an installed add-on can hold still loads, byte for byte, and nothing is rewritten.
+LEGACY_NEXTCLOUD_LOGINS = [
+    ('plain', 'DUMMY-user', 'DUMMY-upgrade-nextcloud-password'),
+    ('e-mail login', 'dummy.user@example.invalid', 'abcd-efgh-ijkl-mnop-qrst'),
+    ('spaces, dots and dashes', 'Dummy User-2.0', 'DUMMY pass word'),  # inner spaces are printable ASCII
+    ('password with a colon and every printable symbol', 'DUMMY-user', 'a:b' + '!"#$%&\'()*+,-./;<=>?@[\\]^_`{|}~'),
+    ('longest username', 'u' * 256, 'DUMMY-password'),
+]
+
+
+@pytest.mark.parametrize('label, username, password', LEGACY_NEXTCLOUD_LOGINS, ids=[c[0] for c in LEGACY_NEXTCLOUD_LOGINS])
+def test_a_saved_nextcloud_login_of_any_earlier_shape_still_loads_unchanged(tmp_path, log_scan, label, username, password):
+    value = json.loads((ZERO_REWRITE / 'nextcloud.json').read_bytes())
+    value['connection'] = {**value['connection'], 'username': username, 'app_password': password}
+    raw = json.dumps(value, separators=(',', ':')).encode()
+    data = installed(tmp_path, raw)
+    mtime = (data / 'state.json').stat().st_mtime_ns
+    store = ProductStore(data, 'nextcloud')
+    state = store.load()
+    store.close()
+    assert (state.connection.username, state.connection.app_password) == (username, password)
+    assert (data / 'state.json').read_bytes() == raw
+    assert (data / 'state.json').stat().st_mtime_ns == mtime  # not rewritten
+
+
+def test_a_colon_in_a_nextcloud_username_could_never_be_saved_by_an_earlier_release():
+    """The legacy-shape claim above rests on this: a ':' username never reached disk before 11/20 (Name refused it), so
+    refusing it now (HTTP Basic joins username and password with ':') strands no installed add-on."""
+    from pydantic import TypeAdapter, ValidationError
+    from mcp_admin_core.products import Name
+    for username in ('user:name', 'a:', ':a', 'us\x00er', 'us\ter'):
+        with pytest.raises(ValidationError):
+            TypeAdapter(Name).validate_python(username)
+        with pytest.raises(ValidationError):
+            products.NextcloudConnection(url='https://nextcloud.invalid', username=username, app_password='DUMMY-pw')

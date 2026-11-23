@@ -267,7 +267,7 @@ class ProfileRuntime:
                 raise ValueError('invalid profile echo')
             self.admin_app, self.mcp_app = make_apps(
                 self.store, self.tools, child, child_url=self.child_url, health=health.snapshot,
-                backend_changed=self.backend_changed, configuration=configuration,
+                backend_changed=self.backend_changed, policy_changed=self.policy_changed, configuration=configuration,
                 backend_check=getattr(health, 'test_saved', None), restart_child=self.backend_changed,
                 stop_child=self.stop_child,
                 diagnostics=getattr(manager, 'diagnostics', None), availability=health.availability,
@@ -316,6 +316,21 @@ class ProfileRuntime:
         A failure is recorded (configuration: child_start_failed) and raised. HM-09: a save or the panel's restart,
         so the hold's memory check applies (hold memory=True), and the health monitor's backoff starts again."""
         await self._relaunch(state, asked=True)
+
+    async def policy_changed(self, previous, state):
+        """Apply Nextcloud policy at the gateway; restart a running child only when tools widen."""
+        from .policy import enabled
+        before = {name for name in self.tools if enabled(name, self.tools, previous)}
+        after = {name for name in self.tools if enabled(name, self.tools, state)}
+        manager = self.supervisor
+        if after - before and manager.status in ('running', 'starting'):
+            await self._relaunch(state, asked=True)
+            return
+        # A watchdog retry or a later explicit start must use the saved policy even
+        # when this save does not itself restart or start the child.
+        if manager.spec is not None:
+            manager.spec = self.child_spec(state, self.store.directory, port=self.port)
+        self.configuration.policy_accepted(previous, state)
 
     async def stop_child(self):
         """HM-12 (contract 3.1; DQ-05; make_apps stop_child): stop the child before its backend identity changes, so

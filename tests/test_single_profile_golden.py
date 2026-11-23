@@ -374,7 +374,10 @@ LISTING_SHA256 = {
     # sentences; the answer is the one before with only that description replaced (both digests together).
     'hermes': '326ec974c2abbe8fc59c95975f38de6c11354f0e1e74a085525b7cfc66428111',
     'opendesign': 'f97a2cc4c89a9e1fb6c8a366cd4d42420a4623cb817d909cab7de728bc7e3931',
-    'emqx': '646abdc0232dc9aa704be13adb72ecc0a032219875e5854c4e53b3715eb28ae3',
+    # HM-23 (PaaS #153): a deliberate tool-surface change, tool_snapshot.py's emqx_list_subscriptions description and
+    # its match_topic description say what the broker does; the answer is the one before with only those two texts
+    # replaced (both digests together).
+    'emqx': 'dad5f8fc8843c047a3adfca67fe4962f4be628e5dc196a13f651b3e01ddbf5cd',
     'litellm': 'a0bc6b2a17c444d5d121d8d31e4ae47500c23d30a9926b1ddbba73e809a42c88',
     'nextcloud': 'b772d6d13efd4ba25e7b8669ee3e3dd5babb57dac1f5cdc85ca037e6417deee7',
     'headscale': '1c677e914fa988de04674ff15ec19448a02b37b495c06a3ba146b8446cb21974',
@@ -384,7 +387,7 @@ LISTED_SHA256 = {
     'n8n': 'b9a68727b86186323186cc3d550efcd2975d9d3f3a10b5438a94903ea8093a98',
     'hermes': 'a8f5083fe3e19d8583513cffca632b602755eece9c8ee0e087caeeb255bc09d9',  # HM-33, with LISTING_SHA256
     'opendesign': '9d205ad353e0b229cc584b98a673cfd584b1d838eb70f90cfa3175309819c7d9',
-    'emqx': '5140e30f2e6fb52e99fcabb946e3f069c33f9e85b976f574d11431c221474148',
+    'emqx': 'ca83692edc778cfc7b211bf313518c5e71d0d89c100001a2a3d0fc1b7d347c34',  # HM-23, with LISTING_SHA256
     'litellm': '8ae286590903c522c73bcd33c05d1e682fa8175cb0b76b1e68f3212ce5ccf029',
     'nextcloud': '1d302a5cf36e703a7bfe7da610230aa645f8e53a3125c47af812649ab1504a87',
     'headscale': '335ae6d5295f88a6a363d7c09545f3500fb5cb537069a4cf71d6ef161248a5db',

@@ -28,9 +28,11 @@ import argparse
 import logging
 
 from fastmcp import FastMCP
+from fastmcp.tools import Tool
 
 from .gating import ToolGate
-from .lifespan import lifespan
+from .lifespan import lifespan, build_client
+from .deps import LiteLLMHttp
 from .middleware import install as install_gating_middleware
 from .settings import get_settings
 from .tools import MODULES
@@ -72,6 +74,16 @@ def build_server(gate: ToolGate | None = None) -> FastMCP:
         len(gate.enabled_tool_names()),
     )
     return mcp
+
+
+def register_private_probe(mcp: FastMCP) -> None:
+    """Install only from the authenticated, loopback add-on child launcher."""
+    async def backend_probe() -> dict:
+        # Private child-only probe: a fresh checked client cannot be starved by
+        # the tools' connection pool, and the parent never exposes this name.
+        async with build_client() as client:
+            return await LiteLLMHttp(client).get("/v1/models")
+    mcp.add_tool(Tool.from_function(backend_probe, name="woow_backend_probe", description="Add-on readiness probe (private)."))
 
 
 # Module-global server so ``fastmcp run woow_litellm_mcp_server.server:mcp`` and

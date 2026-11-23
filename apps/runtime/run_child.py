@@ -1,9 +1,13 @@
 """Start a vendored FastMCP child (EMQX, LiteLLM, Nextcloud) with the add-on's session idle limit (0.1.8 GATEWAY-3).
 
 python -m run_child <module> [the module's own arguments]: installs session_idle before the module builds its
-server, then runs the module as __main__ with the remaining arguments, exactly as `python -m <module>` would.
+server. LiteLLM registers its private probe only after installing child authentication; the other modules run as
+__main__ with the remaining arguments.
 """
+import argparse
+import importlib
 import runpy
+import os
 import sys
 
 import session_idle
@@ -15,6 +19,28 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1] not in MODULES:
         raise SystemExit('run_child: unknown child module')
     module = sys.argv.pop(1)
+    if module == 'emqx_mcp_server.server' and not os.environ.get('EMQX_MCP_STATE_PATH'):
+        raise SystemExit('run_child: EMQX policy path required')
+    if module == 'woow_litellm_mcp_server.server':
+        # The private probe must never be served over unauthenticated stdio or
+        # an externally bound listener. Parse with the same last-option-wins
+        # semantics as the child CLI before installing the bearer wrapper.
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument('-h', '--help', action='store_true')
+        parser.add_argument('--transport', default='http')
+        parser.add_argument('--host', default='0.0.0.0')
+        args, _ = parser.parse_known_args(sys.argv[1:])
+        if args.help:
+            # Delegate to the original CLI without installing or registering the private probe.
+            runpy.run_module(module, run_name='__main__', alter_sys=True)
+            return
+        if args.transport not in ('http', 'streamable-http') or args.host != '127.0.0.1':
+            raise SystemExit('run_child: LiteLLM requires loopback HTTP')
+        session_idle.install()
+        server = importlib.import_module(module)
+        server.register_private_probe(server.mcp)
+        server.main()
+        return
     session_idle.install()
     runpy.run_module(module, run_name='__main__', alter_sys=True)
 

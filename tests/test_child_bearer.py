@@ -90,7 +90,7 @@ ENV_KEYS = {
                       'HERMES_GATEWAY_API_KEY', 'HERMES_GATEWAY_URL'},
     'opendesign': BASE | {'OD_API_BASE'},
     'emqx': BASE | FASTMCP | {'EMQX_MCP_API_KEY', 'EMQX_MCP_API_SECRET', 'EMQX_MCP_BASE_URL', 'EMQX_MCP_DISABLED_TOOLS',
-                              'EMQX_MCP_READONLY'},
+                              'EMQX_MCP_READONLY', 'EMQX_MCP_STATE_PATH'},
     'litellm': BASE | FASTMCP | {'LITELLM_MCP_BASE_URL', 'LITELLM_MCP_DISABLED_TOOLS', 'LITELLM_MCP_MASTER_KEY',
                                  'LITELLM_MCP_READONLY'},
     'nextcloud': BASE | FASTMCP | {'NEXTCLOUD_MCP_ALLOW_DELETE', 'NEXTCLOUD_MCP_APP_PASSWORD',

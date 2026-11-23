@@ -4006,10 +4006,18 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
            'outputSchema': {'additionalProperties': True, 'type': 'object'}},
           {'name': 'emqx_list_subscriptions',
            'title': 'List EMQX Subscriptions',
-           'description': 'Every subscription in the cluster, with filters.\n'
+           'description': 'Every subscription in the cluster, with the filter each was stored under.\n'
                           '\n'
-                          '`match_topic` is the powerful one: given a concrete topic, it tells\n'
-                          'you exactly which subscribers would receive a message on it.',
+                          "Narrow with `clientid` (one device's subscriptions), `topic` (an exact\n"
+                          'stored filter) or `match_topic` (a wildcard search over the stored\n'
+                          'filters, see its description; it is not a delivery lookup).\n'
+                          '\n'
+                          'To answer "who receives messages published to topic T?", do not use\n'
+                          '`match_topic`: list the subscriptions (use `clientid` when you know the\n'
+                          "device, `page` for more) and compare each row's stored `topic` with T\n"
+                          "yourself, by the MQTT wildcard rules ('+' = exactly one level, '#' = all\n"
+                          'remaining levels). An empty `match_topic` result never proves that\n'
+                          'nobody is subscribed.',
            'inputSchema': {'properties': {'clientid': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                        'default': None,
                                                        'description': 'Only subscriptions belonging to this client.'},
@@ -4018,9 +4026,18 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
                                                     'description': 'Exact subscription filter to match.'},
                                           'match_topic': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                           'default': None,
-                                                          'description': 'Find subscriptions whose filter would match '
-                                                                         'this concrete topic — use this to answer '
-                                                                         "'who receives messages published here?'."},
+                                                          'description': 'Wildcard SEARCH over the stored subscription '
+                                                                         'filters, not a delivery lookup. The value is '
+                                                                         "used as a topic filter ('+' and '#' allowed) "
+                                                                         'and compared with the filters clients '
+                                                                         'subscribed with: a subscription is returned '
+                                                                         'when its stored filter is matched by yours '
+                                                                         "(a stored 'sensors/#' is found with "
+                                                                         "'sensors/#'). A concrete topic such as "
+                                                                         "'sensors/a/temp' does NOT find a wildcard "
+                                                                         "subscription like 'sensors/#', so an empty "
+                                                                         'result does not mean nobody would receive '
+                                                                         'that topic.'},
                                           'qos': {'anyOf': [{'maximum': 2, 'minimum': 0, 'type': 'integer'},
                                                             {'type': 'null'}],
                                                   'default': None,
