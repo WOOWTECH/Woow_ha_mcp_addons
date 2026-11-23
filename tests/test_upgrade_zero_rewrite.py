@@ -165,8 +165,9 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
 # 3.3, 11.3) adds a product to features.MULTI_PROFILE_PRODUCTS, and it adds the product here in the same PR, so every
 # change of the switch shows in this test's diff (HM-07's exact pin); a release that switches a product off again
 # (plan 7.4, docs/operations/update-backup-rollback.md: the emergency release template) takes it out of both. A feature
-# PR changes neither. HM-19a, the Odoo 0.5.0 release PR, switched Odoo on (R1).
-SWITCHED_ON = frozenset({'odoo'})
+# PR changes neither. HM-19a, the Odoo 0.5.0 release PR, switched Odoo on (R1); train A's release branch switched EMQX,
+# LiteLLM and Nextcloud on with their 0.5.0 (HM-23 review S-2: EMQX's exact pin is this line).
+SWITCHED_ON = frozenset({'odoo', 'emqx', 'litellm', 'nextcloud'})
 
 
 def test_a_product_is_switched_on_only_by_its_release():
@@ -196,11 +197,12 @@ def assert_released(switched):
 
 def test_a_switch_without_its_release_fails(monkeypatch):
     """Both guards on a switch a feature PR would have changed. The pin: a switch with one product more or one less
-    than SWITCHED_ON fails, even with every product released at 0.5.0. The second guard on its own: Odoo and EMQX at a
-    version below 0.5.0 are refused and at 0.5.0 pass; OpenDesign (no profiles, DQ-28) is refused at any version."""
+    than SWITCHED_ON fails, even with every product released at 0.5.0. The second guard on its own: each switched-on
+    product at a version below 0.5.0 is refused and at 0.5.0 passes; OpenDesign (no profiles, DQ-28) is refused at any
+    version."""
     from mcp_admin_core import PRODUCT_VERSIONS
     switchable = sorted(product for product in features.KNOWN_PRODUCTS if profiles.supports_profiles(product))
-    assert {'odoo', 'emqx'} <= set(switchable) and 'opendesign' not in switchable
+    assert SWITCHED_ON <= set(switchable) and 'opendesign' not in switchable
     for product in switchable:
         monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.5.0')
     for product in switchable:
@@ -209,7 +211,7 @@ def test_a_switch_without_its_release_fails(monkeypatch):
         monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', changed)
         with pytest.raises(AssertionError, match='SWITCHED_ON'):
             test_a_product_is_switched_on_only_by_its_release()
-    for product in ('odoo', 'emqx'):
+    for product in sorted(SWITCHED_ON):
         monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.4.99')
         with pytest.raises(AssertionError, match='below 0.5.0'):
             assert_released(frozenset({product}))
@@ -228,11 +230,12 @@ def test_the_switch_is_read_at_every_call(monkeypatch):
 
 
 def test_a_subprocess_preamble_switches_a_product_on():
-    # HM-19a: the repository switches Odoo on, so the preamble switches a product the repository leaves off (EMQX) on
-    # and Odoo off: it sets exactly the switch the subprocess needs, both ways.
-    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"emqx"}); '
+    # HM-19a: the repository switches Odoo (and, from train A's release, EMQX, LiteLLM and Nextcloud) on, so the preamble
+    # switches a product the repository leaves off (Hermes) on and Odoo off: it sets exactly the switch the subprocess
+    # needs, both ways.
+    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"hermes"}); '
             'import mcp_admin_core.run_product; '
-            'print("ENABLED", features.enabled("emqx"), features.enabled("odoo"))')
+            'print("ENABLED", features.enabled("hermes"), features.enabled("odoo"))')
     result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, cwd=ROOT, timeout=120,
                             env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
                                  'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')})
