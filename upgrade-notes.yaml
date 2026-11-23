@@ -72,7 +72,7 @@ releases:
           Cache-Control no-store, and never reaches the child. Event streams (GET) hold no reservation: a profile's
           streams are capped at 24 (default) and 8 (additional), a further same-profile GET gets 429, -32003 and
           Retry-After 30, requests (POST) keep working while every stream is open, and each stream is bounded on its
-          own (1 MiB handed to the server and not taken, 128 KiB per child event; past that the stream ends cleanly
+          own (2 MiB handed to the server and not taken, 128 KiB per child event; past that the stream ends cleanly
           and the client reconnects). A token changed during an answer gives -32005, a child lost during
           one -32004, without a log traceback. Replies are processed on one worker thread, profile by profile.
         migration: Retry -32003 after Retry-After; check the backend before retrying a write after -32004; reconnect with the new token after -32005.

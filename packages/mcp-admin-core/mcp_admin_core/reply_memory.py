@@ -15,12 +15,15 @@ TICKET_BYTES = 64 * MiB
 TOTAL_BYTES = 512 * MiB
 DEFAULT_TICKETS = 3
 EXTRA_TICKETS = 1
-# One GET stream's whole resident reply memory (what the gateway holds for it: the unsent event, the copies made while
-# it is framed and filtered, the escaped result and the previous event the server may not have taken yet). A ticket
-# covers an 8 MiB child event with 8x its size (64 MiB); a stream relays notifications, never a tools/call reply, so
-# its event is capped at 1/8 of this (STREAM_EVENT_BYTES) with the same 8x allowance: 128 KiB x 8 = 1 MiB.
-STREAM_BYTES = 1 * MiB
-STREAM_EVENT_BYTES = STREAM_BYTES // 8
+# One GET stream's resident reply memory bound (what the gateway holds for it: the unsent event, the copies made while
+# it is framed and filtered, the escaped result and the previous event the server may not have taken yet). A stream
+# relays notifications, never a tools/call reply, so one child event is capped at 128 KiB (STREAM_EVENT_BYTES). The
+# worst transient of one such event (3x for JSON escaping of an emoji-only text = 384 KiB, plus the pending message,
+# the copies and the previous transport buffer) is about 1.0 to 1.3 MiB (measured by
+# tests/test_get_stream_bounds.py::test_a_worst_case_event_stays_inside_the_stream_bound), so the bound is 2 MiB: 16x
+# the event cap, with room for those copies. The reserve in request_budget is an estimate of the sum of these bounds.
+STREAM_BYTES = 2 * MiB
+STREAM_EVENT_BYTES = 128 * 1024
 
 
 class ReplyMemory:

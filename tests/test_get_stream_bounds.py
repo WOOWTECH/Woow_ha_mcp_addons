@@ -160,7 +160,7 @@ async def test_the_stream_bound_is_part_of_the_worst_case_memory_plan():
     streams = profiles.DEFAULT_PROFILE_QUOTA.get_streams + profiles.EXTRA_PROFILE_LIMITS['odoo'] * profiles.EXTRA_PROFILE_QUOTA.get_streams
     assert streams == request_budget.ODOO_MAX_STREAMS == 64
     assert request_budget.ODOO_STREAM_RESERVE_MIB * 1024 * 1024 >= streams * reply_memory.STREAM_BYTES
-    assert reply_memory.STREAM_EVENT_BYTES * 8 == reply_memory.STREAM_BYTES
+    assert reply_memory.STREAM_BYTES == 16 * reply_memory.STREAM_EVENT_BYTES
     ticket_mib = reply_memory.TOTAL_BYTES // (1024 * 1024)
     assert ticket_mib == request_budget.ODOO_REPLY_RESERVE_MIB
     needed = request_budget.odoo_switched_memory_fits
@@ -168,3 +168,74 @@ async def test_the_stream_bound_is_part_of_the_worst_case_memory_plan():
             + ticket_mib + request_budget.ODOO_REPLY_WORK_MIB + request_budget.ODOO_ADMISSION_AMPLIFICATION * 16)
     assert not needed(base + request_budget.ODOO_STREAM_RESERVE_MIB - 1, 6, 'cgroup')
     assert needed(base + request_budget.ODOO_STREAM_RESERVE_MIB, 6, 'cgroup')
+
+
+@pytest.mark.usefixtures('log_scan')
+async def test_a_worst_case_event_stays_inside_the_stream_bound(tmp_path, log_scan):
+    """Review MF-1: the biggest event a stream accepts (STREAM_EVENT_BYTES of emoji, which the gateway re-escapes
+    about 3x) is not cut (the gateway relays the bare notification, its params are not forwarded) and the gateway's peak extra
+    memory while it handles it stays inside STREAM_BYTES."""
+    import tracemalloc
+    emoji = '\U0001F600'
+    head = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed","params":{"x":"'
+    tail = b'"}}\n\n'
+    text = emoji.encode() * ((reply_memory.STREAM_EVENT_BYTES - len(head) - len(tail)) // 4)
+    event = head + text + tail
+    assert reply_memory.STREAM_EVENT_BYTES - 8 <= len(event) <= reply_memory.STREAM_EVENT_BYTES
+    data, children = runtime_parts(tmp_path)
+    children.by_port[18000].get_events = (event,)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        async with runtime.mcp() as client:
+            token = runtime.token(B)
+            session = await session_of(client, token)
+            tracemalloc.start()
+            try:
+                tracemalloc.reset_peak()
+                before = tracemalloc.get_traced_memory()[0]
+                stream = open_streams(runtime, token, session, 1)[0]
+                await until(lambda: b'list_changed' in stream.content or stream.ended)
+                peak = tracemalloc.get_traced_memory()[1] - before
+            finally:
+                tracemalloc.stop()
+            assert not stream.ended, 'the largest allowed event must not end the stream'
+            assert peak <= reply_memory.STREAM_BYTES, (peak, reply_memory.STREAM_BYTES)
+            assert runtime.gate(B).streams == 1
+            children.by_port[18000].free.set()
+            await asyncio.wait_for(stream.task, 5)
+            warnings = [r.getMessage() for r in log_scan.records if 'event stream' in r.getMessage()]
+            assert warnings == [], warnings
+
+
+@pytest.mark.usefixtures('log_scan')
+async def test_a_stream_ended_over_its_bound_can_reconnect_and_its_counts_are_zero(tmp_path, log_scan, monkeypatch):
+    """Review MF-3: after an over-limit end the same session opens a new GET (a client reconnect): it takes a stream
+    slot and no ticket, the earlier stream's slot and bytes are back to zero, and a still-oversized event ends the new
+    stream the same clean way without a reconnect storm (one WARNING a minute per profile and cause)."""
+    monkeypatch.setattr(reply_memory, 'STREAM_EVENT_BYTES', 512)
+    big = b'data: {"jsonrpc":"2.0","method":"notifications/tools/list_changed","params":{"x":"' + b'a' * 1024 + b'"}}\n\n'
+    data, children = runtime_parts(tmp_path)
+    children.by_port[18000].get_events = (big,)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        watch(log_scan, data, B)
+        async with runtime.mcp() as client:
+            token = runtime.token(B)
+            session = await session_of(client, token)
+            for _ in range(3):
+                stream = open_streams(runtime, token, session, 1)[0]
+                await asyncio.wait_for(stream.task, 5)
+                assert stream.ended and stream.status == 200
+                await until(lambda: runtime.gate(B).streams == 0 and runtime.gate(B).active == 0)
+                assert runtime.manager.reply_memory.held == 0 and runtime.gate(B).reply_bytes == 0
+            warnings = [r.getMessage() for r in log_scan.records
+                        if r.name == 'mcp_admin_core.profile_router' and r.levelno >= 30 and 'event stream' in r.getMessage()]
+            assert len(warnings) == 1, warnings  # throttled: three cuts, one line
+            # and with the bound back to normal the same session streams and calls again
+            monkeypatch.undo()
+            children.by_port[18000].get_events = (b': ' + b'k' * 20 + b'\ndata: ' + NOTIFICATION + b'\n\n',)
+            stream = open_streams(runtime, token, session, 1)[0]
+            await until(lambda: b'list_changed' in stream.content)
+            assert not stream.ended and runtime.gate(B).streams == 1
+            answered(await client.post('/mcp', headers={**bearer(token), 'Mcp-Session-Id': session}, json=call(80)))
+            children.by_port[18000].free.set()
+            await asyncio.wait_for(stream.task, 5)

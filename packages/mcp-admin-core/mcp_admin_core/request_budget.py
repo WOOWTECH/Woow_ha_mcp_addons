@@ -82,7 +82,7 @@ ODOO_REPLY_WORK_MIB = 221       # ceil(8 MiB * 27.6)
 # that can be open at once: the default profile's 24 plus every additional profile's 8 (profiles.*_PROFILE_QUOTA).
 ODOO_MAX_STREAMS = (profiles.DEFAULT_PROFILE_QUOTA.get_streams
                     + profiles.EXTRA_PROFILE_LIMITS['odoo'] * profiles.EXTRA_PROFILE_QUOTA.get_streams)
-ODOO_STREAM_RESERVE_MIB = -(-ODOO_MAX_STREAMS * reply_memory.STREAM_BYTES // MiB)   # 64 streams x 1 MiB = 64
+ODOO_STREAM_RESERVE_MIB = -(-ODOO_MAX_STREAMS * reply_memory.STREAM_BYTES // MiB)   # 64 streams x 2 MiB = 128
 # Every Odoo POST holds at least this much of the shared body budget before parsing.
 # The 64x admission factor reserves 4 MiB for a <=64 KiB parsed body.
 ODOO_SMALL_MINIMUM_BYTES = SMALL_REQUEST_BYTES

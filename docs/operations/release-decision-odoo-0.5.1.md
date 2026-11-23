@@ -18,10 +18,11 @@
 
 - GET 事件串流不再取回覆票券（`gateway.reply_may_hold_large_child_output` 對 GET 回 False）；串流上限回到一般名額（預設 24、額外 8），
   超過仍是 429＋`-32003`＋`id: null`＋`Retry-After: 30`；串流開滿時 POST 照常。
-- 串流自己的位元組上限：`reply_memory.STREAM_BYTES`＝1 MiB（交給 server 還沒收走）、`STREAM_EVENT_BYTES`＝128 KiB（子程式單一事件）；
+- 串流自己的位元組上限：`reply_memory.STREAM_BYTES`＝2 MiB（交給 server 還沒收走；審查 MF-1 後由 1 MiB 改）、`STREAM_EVENT_BYTES`＝128 KiB（子程式單一事件）；
   超過時乾淨結束串流（用戶端重連）並記一行 WARNING（不含 token 與內容）。只在開通且用票券的 Odoo；關閉的產品、n8n 與其他產品路徑不變。
-- 全域最壞記憶體算式加保留項 `request_budget.ODOO_STREAM_RESERVE_MIB`＝64（最多 24＋5×8＝64 條串流×1 MiB）：六帳號需要量 2,839 → 2,903 MiB，
-  全 add-on 請求內容預算的推導同樣多扣 64 MiB。
+- 全域最壞記憶體算式加保留項 `request_budget.ODOO_STREAM_RESERVE_MIB`＝128（最多 24＋5×8＝64 條串流×2 MiB）：六帳號需要量 2,839 → 2,967 MiB（3 GiB 上限內），
+  全 add-on 請求內容預算的推導同樣多扣 128 MiB。
+- **驗收的預期結果**：預設帳號 5 個 SDK 用戶端的 `tools/call` 依序都成功；5 個「同時重疊」的 `tools/call` 仍只有 3 張票，後 2 個回 200＋`-32003`＋`Retry-After: 5`，這是已接受的票券設計，不是缺陷。發版後用 HM-19b 同一套 SDK 1.32.2 套件在展示機重跑 F1 與 `f1sdk-*`。
 - **不改**（已接受）：票券本身（每張 64 MiB、全域 512 MiB、預設帳號 3 張、額外帳號各 1 張、超過不排隊、POST 回 200＋`-32003`＋`Retry-After: 5`）
   照舊只用在可能帶大型回覆的 POST；HM-19c 極端壓力只記錄不擋發版；閘道核心修正（`fix/hm19c-*` 分支）不在這一版。
 - 測試：`tests/test_get_stream_bounds.py`（新）、`tests/test_reply_memory.py`、`tests/test_gateway_queue_ha.py`、`tests/test_profile_quotas.py` 改成新語意。
