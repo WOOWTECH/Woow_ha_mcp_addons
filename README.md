@@ -2,7 +2,7 @@
 
 七個啟用的商店產品：Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud、Headscale。**歷史版本 0.3.3：六支 canonical 映像已完成驗收、掃描與公開發布**，包含 n8n 全部 28 個工具的有效 `output` 參數正規化、六個混合工具的 selector 保護，以及 versions/test 的 `exposeToMcp` 既有 updater 有效權限檢查。新增 `conditional_writes` capability metadata，保持 28 個工具、33 個寫入 grants、schema 4 與完整功能預設；不變更 dependency／child pins 或 UI 原始碼。正常 stable Release／Store 與正式 HAOS 升級分別驗證，不由映像發布推定完成。見 [0.3.3 發布證據與驗收邊界](docs/operations/release-decision-0.3.3.md)、[不可變映像紀錄](docs/provenance/release-0.3.3-images.json)。
 
-**Odoo 0.5.0** 是多帳號首發（R1）的候選：Odoo 開通多帳號（預設帳號＋最多 5 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），其他產品維持沒開通。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見 [Odoo CHANGELOG](addons/odoo/CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。映像尚未建置；GitHub 託管機器的建置與候選關卡、目標硬體的容量量測、推 GHCR、HAOS 驗收與合併各自另有關卡，都等負責人批准，見 [0.5.0 發佈紀錄草稿](docs/operations/release-decision-odoo-0.5.0.md)。
+**Odoo 0.5.1** 是多帳號首發（R1）的候選：Odoo 開通多帳號（預設帳號＋最多 5 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），其他產品維持沒開通。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見 [Odoo CHANGELOG](addons/odoo/CHANGELOG.md) 與 [upgrade-notes.yaml](upgrade-notes.yaml)。映像尚未建置；GitHub 託管機器的建置與候選關卡、目標硬體的容量量測、推 GHCR、HAOS 驗收與合併各自另有關卡，都等負責人批准，見 [0.5.1 發佈紀錄草稿](docs/operations/release-decision-odoo-0.5.1.md)。
 
 Headscale 0.4.18 已有 Stable Release 並進入商店；0.4.19 是維修版候選：主因是管理面板接受 HA Core 2026.11.2（0.4.18 只認到 2026.11.1，在 Core 2026.11.2 上管理面板拒絕每個請求，MCP 端點不受影響），並帶出 0.4.18 之後合併、不受多帳號開關管的共用變更（見 [CHANGELOG](CHANGELOG.md)）。映像已由 GitHub 託管機器的發版流程建置、驗收並推上 GHCR，匿名驗證每一層（2026-11-18，[發佈紀錄](docs/operations/release-decision-headscale-0.4.19.md)）；HAOS 驗收與合併另有關卡。其他產品的版號各自獨立。見 [Headscale 0.4.18 發佈紀錄](docs/operations/release-decision-headscale-0.4.18.md)。
 
@@ -46,7 +46,7 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
 提供工具數、連線欄位、風險與更新狀態（工具數以[工具表](docs/tool-surface.md)各產品段落為準）。一台 HA 可分別選裝，每個 Add-on
-獨立 token／資料／版本。Odoo 0.5.0 起同一個 Add-on 可開預設帳號＋最多 5 個額外帳號（每個帳號一組後端、一把權杖；同產品可多帳號，
+獨立 token／資料／版本。Odoo 0.5.1 起同一個 Add-on 可開預設帳號＋最多 5 個額外帳號（每個帳號一組後端、一把權杖；同產品可多帳號，
 但不宣稱多租戶，也不宣稱子程式之間隔離：所有帳號的子程式是同一個系統帳號）；其他產品仍是每個 Add-on 一組後端。
 
 ## 管理功能與範圍

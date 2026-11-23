@@ -14,7 +14,7 @@
     "headscale"
   ],
   "version": "0.4.14",
-  "version_overrides": {"odoo": "0.5.0", "headscale": "0.4.19"},
+  "version_overrides": {"odoo": "0.5.1", "headscale": "0.4.19"},
   "os_security_upgrades": {
     "snapshot": "20261104T124343Z",
     "suite": "bookworm-security",

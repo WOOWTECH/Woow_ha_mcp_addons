@@ -121,7 +121,7 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
   - 先發了緊急關閉版（沒開通的版本）再重新開通時，還原後還沒核對的帳號（含預設帳號）照樣要先核對。緊急關閉期間重新產生過預設帳號的權杖時，
     同「沒開通、但磁碟上有帳號資料時的還原」那一點：核對之前改 Odoo 網址、資料庫或使用者的存檔會被拒絕（409，什麼都沒存）。
   - 隔離區的帳號資料超過 64 筆時，面板只列前 64 筆並說還有幾筆；刪掉上面的之後，其餘的會依序出現。
-- **涵蓋範圍**：這個保護只涵蓋「各產品第一個含多帳號還原守門（HM-13）的版本以後做的備份」（Odoo 預計是 0.5.0，以發版時為準）。還原時
+- **涵蓋範圍**：這個保護只涵蓋「各產品第一個含多帳號還原守門（HM-13）的版本以後做的備份」（Odoo 預計是 0.5.1，以發版時為準）。還原時
   Supervisor 會換回備份當時的映像，看不看得出曾經還原要看那一版：
   - 0.4.13 以前（Headscale 0.4.18 以前）：不建還原標記，之後再升級時看不出曾經還原。
   - 0.4.14（Headscale 0.4.19）起、還沒有守門的版本：還原時建標記、一直留著，之後第一次以含守門的版本啟動時才提示（這種備份沒有帳號資料：
@@ -234,7 +234,7 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 2. 改的檔：
    - `packages/mcp-admin-core/mcp_admin_core/features.py`：把產品移出 `MULTI_PROFILE_PRODUCTS`；或 revert 出事的那一片。
    - 釘住開通集合的測試照新的集合改：`tests/test_upgrade_zero_rewrite.py` 的 `SWITCHED_ON`（`test_a_product_is_switched_on_only_by_its_release`
-     斷言 `MULTI_PROFILE_PRODUCTS` 正好等於它；Odoo 0.5.0 起是 `{'odoo'}`），和 `features.py` 一起把產品拿掉。HM-19a 為開通改過的其他測試都改成自己
+     斷言 `MULTI_PROFILE_PRODUCTS` 正好等於它；Odoo 0.5.1 起是 `{'odoo'}`），和 `features.py` 一起把產品拿掉。HM-19a 為開通改過的其他測試都改成自己
      指定開關模式（`tests/switch_modes.py` 的 `switched_off`，或子程序前置碼明說開關），開關關了照樣測同一件事，關閉版不用改回；逐檔清單在
      `docs/provenance/ha-multiprofile-HM-19a-20261119.md` 第 4 節。
    - 版號資料 7 處照 [release](release.md)「升版時要改的版號資料」（`docs/provenance/runtime-patches.json` 的 `features.py`、`__init__.py` 摘要一起更新）。

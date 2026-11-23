@@ -2,9 +2,11 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
-  # Odoo 0.5.0 switches multiple profiles on for Odoo only (multi-profile plan R1, HM-19a; docs/multi-profile/contract.md
+  # Odoo 0.5.1 switches multiple profiles on for Odoo only (multi-profile plan R1, HM-19a; docs/multi-profile/contract.md
   # section 1.4 is the complete list of what the default profile sees change). Other products keep their versions.
-  - to_version: "0.5.0"
+  # 0.5.0 was pushed to GHCR but never listed in the Store: 0.5.1 is the first listed multi-profile version and the
+  # upgrade is 0.4.14 -> 0.5.1 directly. 0.5.1 also fixes F1 (an event stream no longer holds a reply reservation).
+  - to_version: "0.5.1"
     from_version: "0.4.14"
     addons: [woow_mcp_odoo]
     summary: >-
@@ -41,7 +43,7 @@ releases:
           before the restore answer 410 operation_restored. Unreadable profiles are moved to a quarantine directory.
         migration: >-
           Review each profile on the card, issue new tokens and update clients. A backup without additional profiles
-          revokes nothing (next section). The protection covers backups made with 0.5.0 or later only.
+          revokes nothing (next section). The protection covers backups made with 0.5.1 or later only (0.5.0 was never listed in the Store).
     behavior_changes:
       - id: admin-panel-profiles
         change: >-
@@ -64,13 +66,14 @@ releases:
           Retry-After 5 (200 for a small body with an id, else 503) instead of a plain-text 503; at most 32 wait and
           a forwarding slot not free within 1 second gives -32003.
           Each additional profile has 32 and 8 streams of its own; the outer bound is 224 connections. Pending replies
-          are capped at 32 MiB per profile (soft). Forwarded GET streams and identified POST requests other than
-          initialize and ping also hold 64 MiB reservations: at most 3 for the default profile, 1 per additional profile,
-          and 512 MiB (8 reservations) across the add-on. The nominal GET quotas remain 24/8, but a further
-          same-profile GET after 3/1 open streams gets 429, -32003 and Retry-After 30. Other covered requests share
-          the tickets: a GET below its stream cap gets 503, -32003 and Retry-After 5 if its ticket is already held;
-          a covered POST gets 200, -32003 and Retry-After 5 when full. Ticket refusals have Cache-Control no-store
-          and never reach the child. A token changed during an answer gives -32005, a child lost during
+          are capped at 32 MiB per profile (soft). Identified POST requests other than initialize and ping also hold
+          64 MiB reservations: at most 3 for the default profile, 1 per additional profile, and 512 MiB (8
+          reservations) across the add-on; a covered POST gets 200, -32003 and Retry-After 5 when full, with
+          Cache-Control no-store, and never reaches the child. Event streams (GET) hold no reservation: a profile's
+          streams are capped at 24 (default) and 8 (additional), a further same-profile GET gets 429, -32003 and
+          Retry-After 30, requests (POST) keep working while every stream is open, and each stream is bounded on its
+          own (1 MiB handed to the server and not taken, 128 KiB per child event; past that the stream ends cleanly
+          and the client reconnects). A token changed during an answer gives -32005, a child lost during
           one -32004, without a log traceback. Replies are processed on one worker thread, profile by profile.
         migration: Retry -32003 after Retry-After; check the backend before retrying a write after -32004; reconnect with the new token after -32005.
       - id: child-watchdog-and-health
@@ -113,7 +116,7 @@ releases:
         merge, Store sync); additional profiles then become dormant (tokens revoked, data kept). Meanwhile stop the
         add-on, or revoke or delete a profile, or press "revoke all" in the panel.
       - >-
-        The restore protection covers backups made with 0.5.0 or later. After restoring an older backup, or a VM or
+        The restore protection covers backups made with 0.5.1 or later (0.5.0 was never listed in the Store). After restoring an older backup, or a VM or
         disk snapshot (no restore signal), update to the latest version and press "revoke all". See
         docs/operations/update-backup-rollback.md. Downgrades and rollback drills are pending (HM-19b).
   - to_version: "0.4.7"

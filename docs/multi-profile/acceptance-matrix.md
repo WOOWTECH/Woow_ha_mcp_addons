@@ -49,7 +49,7 @@ Store＝升版比對 hook；HAOS＝QA HAOS 上的 P9 kit 加人工（每一步�
 
 ## Odoo 首發通過標準（計畫 §10.6 摘要；HM-19b、HM-19c）
 
-1. 單帳號升級 0.4.14 → 0.5.0（計畫寫 0.4.13；0.4.14 在 2026-11-18 發了）：預設帳號 token、兩條網址、`state.json` 位元、`tools/list`、政策 0 差異（Store `verify`＋HAOS）。先單帳號，再多帳號。
+1. 單帳號升級 0.4.14 → 0.5.1（0.5.0 從未上架，驗收對象改 0.5.1，F1 回歸見 `tests/test_get_stream_bounds.py`；計畫寫 0.4.13；0.4.14 在 2026-11-18 發了）：預設帳號 token、兩條網址、`state.json` 位元、`tools/list`、政策 0 差異（Store `verify`＋HAOS）。先單帳號，再多帳號。
 2. 同一個 Odoo 資料庫預設＋5 個受限使用者：N×N 只有對角線；跨帳號寫入全擋；A 的審批 token 在 B 被拒；換使用者就換 token、兩條舊網址都失效。
 3. 31 種網址變形、標頭與 cookie 冒用、兩個交叉案例（Bearer 屬於 B；密鑰路徑屬於 A＋`Authorization` 屬於 B）：0 次跨帳號。
 4. 負載中輪替、撤銷、刪除只影響該帳號；刪除後 port 釋放、目錄清除；重建拿新 id 與新 token。
