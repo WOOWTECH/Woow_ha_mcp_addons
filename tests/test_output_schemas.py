@@ -42,8 +42,13 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-23 (PaaS #153): emqx_list_subscriptions' match_topic text (topics.py); emqx_prometheus_stats asks for
     # text/plain and refuses empty text (cluster.py, errors.py); a value a URL cannot carry gets the fixed
     # EMQX_DESTINATION_DENIED (_common.py, deps.py). No input or output schema or handler result shape changes.
+    # PaaS #160 (topics.py again, and registry.py): emqx_list_topics' description no longer says that a topic missing
+    # from the list has no subscriber (the docstring, and the registry's one-line text); text only, the tool's inputs,
+    # output schema and handler are the ones before.
     'apps/emqx/vendor/emqx_mcp_server/tools/topics.py': (
-        'emqx', 'd85843f135595d61abde92f7d8b0792df43d78e802149770fca93ed3853ba8cc'),
+        'emqx', '7e9e3704f60717a5b1cca317c0ae3d2d78ff0d0e1eac22e71d0a3fc3feec412b'),
+    'apps/emqx/vendor/emqx_mcp_server/registry.py': (
+        'emqx', '30d439ba0363a3caa9aa692260b88605d9970843d87ef80d3b8b765265d9f625'),
     'apps/emqx/vendor/emqx_mcp_server/tools/cluster.py': (
         'emqx', '4504eeddaf71a69d87acdfb671202f706a20b0199472284bbaee529a83df5dea'),
     'apps/emqx/vendor/emqx_mcp_server/errors.py': (
