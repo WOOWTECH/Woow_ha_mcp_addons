@@ -20,6 +20,12 @@ from mcp_admin_core.products import PRODUCTS
 from test_ha_role import gateway
 from test_lifecycle import until
 from test_real_products import connection
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
+
+# HM-19a: written for the switched-off add-on (tests/switch_modes.py): the single-profile runtime and its stand-ins,
+# whatever the repository switches on (Odoo from 0.5.0). The switched-on runtime has its own tests
+# (tests/multi_profile_runtime.py and the tests that use it).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 
 def owned_spec(tmp_path, name):

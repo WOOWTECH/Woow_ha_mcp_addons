@@ -219,7 +219,94 @@ def test_switched_off_counts_one_account_and_switched_on_the_products_capacity(m
     ceiling(monkeypatch, 4096)
     off, on = module.BudgetLimits.derive('odoo'), module.BudgetLimits.derive('odoo', switched_on=True)
     assert off.total == int((4096 - 76 - 100 - 150) * MiB / 20)
-    assert on.total == int((4096 - 76 - 600 - 150) * MiB / 20) < off.total
+    assert on.total == int((4096 - 256 - 76 - 600 - 150 - 512 - 221 - 128) * MiB
+                           / module.ODOO_ADMISSION_AMPLIFICATION) < off.total
+    assert off.small_minimum == 0
+    assert module.BudgetLimits.derive('n8n', switched_on=True).small_minimum == 0
+
+
+def test_odoo_reply_and_body_reservations_fit_three_gib_without_relaxing_release_gate(monkeypatch):
+    module = ceiling(monkeypatch, 3072)
+    limits = module.BudgetLimits.derive('odoo', switched_on=True)
+    assert module.AMPLIFICATION == 20  # the §5 release gate, distinct from conservative admission
+    assert module.ODOO_ADMISSION_AMPLIFICATION == 64
+    assert limits.total >= 16 * MiB and limits.per_profile == 16 * MiB
+    accounted = (256 + 76 + 600 + 150 + 512 + 221 + 128  # 0.5.1: 64 GET streams x 2 MiB
+                 + limits.total / MiB * module.ODOO_ADMISSION_AMPLIFICATION)
+    assert accounted <= 3072
+    assert limits.small_minimum == 64 * 1024
+    assert module.odoo_switched_memory_fits(3072, 6, 'cgroup')
+    assert not module.odoo_switched_memory_fits(2048, 6, 'cgroup')
+    assert not module.odoo_switched_memory_fits(None, 6, 'none')
+
+
+def test_odoo_host_memavailable_is_reserved_once_and_switched_off_is_unchanged(monkeypatch):
+    module = ceiling(monkeypatch, 5970, 'meminfo')  # memory_ceiling already removed 256 MiB
+    on = module.BudgetLimits.derive('odoo', switched_on=True)
+    assert on.total == int((5970 - 76 - 600 - 150 - 512 - 221 - 128) * MiB / 64)
+    off = module.BudgetLimits.derive('odoo', switched_on=False)
+    assert off.total == int((5970 - 76 - 100 - 150) * MiB / 20)
+
+
+@pytest.mark.parametrize('ceiling_mib,source,fits', [
+    (2048, 'cgroup', False), (2966, 'cgroup', False), (2967, 'cgroup', True),  # 0.5.1: 2,839 + 128 stream MiB
+    (3072, 'cgroup', True), (2710, 'meminfo', False), (2711, 'meminfo', True),
+    (None, 'none', False),
+])
+def test_odoo_activation_requires_joint_floor(ceiling_mib, source, fits):
+    module = rb()
+    assert module.odoo_switched_memory_fits(ceiling_mib, 6, source) is fits
+
+
+async def test_odoo_small_body_reserves_before_parse_and_refunds_after_end():
+    module = rb()
+    limits = module.BudgetLimits(total=module.SMALL_REQUEST_BYTES * 2,
+                                 per_profile=module.SMALL_REQUEST_BYTES * 2,
+                                 small_minimum=module.SMALL_REQUEST_BYTES)
+    owner = module.RequestBudget(limits)
+
+    class Small:
+        method = 'POST'
+
+        def __init__(self):
+            from starlette.datastructures import Headers
+            self.headers = Headers(raw=[(b'content-length', b'56127')])
+            self.read = False
+
+        async def stream(self):
+            self.read = True
+            assert owner.used() >= module.SMALL_REQUEST_BYTES  # ingress reserved before parser receives bytes
+            yield b'{' + b' ' * 56125 + b'}'
+
+    live = []
+    for profile in ('a', 'b'):
+        request = Small()
+        reservation = owner.share(profile, cap=MiB).open()
+        module.watch(request, reservation, cap=CAP)
+        async for _ in request.stream():
+            pass
+        assert request.read
+        live.append(reservation)
+    assert owner.used() == 2 * module.SMALL_REQUEST_BYTES
+    refused = Small()
+    reservation = owner.share('c', cap=MiB).open()
+    module.watch(refused, reservation, cap=CAP)
+    with pytest.raises(module.BudgetExceeded) as error:
+        async for _ in refused.stream():
+            pass
+    assert error.value.scope == 'global' and not refused.read
+    reservation.close()
+    live[0].close()  # the ASGI completion or cancellation path returns the reservation
+    assert owner.used() == module.SMALL_REQUEST_BYTES
+    later = Small()
+    reservation = owner.share('c', cap=MiB).open()
+    module.watch(later, reservation, cap=CAP)
+    async for _ in later.stream():
+        pass
+    assert later.read
+    reservation.close()
+    live[1].close()
+    assert owner.used() == 0
 
 
 def test_more_accounts_or_heavier_children_shrink_the_budget():

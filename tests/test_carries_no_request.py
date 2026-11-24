@@ -24,7 +24,7 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profile_router, profiles
 from mcp_admin_core.config import strict_json
-from switched_gateway import (B, INITIALIZED, PRODUCT, GatewayChild, bearer, call, quota, session_of, setup, until,
+from switched_gateway import (B, INITIALIZED, PRODUCT, GatewayChild, bearer, call, ping, quota, session_of, setup, until,
                               watch)
 from test_single_profile_golden import initialize_message
 from test_request_budget_gateway import drive, raw_scope
@@ -162,7 +162,7 @@ def test_nothing_parsed_means_the_ordinary_lane():
 
 async def test_the_reserve_carries_notifications_initialized_while_every_ordinary_slot_is_busy(
         tmp_path, log_scan, monkeypatch):
-    """B's 2 ordinary slots held by tools/calls its child has not answered. A request waits its 0.6 s and gets 200 +
+    """B's 2 ordinary slots held by bounded pings its child has not answered. A request waits 0.6 s and gets 200 +
     -32003 under its id; notifications/initialized takes one of the reserved slots and reaches the child at once (202;
     MCP Python SDK 1.x ends the session on a 5xx to a notification, the TS SDK's connect fails, SDK 2.x drops it); other
     notifications are answered 202 by the gateway itself and never forwarded (HA forwards none of them: plan 8.8 #6's
@@ -182,8 +182,8 @@ async def test_the_reserve_carries_notifications_initialized_while_every_ordinar
         async with runtime.mcp() as client:
             session = await session_of(client, token)
             headers = {**bearer(token), 'Mcp-Session-Id': session}
-            child.hold_calls = True
-            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(60 + n))) for n in range(2)]
+            child.hold_ping = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(60 + n))) for n in range(2)]
             await until(lambda: child.waiting == 2)
             ordinary = await client.post('/mcp', headers=headers, json=call(9))
             assert ordinary.status_code == 200 and ordinary.json()['error']['code'] == -32003
@@ -251,12 +251,12 @@ async def test_the_reserve_is_reached_even_once_the_profiles_admission_is_full(t
         gate = runtime.gate(B)
         async with runtime.mcp(timeout=60) as client:
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
-            child.hold_calls = True
-            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(100 + n)))
+            child.hold_ping = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(100 + n)))
                     for n in range(numbers.forward_slots)]
             await until(lambda: child.waiting == numbers.forward_slots)
             ordinary = runtime.manager.get(B).runtime.mcp_app.state.lanes['ordinary']
-            waiting = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(200 + n)))
+            waiting = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(200 + n)))
                        for n in range(queued)]
             await until(lambda: ordinary.waiting == queued)
             assert gate.active == numbers.forward_slots + queued
@@ -293,8 +293,8 @@ async def test_a_newly_connected_clients_initialized_reaches_the_child_with_the_
         async with runtime.mcp(timeout=60) as client:
             flood = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
             newcomer = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
-            child.hold_calls = True
-            held = [asyncio.create_task(client.post('/mcp', headers=flood, json=call(100 + n)))
+            child.hold_ping = True
+            held = [asyncio.create_task(client.post('/mcp', headers=flood, json=ping(100 + n)))
                     for n in range(numbers.forward_slots + numbers.queue)]
             ordinary = runtime.manager.get(B).runtime.mcp_app.state.lanes['ordinary']
             await until(lambda: child.waiting == numbers.forward_slots and ordinary.waiting == numbers.queue)

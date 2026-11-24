@@ -6,6 +6,7 @@ GUI owns typed connection/token/policy. CLI owns deployment fields only.
 import argparse
 import asyncio
 from contextlib import contextmanager
+import os
 from pathlib import Path
 import signal
 
@@ -14,6 +15,7 @@ import uvicorn
 from . import features, redact, restore_lock, version_for_product
 from .config import ConfigError
 from .capabilities import ManagementOptions
+from .capacity_metrics import CapacityMetrics, activate, deactivate, write_evidence
 from .ha_role import make_ha_admin_verifier
 from .lifecycle import CHILD_PORT, child_port_text
 from .products import INSTRUCTIONS, PRODUCTS, ProductStore, TOOLS, child_spec
@@ -28,6 +30,18 @@ class Listener(uvicorn.Server):
         yield
 
 
+def capacity_opted_in():
+    """An exact opt-in; other values retain the ordinary runtime path."""
+    return os.environ.get('WOOW_CAPACITY_METRICS') == '1'
+
+
+async def dump_capacity_on_signal(capacity, requested):
+    """Freeze the measured window before writing JSON on explicit SIGUSR1."""
+    await requested.wait()
+    snapshot = await capacity.stop()
+    write_evidence(snapshot)
+
+
 async def run(args, *, child_port=CHILD_PORT):
     # HM-04: one port for the child's spec, the health monitor, the gateway and its capability probe. main() runs the
     # default profile's child on CHILD_PORT; an extra profile's runtime (multi-profile plan 5.4) passes its own.
@@ -39,9 +53,22 @@ async def run(args, *, child_port=CHILD_PORT):
     store = ProductStore(args.data, args.product)
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
+    capacity = None
+    capacity_token = None
+    capacity_dump_task = None
     try:
         # The switch is read once per start: the boot guard and the runtime below see the same answer (plan 3.3).
         enabled = features.enabled(args.product)
+        # Explicit diagnostic opt-in. A SIGUSR1 after the bounded load freezes
+        # the in-process window and writes one numeric-only /tmp snapshot.
+        if capacity_opted_in():
+            capacity = CapacityMetrics(enabled=True)
+            capacity.start()
+            capacity_token = activate(capacity)
+            dump_requested = asyncio.Event()
+            loop.add_signal_handler(signal.SIGUSR1, dump_requested.set)
+
+            capacity_dump_task = asyncio.create_task(dump_capacity_on_signal(capacity, dump_requested))
         # HM-13b (plan 8.4; contract 1.2, 7; not gated): the boot guard, after the legacy migration and before any child
         # or listener: a restore, an unfinished "revoke all", dormant profiles. A product not switched on without
         # profile data is left alone (a restore's marker only gets its notice). ConfigError: nothing is served, the
@@ -78,7 +105,7 @@ async def run(args, *, child_port=CHILD_PORT):
             # are answered at once, the one in process is waited for at most reply_worker.STOP_SECONDS), and should its
             # thread end while the add-on serves, the add-on stops, as for any other component (the Supervisor restarts
             # it).
-            worker = ReplyWorker()
+            worker = ReplyWorker(capacity_metrics=capacity)
             profile = ProfileManager(store, args.product, TOOLS[args.product], child_spec, port=child_port,
                                      app_options=options, reply_worker=worker, restore_notice=notice)
         else:
@@ -135,9 +162,23 @@ async def run(args, *, child_port=CHILD_PORT):
                 if worker is not None:
                     await worker.stop()
     finally:
-        store.close()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.remove_signal_handler(sig)
+        try:
+            if capacity is not None:
+                try:
+                    loop.remove_signal_handler(signal.SIGUSR1)
+                    if capacity_dump_task is not None:
+                        if not capacity_dump_task.done():
+                            capacity_dump_task.cancel()
+                        await asyncio.gather(capacity_dump_task, return_exceptions=True)
+                    snapshot = await capacity.stop()
+                    write_evidence(snapshot)
+                finally:
+                    if capacity_token is not None:
+                        deactivate(capacity_token)
+        finally:
+            store.close()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.remove_signal_handler(sig)
 
 
 def main():

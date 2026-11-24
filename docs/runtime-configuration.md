@@ -69,7 +69,7 @@ owned local fixtures, not evidence of HA Ingress or a live third-party backend.
 
 ## 多帳號（產品開通後）的設定
 
-這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫產品開通多帳號之後的設定；**目前（2026-11-19）還沒有產品開通**，沒開通的產品照上面
+這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫產品開通多帳號之後的設定；**Odoo 從 0.5.1 起開通（HM-19a），其他產品還沒開通**，沒開通的產品照上面
 各節，回應一個位元組都不變。逐條規則、錯誤代碼與欄位以契約為準（第 2、3、4.1 節；開通後預設帳號會變的事：第 1.4 節）。
 
 - **每個帳號一份設定**：預設帳號在 `/data/mcp/state.json`（一個鍵都不加），額外帳號在 `/data/mcp/profiles/<24 位小寫 hex>/state.json`。每個帳號各有自己的

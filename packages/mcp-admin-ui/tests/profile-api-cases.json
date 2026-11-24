@@ -89,7 +89,7 @@
     {
       "name": "rows",
       "about": "the list's rows for a profile its state cannot be read (U: indexed, its directory gone) and one over the memory limit (C)",
-      "setup": {"product": "odoo", "memory_limit_mib": 512, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}, {"role": "C", "label": "Gamma Ops", "status": "blocked", "disabled_reason": "memory_capacity", "blocked_reason": "memory_capacity", "required_memory_mib": 556}], "unavailable": [{"role": "U", "label": "Upsilon Ops"}]},
+      "setup": {"product": "emqx", "memory_limit_mib": 576, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}, {"role": "C", "label": "Gamma Ops", "status": "blocked", "disabled_reason": "memory_capacity", "blocked_reason": "memory_capacity", "required_memory_mib": 736}], "unavailable": [{"role": "U", "label": "Upsilon Ops"}]},
       "cases": [
         {"name": "list", "request": {"method": "GET", "path": "/api/profiles"}, "keys": "*", "expect": {"status": 200, "etag": "p1", "body": {"profiles": [{"id": "default", "label": "Default", "port": "<int>", "is_default": true, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<B>", "label": "Beta Ops", "port": "<int>", "is_default": false, "disabled_reason": null, "status": "running", "blocked_reason": null}, {"id": "<C>", "label": "Gamma Ops", "port": "<int>", "is_default": false, "disabled_reason": "memory_capacity", "required_memory_mib": "<int>", "status": "blocked", "blocked_reason": "memory_capacity"}, {"id": "<U>", "label": "Upsilon Ops", "port": "<int>", "is_default": false, "disabled_reason": "profile_unavailable", "status": "failed", "blocked_reason": null}], "orphans": []}}},
         {"name": "bootstrap-unreadable", "request": {"method": "GET", "path": "/api/bootstrap", "profile": "U"}, "keys": "*", "expect": {"status": 503, "etag": null, "body": {"error": "state unavailable"}}},
@@ -116,7 +116,7 @@
     {
       "name": "memory",
       "about": "MemAvailable cannot hold one more child (no cgroup limit)",
-      "setup": {"product": "odoo", "available_memory_mib": 300, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}]},
+      "setup": {"product": "emqx", "available_memory_mib": 300, "extras": [{"role": "B", "label": "Beta Ops", "status": "running"}]},
       "cases": [
         {"name": "create", "request": {"method": "POST", "path": "/api/profiles", "csrf": true, "if_match": "index", "key": "new", "body": {"label": "Kappa Desk"}}, "keys": "*", "expect": {"status": 409, "etag": null, "body": {"error": "request denied", "detail": {"code": "profile_memory_insufficient", "limit": "<int>", "required_memory_mib": "<int>", "available_memory_mib": "<int>"}}}}
       ]

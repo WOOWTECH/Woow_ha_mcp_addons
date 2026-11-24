@@ -140,7 +140,8 @@ async def manager_rig(tmp_path, *, product=PRODUCT, extras=2, ports=None, answer
     rig_ports = {'default': default_port, **dict(zip(extra_ids, ports))}
 
     def child_client(*args, **kwargs):
-        kwargs.setdefault('transport', httpx.MockTransport(children.route))
+        if kwargs.get('transport') is None or isinstance(kwargs['transport'], profile_runtime.ListenerGuard):
+            kwargs['transport'] = httpx.MockTransport(children.route)
         return GENUINE_CLIENT(*args, **kwargs)
 
     with pytest.MonkeyPatch.context() as patch:

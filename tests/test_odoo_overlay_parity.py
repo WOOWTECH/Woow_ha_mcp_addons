@@ -26,6 +26,12 @@ from owned_runtime import Endpoint
 from test_odoo_child_switch_runtime import ALL_ON, INIT, call
 from test_real_products import connection, rpc
 from test_six_hardening import Quiet, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
+
+# HM-19a: written for the switched-off add-on (tests/switch_modes.py). A real child here talks to a loopback fake
+# backend, which the child of a switched-on product refuses (HM-20: WOOW_MCP_DENY_LOOPBACK=1, tested both ways in
+# tests/test_backend_loopback.py); the child's behavior under test is the same in both modes.
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 BLOCKED = 'Unreviewed side-effect methods are blocked by default'
 # The eighteen methods of the reviewed read list (PaaS write_gates.REVIEWED_READ_METHODS), on the model each is called on.

@@ -17,6 +17,7 @@ The 16 MiB bodies are made one at a time, when a test runs (no module-level corp
 import asyncio
 import base64
 import json
+import statistics
 import time
 import tracemalloc
 
@@ -131,6 +132,35 @@ def test_the_depth_boundary():
     assert violation(nested(DEFAULT_MAX_DEPTH)) is None
     assert 'nesting' in violation(nested(DEFAULT_MAX_DEPTH + 1))
     assert violation(b'{"a":"' + b'[' * 500 + b'\\"' + b'[' * 500 + b'"}') is None
+
+
+@pytest.mark.parametrize('opening,closing', [(b'{"a":[', b']}'), (b'[{"a":', b'}]')])
+def test_mixed_container_depth_cannot_collapse_two_levels_per_pass(opening, closing):
+    # The JSON-RPC envelope and arguments object contribute three levels.
+    # 30 mixed pairs are depth 63; 31 are depth 65 and must be refused.
+    for pairs, expected in ((30, None), (31, 'nesting'), (33, 'nesting')):
+        body = envelope(b'{"padding":' + opening * pairs + b'0' + closing * pairs + b'}')
+        json.loads(body)
+        reason = violation(body)
+        if expected is None:
+            assert reason is None
+        else:
+            assert reason is not None and expected in reason
+            with pytest.raises(request_limits.RequestLimitError) as caught:
+                gateway._parse_json_body(body, gateway.STRUCTURE_LIMITS, True)
+            assert caught.value.status == 200
+            assert caught.value.payload['id'] == 7
+            assert caught.value.payload['error']['code'] == -32602
+
+
+def test_mixed_container_scan_preserves_malformed_and_depth_precedence():
+    deep = b'{"a":[' * 33 + b'0' + b']}' * 33
+    # The legacy scanner stops at an excess closer, and refuses over-depth
+    # structure even when malformed input ends before its closing brackets.
+    assert 'nesting' in violation(deep)
+    assert violation(b'}' + deep) is None
+    assert 'nesting' in violation(deep[:-1])
+    assert violation(b'[' * 64 + b']' * 63 + b'}') is None
 
 
 def test_the_element_boundary_counts_commas_and_containers():
@@ -309,6 +339,75 @@ def test_the_element_boundary_is_exactly_the_limit_on_the_slow_path():
         return b'[' + noise + b',0' * (elements - 1) + b']'
     assert violation(make(limit)) is None
     assert 'elements' in violation(make(limit + 1))
+
+
+def test_near_limit_object_burst_counts_only_structure_outside_escaped_strings():
+    # HM-19c's 0.8 MiB burst shape: accepting it must not turn the next,
+    # over-limit shape into a parser allocation or count punctuation in text.
+    item = b'{"a":1}'
+    def body(count):
+        return envelope(b'{"padding":[' + b','.join([item] * count)
+                        + b'],"noise":"\\\"[[[,,,\\\""}')
+    within = body(99_990)
+    assert len(within) < MiB and json.loads(within)
+    assert violation(within) is None
+    assert 'elements' in violation(body(100_000))
+
+
+def test_near_limit_object_guard_does_not_dominate_decode_cpu():
+    """HM-19c: 64 of these bodies saturated the J6412 gateway before child work.
+
+    Keep the authenticated structure guard cheaper than decoding the same
+    accepted body. CPU time compares two production functions on this runner,
+    avoiding a machine-specific wall-clock deadline in the unit test.
+    """
+    from mcp_admin_core.config import strict_json
+
+    message = {'jsonrpc': '2.0', 'id': 100, 'method': 'tools/call',
+               'params': {'name': 'list_models', 'arguments': {
+                   'limit': 1, 'padding': [{'a': 1}] * 99_990}}}
+    body = json.dumps(message, ensure_ascii=False, separators=(',', ':')).encode()
+    assert len(body) == 800_036
+    guard = lambda: request_limits.McpRequestLimits(N, DEFAULT_MAX_TOTAL_ELEMENTS).check_structure(body)
+    decode = lambda: strict_json(body)
+    guard()
+    decode()
+
+    def median_cpu(operation):
+        samples = []
+        for _ in range(5):
+            started = time.process_time()
+            operation()
+            samples.append(time.process_time() - started)
+        return statistics.median(samples)
+
+    assert median_cpu(guard) < .9 * median_cpu(decode)
+
+
+def test_unterminated_string_keeps_earlier_structure_refusal():
+    body = b'[' + b'0,' * (DEFAULT_MAX_TOTAL_ELEMENTS + 1) + b'"' + b'\\,' * 1000
+    assert 'elements' in violation(body)
+    assert violation(b'"' + b',' * 300_000) is None
+
+
+def test_obvious_deep_prefix_rejects_before_full_body_preprocessing(monkeypatch):
+    original = request_limits._COMPLETE_STRING
+    lengths = []
+
+    class RecordingPattern:
+        def sub(self, replacement, data):
+            lengths.append(len(data))
+            return original.sub(replacement, data)
+
+    monkeypatch.setattr(request_limits, '_COMPLETE_STRING', RecordingPattern())
+    body = b'[' * 65 + b' ' * (N - 65)
+    assert violation(body) == 'more than 64 levels of nesting'
+    assert lengths == [request_limits._EARLY_STRUCTURE_WINDOW]
+
+
+def test_prefix_scan_does_not_count_brackets_inside_a_string():
+    body = b'["' + b'[' * 65 + b'"]' + b' ' * (N - 69)
+    assert violation(body) is None
 
 
 # ---- the corpora under the guard: what parsing still costs (HM-08's measurement, HM-19c measures on the hardware) ----

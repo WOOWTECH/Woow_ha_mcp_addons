@@ -27,7 +27,7 @@ import pytest
 from log_scan import log_scan  # noqa: F401  (fixture)
 from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profile_router, profiles
-from switched_gateway import (B, PRODUCT, Exchange, GatewayChild, bearer, call, json_body, quota, session_of, setup,
+from switched_gateway import (B, PRODUCT, Exchange, GatewayChild, bearer, call, ping, json_body, quota, session_of, setup,
                               until, watch)
 from test_single_profile_golden import GENUINE_CLIENT
 
@@ -337,7 +337,7 @@ def holding_runtime(tmp_path, monkeypatch, **changes):
     children = Children()
     children.add(3000, GatewayChild('default', PRODUCT, data))
     child = children.add(18000, GatewayChild('p' + B[:4], PRODUCT, profiles.Layout(data).profile(B)))
-    child.hold_calls = True
+    child.hold_ping = True
     return data, children, child
 
 
@@ -359,7 +359,7 @@ async def test_request_abandoned_while_queued_never_reaches_the_child_on_a_real_
         url = f'http://127.0.0.1:{runtime.mcp_port}/mcp'
         async with GENUINE_CLIENT(timeout=30, limits=httpx.Limits(max_connections=20)) as client:
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token, url)}
-            held = [asyncio.create_task(client.post(url, headers=headers, json=call(1000 + n))) for n in range(2)]
+            held = [asyncio.create_task(client.post(url, headers=headers, json=ping(1000 + n))) for n in range(2)]
             await until(lambda: child.waiting == 2)
             patient = asyncio.create_task(client.post(url, headers=headers, json=call(88)))
             await until(lambda: any(lane_.waiting == 1 for lane_ in lanes_of(runtime, B)))
@@ -395,7 +395,7 @@ async def test_clients_leaving_the_queue_are_noticed_at_once_and_take_nothing(tm
         async with runtime.mcp() as client:
             session = await session_of(client, token)
             headers = {**bearer(token), 'Mcp-Session-Id': session}
-            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(1000 + n))) for n in range(2)]
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(1000 + n))) for n in range(2)]
             await until(lambda: child.waiting == 2)
             leavers = []
             for n in range(5):
@@ -415,10 +415,10 @@ async def test_clients_leaving_the_queue_are_noticed_at_once_and_take_nothing(tm
             assert lanes[0].semaphore.locked() and child.waiting == 2
             child.free.set()
             await asyncio.gather(*held)
-            child.hold_calls = False
+            child.hold_ping = False
             after = await client.post('/mcp', headers=headers, json=call(9))
             assert after.status_code == 200 and after.json()['id'] == 9 and 'result' in after.json()
-        assert not [i for i in child.client_calls() if 200 <= i < 205], 'an abandoned request reached the child'
+        assert not [i for i in child.client_calls() if 200 <= i < 205], 'an abandoned write reached the child'
         assert [method for method, *_ in child.seen].count('GET') == 0
         notes = [r.getMessage() for r in router_warnings(log_scan)]
         assert len([line for line in notes if 'closed its connection' in line]) == 1, notes
@@ -436,9 +436,9 @@ async def test_the_queue_is_capped_per_profile_and_the_overflow_gets_a_clean_bus
         token = runtime.token(B)
         async with runtime.mcp() as client:
             headers = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
-            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(1000 + n))) for n in range(2)]
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(1000 + n))) for n in range(2)]
             await until(lambda: child.waiting == 2)
-            queued = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(300 + n))) for n in range(3)]
+            queued = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(300 + n))) for n in range(3)]
             lanes = lanes_of(runtime, B)
             await until(lambda: lanes[0].waiting == 3)
             loop = asyncio.get_running_loop()
@@ -488,12 +488,12 @@ async def test_one_profiles_full_queue_never_refuses_another_profiles_waiting_re
                 token = runtime.token(profile)
                 headers[profile] = {**bearer(token), 'Mcp-Session-Id': await session_of(client, token)}
             for kid in kids.values():
-                kid.hold_calls = True
-            held = [asyncio.create_task(client.post('/mcp', headers=headers[profile], json=call(ident)))
+                kid.hold_ping = True
+            held = [asyncio.create_task(client.post('/mcp', headers=headers[profile], json=ping(ident)))
                     for ident, profile in ((1, full), (2, other))]
             await until(lambda: all(kid.waiting == 1 for kid in kids.values()))
             lanes = {profile: lanes_of(runtime, profile)[0] for profile in (B, 'default')}
-            queued = asyncio.create_task(client.post('/mcp', headers=headers[full], json=call(3)))
+            queued = asyncio.create_task(client.post('/mcp', headers=headers[full], json=ping(3)))
             await until(lambda: lanes[full].waiting == 1)  # the full profile's queue (cap 1) is full now
             refused = await client.post('/mcp', headers=headers[full], json=call(4))
             assert refused.status_code == 200 and refused.json() == {'jsonrpc': '2.0', 'id': 4, 'error': {
@@ -509,11 +509,10 @@ async def test_one_profiles_full_queue_never_refuses_another_profiles_waiting_re
 
 
 async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, log_scan, monkeypatch):
-    """UC-31 (plan 16; HM-14 review S-3): an event stream (GET) holds one of its profile's ordinary forwarding slots,
-    and a place in its admission, for as long as it is open. An additional profile's real numbers (16 slots, 8 streams;
-    only the wait made 0.3 s): with its 8 streams open, 8 POSTs run at once, the 9th waits and gets 200 + -32003 under
-    its id with the slots' text, and a 9th stream gets 429 at once. So POSTs keep 8 slots while the streams are at their
-    cap (the default profile: 32 - 24 = 8), as PaaS sets its stream cap under its connection cap."""
+    """0.5.1 (F1): the GET streams of an additional profile fill its stream cap (8) and hold an ordinary slot each for
+    their whole life, but no reply ticket; 8 bounded ping calls fill the other slots. A POST still waits for an
+    ordinary slot; the next GET receives the stream-cap 429 before taking a forwarding slot.
+    """
     data, children, child = holding_runtime(tmp_path, monkeypatch, forward_wait_seconds=.3)
     numbers = profiles.EXTRA_PROFILE_QUOTA
     async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
@@ -526,9 +525,10 @@ async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, lo
             streams = [Exchange(runtime.mcp_app, 'GET', '/mcp', stream_headers).start()
                        for _ in range(numbers.get_streams)]
             await until(lambda: all(b': open' in stream.content for stream in streams))
-            room = numbers.forward_slots - numbers.get_streams
+            assert runtime.manager.reply_memory.held == 0, 'a GET stream took a reply ticket'
+            room = numbers.forward_slots - len(streams)
             assert (numbers.forward_slots, numbers.get_streams, room) == (16, 8, 8)
-            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=call(100 + n))) for n in range(room)]
+            held = [asyncio.create_task(client.post('/mcp', headers=headers, json=ping(100 + n))) for n in range(room)]
             await until(lambda: child.waiting == room)
             assert lanes_of(runtime, B)[0].semaphore.locked() and runtime.gate(B).active == numbers.forward_slots
             busy = await client.post('/mcp', headers=headers, json=call(999))
@@ -536,6 +536,8 @@ async def test_get_streams_hold_ordinary_slots_for_their_whole_life(tmp_path, lo
                 'code': -32003, 'message': profile_router.forward_text(numbers.forward_slots, .3)}}
             stream = await client.get('/mcp', headers=headers)
             assert stream.status_code == 429 and stream.headers['retry-after'] == '30'
+            assert stream.json() == {'jsonrpc': '2.0', 'id': None, 'error': {
+                'code': -32003, 'message': profile_router.streams_text(numbers.get_streams)}}
             child.free.set()
             assert [response.status_code for response in await asyncio.gather(*held)] == [200] * room
             await asyncio.wait_for(asyncio.gather(*(exchange.task for exchange in streams)), 5)

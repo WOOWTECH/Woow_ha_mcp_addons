@@ -101,7 +101,7 @@ STACK_BYTES = 16 * 1024 * 1024
 # note, CPU-starvation test): the loop's longest stop while the worker processed A's replies 17-27 ms (contract 6: at
 # most 50 ms), the other profile's tools/call p99 0.38-0.44 s (at most 0.7 s).
 SLICE_SECONDS = 0.005
-BREATH_SECONDS = 0.002
+BREATH_SECONDS = 0.004
 YIELD_SECONDS = 0.010   # how long one checkpoint may wait in all while the loop has callbacks ready to run
 YIELD_STEP_SECONDS = 0.0005
 _breath = threading.local()  # set on the worker thread only: since (its last breath or wake-up), ready, loop_thread
@@ -423,7 +423,7 @@ class ReplyWorker:
     what ended it when that was not stop(). processed and peak count the jobs done and the most in process at once
     (never more than one); handed counts the jobs each profile handed over."""
 
-    def __init__(self):
+    def __init__(self, *, capacity_metrics=None):
         self._lock = threading.Lock()
         self._work = threading.Condition(self._lock)
         self._queues = {}        # profile -> deque of its queued jobs
@@ -437,6 +437,7 @@ class ReplyWorker:
         self.processed = 0
         self.peak = 0
         self.handed = Counter()  # jobs each profile handed over so far (the tests read it; nothing else does yet)
+        self._capacity_metrics = capacity_metrics
 
     @property
     def alive(self):
@@ -543,6 +544,7 @@ class ReplyWorker:
         try:
             while (job := self._next()) is not None:
                 result = error = None
+                capacity_started = time.monotonic_ns() if self._capacity_metrics is not None else None
                 # D1: the cyclic collector held off while the job runs (the module docstring), given back however it
                 # ends; left as it is when something else had it off.
                 held = gc.isenabled()
@@ -554,6 +556,9 @@ class ReplyWorker:
                     error = caught
                     traceback.clear_frames(caught.__traceback__)
                 finally:
+                    if capacity_started is not None:
+                        self._capacity_metrics.on_reply_job(
+                            capacity_started, time.monotonic_ns(), 1 if error is not None else 0)
                     if held:
                         gc.enable()
                 job.function = job.args = None

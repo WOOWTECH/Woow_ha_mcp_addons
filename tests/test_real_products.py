@@ -18,7 +18,8 @@ import xmlrpc.client
 import httpx
 import pytest
 
-from mcp_admin_core.health import protocol_reply
+from mcp_admin_core import features, products
+from mcp_admin_core.health import HEALTH_INTERVAL, protocol_reply
 from mcp_admin_core.products import INSTRUCTIONS, ODOO_HEALTH_PROBE, PRODUCTS, PROBES, ProductStore, TOOLS, child_spec
 from mcp_admin_core.policy import policy_enabled
 
@@ -53,7 +54,7 @@ def connection(product, url):
 
 
 @contextmanager
-def backend(product):
+def backend(product, *, bind_host=None):
     calls = []
     offline = threading.Event()
     nextcloud = nextcloud_fixtures.NextcloudFake()
@@ -128,10 +129,13 @@ def backend(product):
                 raise AssertionError(method)
             self.respond(xmlrpc.client.dumps((result,), methodresponse=True, allow_none=True).encode(), 'text/xml')
 
-    # The Headscale native transport refuses loopback even for a test server.
-    # Bind only the runner's own private address so the real TCP destination
-    # policy stays in force; all other existing product fixtures use loopback.
-    host = socket.gethostbyname(socket.gethostname()) if product == 'headscale' else '127.0.0.1'
+    # The Headscale native transport refuses loopback even for a test server, and so does the child of a switched-on
+    # product (HM-20; HM-19a: Odoo from 0.5.0; asked when the fake starts, as child_spec asks it). Bind only the
+    # runner's own private address then, so the real TCP destination policy stays in force; every other product uses
+    # loopback.
+    host = bind_host if bind_host is not None else (
+        socket.gethostbyname(socket.gethostname()) if product == 'headscale' or products.loopback_refused(product)
+        else '127.0.0.1')
     server = ThreadingHTTPServer((host, 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -152,7 +156,7 @@ async def rpc(client, url, headers, message):
 
 
 @pytest.mark.parametrize('product', PRODUCTS)
-async def test_real_child_fake_backend_and_boundary(tmp_path, product):
+async def test_real_child_fake_backend_and_boundary(tmp_path, product, *, outage_check=None):
     with backend(product) as (url, calls, offline):
         store = ProductStore(tmp_path / 'state', product)
         store.update(connection=connection(product, url), writes_enabled=False, enabled_write_tools=[])  # a new state has every write on (2026-10-15)
@@ -165,7 +169,14 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
         endpoint = f'http://127.0.0.1:{port}/mcp'
         log_path = tmp_path / 'owned-runtime.log'
         runner = Executable(tmp_path, product, [port, admin_port])
-        code = 'from mcp_admin_core import run_product; ' + runner.code('run_product') + 'run_product.main()'
+        # Exercise the actual management guard with the real Odoo child, even on
+        # unprivileged hosts where the separate UID 10001 proof cannot run.
+        guard = ("import runpy; runpy.run_path('packaging/management_launcher.py')['guard'](); "
+                 if product == 'odoo' else '')
+        multi = ("from hm15_odoo_guard_probe import install as install_hm15; "
+                 f"install_hm15(run_product._owned_test_endpoint, {str(tmp_path / 'hm15-owned')!r}); "
+                 if product == 'odoo' else '')
+        code = guard + 'from mcp_admin_core import run_product; ' + runner.code('run_product') + multi + 'run_product.main()'
         runner.release()
         with log_path.open('wb') as log:
             process = subprocess.Popen([str(ROOT / '.venv/bin/python'), '-c', code, product,
@@ -192,6 +203,8 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     else:
                         pytest.fail(f'{product}: initialization timed out ({last}); {log_path.read_text()}')
                     assert result['capabilities'] == {'tools': {}}
+                    if product == 'odoo':
+                        assert (tmp_path / 'hm15-owned').read_text() == 'owned\n'
                     # 0.1.8 (F6): run_product names the add-on and its own release version (HM-17: the release data's,
                     # so a version bump changes data only); only Nextcloud carries (reviewed) instructions.
                     assert result['serverInfo'] == {'name': 'woow-mcp-' + product,
@@ -246,10 +259,14 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product):
                     children_path = Path(f'/proc/{process.pid}/task/{process.pid}/children')
                     child_pids = children_path.read_text().split()
                     assert len(child_pids) == 1
-                    offline.set()
-                    async with asyncio.timeout(22):
-                        while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
-                            await asyncio.sleep(.25)
+                    if outage_check is not None:
+                        await outage_check(client, f'http://127.0.0.1:{port}/health/ready')
+                    else:
+                        offline.set()
+                        # Odoo's guard probe and released multi-profile products require two failed checks.
+                        async with asyncio.timeout(22 + (HEALTH_INTERVAL if product == 'odoo' or features.enabled(product) else 0)):
+                            while (await client.get(f'http://127.0.0.1:{port}/health/ready')).status_code != 503:
+                                await asyncio.sleep(.25)
                     assert process.poll() is None
                     assert children_path.read_text().split() == child_pids, 'backend outage restarted child'
                     pong = await rpc(client, endpoint, headers, {'jsonrpc': '2.0', 'id': 6, 'method': 'ping'})

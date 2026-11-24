@@ -130,7 +130,8 @@ GATEWAY_BUSY = -32003
 BUSY_RETRY_AFTER = 5
 STREAM_RETRY_AFTER = 30
 # HM-31 (contract 2.2 point 4, 2.4, 5; PaaS #155): the request state's name for the request's request_budget.Reservation
-# (AnyMethod opens one for every MCP request of make_apps' body_budget and closes it when the request ends: its answer
+# (AnyMethod opens one for ordinary MCP requests of make_apps' body_budget; a profile's admission gate may hand in
+# one it already opened. Its owner closes it when the request ends: its answer
 # sent in full, an event stream's last byte included, or its client gone). serve() charges it once the token is checked:
 # the body as read (a declared Content-Length before a byte is read) and as forwarded to the child (HM-08 review MF-1,
 # S-1). It replaces HM-08's FORWARDED_BODY: one budget, switched on or off.
@@ -147,6 +148,31 @@ PENDING_REPLIES = "pending_replies"
 # server took a byte of it); the profile's gate counts them as its answers not received yet from then on, and against
 # what its app hands the server later. A tools/call that waited for that slot is then refused by the check above.
 PENDING_CHARGE = "pending_charge"
+# A switched-on Odoo profile's shared reply-memory ticket, taken only after a
+# forwarding slot and immediately before the child request is built.
+REPLY_RESERVE = "reply_reserve"
+UNTICKETED_CONTROL_RESPONSE = 64 * 1024
+
+
+# 0.5.1 (F1; contract 2.4, 5): the request state's name for a switched-on Odoo GET stream's own bound (profile_router puts
+# it there; a GET stream takes no reply ticket). The value is (event_bytes, exceeded): the most a child's event may be
+# before the gateway ends the stream, and the gate's call to log that (it names the cause, never content).
+STREAM_GUARD = "stream_guard"
+
+
+class StreamLimit(Exception):
+    """Raised by a switched-on profile's gate through the app's send once a GET stream held more than its byte bound:
+    the gate has already ended the response and catches this itself, so it never reaches the server."""
+
+
+def reply_may_hold_large_child_output(http_method, message):
+    """Only an identified POST may hold a large child reply (it takes a reply ticket).
+
+    0.5.1 (F1): a GET event stream takes none: it relays no tools/call reply and holds its own small bound instead
+    (STREAM_GUARD). Notifications and DELETE have no relayed body; health never enters serve.
+    """
+    return http_method == "POST" and isinstance(message, dict) and "id" in message \
+        and message.get("method") not in ("initialize", "ping")
 # HM-14 (contract 2.4, 2.5; the PaaS gateway's codes, texts and timings, woow-mcp-server 69ac425 proxy.py, mcp_access.py,
 # gateway_pool.py), for a switched-on product only (make_apps slot_busy given): a child whose connection broke while it
 # handled a request (-32004) and a token rotated or revoked after an answer began to go out (-32005).
@@ -613,7 +639,8 @@ class AnyMethod:
     """An ASGI endpoint, so Starlette hands every method to the handler: the Bearer check comes first, then 405.
 
     HM-31: budget (a request_budget.Share), when given, opens the request's reservation (the request's state,
-    BODY_RESERVATION) and closes it when the request ends, however it ends: nothing it held stays charged."""
+    BODY_RESERVATION) and closes it when the request ends. An admission gate can pass its existing reservation;
+    that gate owns its close after the full ASGI send or cancellation. Nothing it held stays charged."""
     def __init__(self, handler, budget=None):
         self.app = request_response(handler)
         self.budget = budget
@@ -621,13 +648,25 @@ class AnyMethod:
     async def __call__(self, scope, receive, send):
         if self.budget is None:
             return await self.app(scope, receive, send)
-        reservation = self.budget.open()
+        # The profile admission gate may have read a small POST before handing
+        # a notification here. Reuse its charge rather than opening a second
+        # reservation for the same body. The gate owns that reservation until
+        # the outer ASGI send/cancellation finishes.
+        reservation = scope.get("state", {}).get(BODY_RESERVATION)
+        borrowed = reservation is not None
+        if borrowed:
+            if (not isinstance(reservation, request_budget.Reservation)
+                    or reservation.share is not self.budget or reservation.closed):
+                raise RuntimeError("invalid inherited body reservation")
+        else:
+            reservation = self.budget.open()
         # A copy of the request's state, so nothing is written into the server's own dict.
         scope = {**scope, "state": {**scope.get("state", {}), BODY_RESERVATION: reservation}}
         try:
             await self.app(scope, receive, send)
         finally:
-            reservation.close()
+            if not borrowed:
+                reservation.close()
 
 
 async def body(request: Request):
@@ -652,7 +691,19 @@ async def body(request: Request):
     return bytes(content)
 
 
-async def json_body(request, guard=None):
+def _parse_json_body(raw, guard, escaped_only=False):
+    if guard is not None:
+        guard.check_structure(raw)
+    value = strict_json(raw)
+    # A lone surrogate can only enter through a JSON \u escape: raw unescaped
+    # UTF-8 surrogates are rejected by the guard. Avoid serializing the entire
+    # object graph when no escape can have created one.
+    if not escaped_only or b"\\u" in raw:
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+    return value
+
+
+async def json_body(request, guard=None, parse_slot=None):
     """HM-31: guard (an McpRequestLimits; the MCP path gives STRUCTURE_LIMITS) checks the body's structure and encoding
     before it is parsed: request_limits.too_complex (a RequestLimitError) when it is too deep, has too many elements or
     is not UTF-8. The management API gives none."""
@@ -660,12 +711,24 @@ async def json_body(request, guard=None):
         raise BadRequest(415)
     try:
         raw = await body(request)
-        if guard is not None:
-            guard.check_structure(raw)
-        value = strict_json(raw)
-        # A lone surrogate (e.g. an id "\ud800") parses but cannot be encoded back into a reply.
-        json.dumps(value, ensure_ascii=False).encode("utf-8")
-        return value
+        if parse_slot is None:
+            return _parse_json_body(raw, guard)
+        # One parser per profile bounds the live object graph and keeps other
+        # profiles' event loops responsive during object-heavy JSON validation.
+        async with parse_slot:
+            worker = asyncio.create_task(anyio.to_thread.run_sync(_parse_json_body, raw, guard, True))
+            try:
+                return await asyncio.shield(worker)
+            finally:
+                # A revoked token or disconnected caller must not release the
+                # profile slot while its thread is still parsing the body.
+                joined = asyncio.gather(worker, return_exceptions=True)
+                with anyio.CancelScope(shield=True):
+                    while not joined.done():
+                        try:
+                            await asyncio.shield(joined)
+                        except asyncio.CancelledError:
+                            pass
     except (ValueError, RecursionError):  # UnicodeEncodeError is a ValueError
         raise BadRequest() from None
 
@@ -1097,6 +1160,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     configuration = configuration or ConfigurationState(store)
     operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(FORWARD_SLOTS if forward_slots is None else forward_slots)
+    ingress_parse_slot = asyncio.Semaphore(1) if slot_busy is not None else None
     # HM-14: a switched-on profile's two lanes (the ordinary slots and the reserved ones); switched off: slots, as before
     lanes = None if slot_busy is None else {
         ORDINARY_LANE: Lane(ORDINARY_LANE, FORWARD_SLOTS if forward_slots is None else forward_slots),
@@ -1733,7 +1797,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except ConfigError:
             return False
 
-    async def chunks(owner, lease, seconds=None):
+    async def chunks(owner, lease, seconds=None, max_bytes=MAX_RESPONSE):
         """Bound total bytes/time (seconds, default STREAM_SECONDS); poll revocation even while upstream is idle.
 
         HM-30 D3 (contract 6), only for a switched-on product (reply_worker given): each piece is read under the lease
@@ -1754,7 +1818,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     except StopAsyncIteration:
                         return
                     total += len(chunk)
-                    if total > MAX_RESPONSE:
+                    if total > max_bytes:
                         owner.overflowed = True
                         return
                     yield chunk
@@ -1780,7 +1844,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         except Exception:
             pass
 
-    async def initialize_reply(owner, lease, is_sse, ident):
+    async def initialize_reply(owner, lease, is_sse, ident, max_bytes=MAX_RESPONSE):
         """Read the child's reply to initialize: (outcome, message, SSE frame lines other than data).
 
         outcome is "ok", "missing" or "invalid". Stops at the JSON-RPC response with the request's id
@@ -1796,7 +1860,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             return "ok" if one_reply(value) else "invalid"
 
         pending = bytearray()
-        reader = chunks(owner, lease)
+        reader = chunks(owner, lease, max_bytes=max_bytes)
         try:
             async for chunk in reader:
                 start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
@@ -1837,7 +1901,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         outcome = reply(value)
         return ("ok", value, None) if outcome == "ok" else ("invalid" if outcome else "missing", None, None)
 
-    async def stream(owner, lease, request=None, seconds=None):
+    async def stream(owner, lease, request=None, seconds=None, guard=None):
         """Relay a child's SSE 200 (the only stream the caller hands over). request is the (id, method) of the POST
         this stream answers, None for a GET stream; seconds bounds it (chunks)."""
         # Every event is rebuilt from the lines the gateway understood (sse_frame), so nothing it did not filter
@@ -1847,6 +1911,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             start = max(0, len(pending) - 3)  # only new bytes, plus a boundary split across chunks
             pending.extend(chunk)
             while match := EVENT_BOUNDARY.search(pending, start):
+                if guard is not None and match.start() > guard[0]:
+                    guard[1]("a child event")  # a GET stream relays notifications: a larger event ends the stream
+                    return
                 if reply_worker is not None and match.start() > WORKER_FRAME_BYTES:
                     # HM-30 D1: a large event is framed, processed and built on the reply worker, in this profile's
                     # turn (relayed_frame: the steps below, the same bytes); the state for a POST stream's reply is read
@@ -1905,6 +1972,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     # after it adds no -32005; when the token changed as the server took it, Ending sees the event)
                     owner.answered = True
                     return  # a duplicate reply or anything after it is never relayed
+            if guard is not None and len(pending) > guard[0]:
+                guard[1]("a child event")  # 0.5.1 (F1): an event still unfinished past the bound ends the stream too
+                return
         # A truncated SSE event is intentionally not dispatched.
         if slot_busy is not None and owner.interrupted is not None:
             # HM-14 (contract 2.5): the child's connection broke after the stream started. A POST's reply that did not
@@ -2135,7 +2205,7 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         raise BadRequest(408) from None
                 else:
                     try:
-                        message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS))
+                        message = await lease.run(lambda: json_body(request, STRUCTURE_LIMITS, ingress_parse_slot))
                     except RequestLimitError as error:
                         return refused_body(error)  # HM-31: the structure guard (too deep, too many elements, not UTF-8)
                     except BadRequest as error:
@@ -2221,6 +2291,12 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             except Denied:
                 raise BadRequest(403) from None
         if listing is not None:
+            if method == "tools/list":
+                reserve_reply = getattr(request.state, REPLY_RESERVE, None)
+                if reserve_reply is not None:
+                    answer = reserve_reply(message)
+                    if answer is not None:
+                        return answer
             answer = without_child()
             if answer is not None:
                 return answer
@@ -2293,6 +2369,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     budget_share.warn("bytes", request_budget.budget_note(exceeded))
                     # the slot is released below; the child never gets the request
                     return busy_reply(message, request_budget.budget_text(exceeded))
+            reserve_reply = getattr(request.state, REPLY_RESERVE, None)
+            if reserve_reply is not None and reply_may_hold_large_child_output(request.method, message):
+                answer = reserve_reply(message)
+                if answer is not None:
+                    return answer
             waited = time.monotonic() + CHILD_WAIT_SECONDS
             call_seconds = CALL_SECONDS if method == "tools/call" else None  # 0.2.2: see CALL_SECONDS
             async with asyncio.timeout(call_seconds + 5 if call_seconds else 35):
@@ -2345,6 +2426,26 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 raise BadRequest(502)  # the child refused the gateway's own token or Host: not a client credential issue
             media = upstream.headers.get("content-type", "").split(";")[0].strip().lower()
             is_sse = media == "text/event-stream"
+            # A ping has no reply ticket. The real Odoo child frames even its
+            # small ping as SSE: take only its matching reply under the same
+            # fixed control limit as a JSON ping, then close the child stream.
+            if reserve_reply is not None and method == "ping" and is_sse and upstream.status_code == 200:
+                outcome, value, _ = await initialize_reply(
+                    owner, lease, True, message.get("id"), UNTICKETED_CONTROL_RESPONSE)
+                if not still_authorized(state.token):
+                    raise refused()
+                if lanes is not None and owner.interrupted is not None:
+                    return await interrupted_answer(owner, request, message, owner.interrupted)
+                if outcome != "ok":
+                    raise BadRequest(502)
+                value = gateway_reply(value, "ping")
+                if "error" in value:
+                    value = redact.redact_secrets(value, masks(store.load()))
+                response_headers["content-type"] = "text/event-stream"
+                ping_body = b"data: " + json.dumps(value, separators=(",", ":")).encode() + b"\n\n"
+                if len(ping_body) > UNTICKETED_CONTROL_RESPONSE:
+                    raise BadRequest(502)
+                return Response(ping_body, status_code=200, headers=response_headers)
             if is_sse:  # the gateway re-frames events itself: never forward the child's parameters (charset)
                 response_headers["content-type"] = "text/event-stream"
             request_id = request.method == "POST" and isinstance(message, dict) and "id" in message
@@ -2368,7 +2469,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                         return backend_unavailable(message.get("id"))  # the child sent no reply
                     raise BadRequest(502)
             if method == "initialize" and upstream.status_code == 200:
-                outcome, value, frame = await initialize_reply(owner, lease, is_sse, message.get("id"))
+                outcome, value, frame = await initialize_reply(
+                    owner, lease, is_sse, message.get("id"),
+                    UNTICKETED_CONTROL_RESPONSE if reserve_reply is not None else MAX_RESPONSE)
                 if not still_authorized(state.token):
                     raise refused()
                 if lanes is not None and owner.interrupted is not None:
@@ -2423,7 +2526,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # Every JSON reply is parsed, must answer this request, is filtered and re-serialized: a child
                 # cannot hand a client an unfiltered list under another request's id or in a batch.
                 result = bytearray()
-                async for chunk in chunks(owner, lease, call_seconds):
+                async for chunk in chunks(owner, lease, call_seconds,
+                                          UNTICKETED_CONTROL_RESPONSE if reserve_reply is not None and method == "ping"
+                                          else MAX_RESPONSE):
                     result.extend(chunk)
                 if not still_authorized(state.token):
                     raise refused()
@@ -2458,7 +2563,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
             if request_id:
                 owner.reply = (message.get("id"),)  # HM-14: the id an Ending's -32005 event answers
             response = OwnedStreamingResponse(stream(owner, lease, (message.get("id"), method) if request_id else None,
-                                                     call_seconds),
+                                                     call_seconds,
+                                                     None if request_id else getattr(request.state, STREAM_GUARD, None)),
                                               owner=owner, status_code=200, headers=response_headers)
             # This answer hands any session id it carries over to the client, so the end of its stream must never
             # DELETE that session (an initialize never streams today: it is answered or refused above).

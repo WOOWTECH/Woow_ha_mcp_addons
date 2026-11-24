@@ -121,7 +121,7 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
   - 先發了緊急關閉版（沒開通的版本）再重新開通時，還原後還沒核對的帳號（含預設帳號）照樣要先核對。緊急關閉期間重新產生過預設帳號的權杖時，
     同「沒開通、但磁碟上有帳號資料時的還原」那一點：核對之前改 Odoo 網址、資料庫或使用者的存檔會被拒絕（409，什麼都沒存）。
   - 隔離區的帳號資料超過 64 筆時，面板只列前 64 筆並說還有幾筆；刪掉上面的之後，其餘的會依序出現。
-- **涵蓋範圍**：這個保護只涵蓋「各產品第一個含多帳號還原守門（HM-13）的版本以後做的備份」（Odoo 預計是 0.5.0，以發版時為準）。還原時
+- **涵蓋範圍**：這個保護只涵蓋「各產品第一個含多帳號還原守門（HM-13）的版本以後做的備份」（Odoo 預計是 0.5.1，以發版時為準）。還原時
   Supervisor 會換回備份當時的映像，看不看得出曾經還原要看那一版：
   - 0.4.13 以前（Headscale 0.4.18 以前）：不建還原標記，之後再升級時看不出曾經還原。
   - 0.4.14（Headscale 0.4.19）起、還沒有守門的版本：還原時建標記、一直留著，之後第一次以含守門的版本啟動時才提示（這種備份沒有帳號資料：
@@ -226,15 +226,17 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 
 ### 緊急發版範本（關閉版）
 
-出事時照這份做，只填產品與版號。關閉版出來之前，每台都可以立即做 (c)。**這份範本還沒經負責人預先核准**：HM-19a（Odoo 首發的升版 PR）照它核對一次、
-交負責人核准，之後才算「預先核准」（多帳號計畫 §7.4）。
+出事時照這份做，只填產品與版號。關閉版出來之前，每台都可以立即做 (c)。**這份範本還沒經負責人預先核准**：HM-19a（Odoo 首發的升版 PR）照它核對過一次
+（2026-11-19，結果在 [0.5.0 發佈紀錄](release-decision-odoo-0.5.0.md)「緊急發版範本」一節；改了第 2 點釘選測試那一項），交負責人核准，之後才算「預先核准」
+（多帳號計畫 §7.4）。
 
 1. 從 `claude-delivery` 開 `release/<名稱>` 分支（`release.yaml` 只在 `release/*` 分支觸發；新版號要比目前發行的大，商店不收較低版號）。
 2. 改的檔：
    - `packages/mcp-admin-core/mcp_admin_core/features.py`：把產品移出 `MULTI_PROFILE_PRODUCTS`；或 revert 出事的那一片。
-   - 釘住開通集合的測試照新的集合改：目前是 `tests/test_upgrade_zero_rewrite.py` 的 `test_multi_profile_is_switched_off_for_every_product`
-     （斷言 `MULTI_PROFILE_PRODUCTS` 是空集合；開通片會改它，關閉版要改回）。開通片為了開通改過的其他測試也照關閉後的行為改回；HM-19a 核對
-     範本時把這些測試列全。
+   - 釘住開通集合的測試照新的集合改：`tests/test_upgrade_zero_rewrite.py` 的 `SWITCHED_ON`（`test_a_product_is_switched_on_only_by_its_release`
+     斷言 `MULTI_PROFILE_PRODUCTS` 正好等於它；Odoo 0.5.1 起是 `{'odoo'}`），和 `features.py` 一起把產品拿掉。HM-19a 為開通改過的其他測試都改成自己
+     指定開關模式（`tests/switch_modes.py` 的 `switched_off`，或子程序前置碼明說開關），開關關了照樣測同一件事，關閉版不用改回；逐檔清單在
+     `docs/provenance/ha-multiprofile-HM-19a-20261119.md` 第 4 節。
    - 版號資料 7 處照 [release](release.md)「升版時要改的版號資料」（`docs/provenance/runtime-patches.json` 的 `features.py`、`__init__.py` 摘要一起更新）。
    - `addons/<產品>/CHANGELOG.md`：寫明關掉多帳號；額外帳號變休眠、權杖已撤銷、資料保留；預設帳號照常；密鑰網址的 Origin enforce 失效（任何來源都放行）；
      重新開通後要先核對才能重發。根目錄 `CHANGELOG.md` 照前例一段。

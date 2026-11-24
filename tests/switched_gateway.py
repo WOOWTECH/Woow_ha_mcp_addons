@@ -45,6 +45,11 @@ def call(ident):
     return {'jsonrpc': '2.0', 'id': ident, 'method': 'tools/call', 'params': {'name': TOOL, 'arguments': ARGUMENTS}}
 
 
+def ping(ident):
+    """A bounded child reply: it occupies an ordinary slot without a large-reply ticket."""
+    return {'jsonrpc': '2.0', 'id': ident, 'method': 'ping'}
+
+
 INITIALIZED = {'jsonrpc': '2.0', 'method': 'notifications/initialized'}
 
 
@@ -113,6 +118,8 @@ class GatewayChild(ProfileChild):
         self.free = asyncio.Event()
         self.hold_calls = self.hold_initialized = self.streaming = False
         self.waiting = 0
+        self.hold_ping = False
+        self.get_events = ()      # byte strings a GET stream sends after its first comment, before it waits for free
         self.fail = None          # an httpx error class: a tools/call breaks before any header
         self.broken = None        # 'json' or 'sse': a tools/call's answer breaks after its first bytes
         self.on_break = None
@@ -155,10 +162,12 @@ class GatewayChild(ProfileChild):
         self.seen.append((request.method, method, message.get('id')))
         if request.method == 'GET':
             self.requests.append(request)
-            free = self.free
+            free, extra = self.free, tuple(self.get_events)
 
             async def events():
                 yield b': open\n\n'
+                for event in extra:
+                    yield event
                 await free.wait()
             if self.broken == 'sse' or self.fail is not None:
                 if self.fail is not None:
@@ -172,6 +181,9 @@ class GatewayChild(ProfileChild):
             self.requests.append(request)
             await self.hold()
             return httpx.Response(202)
+        if method == 'ping' and self.hold_ping:
+            await self.hold()
+            return await super().__call__(request)
         if method == 'tools/call' and message['params']['name'] != probe_name(self.product):
             ident = message['id']
             if self.reply is not None:
@@ -207,6 +219,10 @@ class GatewayChild(ProfileChild):
     def client_calls(self):
         """The ids of the client tools/calls this child got."""
         return [ident for method, rpc, ident in self.seen if rpc == 'tools/call']
+
+    def client_pings(self):
+        """The ids of bounded control requests the child got."""
+        return [ident for method, rpc, ident in self.seen if rpc == 'ping']
 
 
 class Exchange:

@@ -32,6 +32,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from multi_profile_runtime import Children, create_profile, ids, multi_profile_runtime, stored
 from mcp_admin_core import owner_defaults, profiles, restore_detect
 from mcp_admin_core.config import ConfigError
@@ -212,7 +213,7 @@ def monitor_of(manager, profile_id):
 
 # ---- switched off: nothing of this exists (contract 1.2) ----
 
-async def test_switched_off_the_profile_paths_are_unknown_and_no_header_is_needed(tmp_path, log_scan):
+async def test_switched_off_the_profile_paths_are_unknown_and_no_header_is_needed(tmp_path, log_scan, switched_off):
     """A product not switched on keeps today's management API: /api/profiles is an unknown operation (404 with an
     empty body after the role check), PATCH and DELETE are Starlette's 405 before anything else, a profile-scoped
     request needs no X-MCP-Profile and one it carries changes nothing (its bytes are the same), the bootstrap has no
@@ -292,20 +293,21 @@ async def test_the_list_names_every_profile_with_its_state_and_no_secret(tmp_pat
         assert again == (body, response.headers['etag'])
 
 
-async def test_a_profile_over_the_memory_limit_is_listed_with_what_it_needs(tmp_path, log_scan, monkeypatch):
-    """PaaS test_memory_disabled_profile_is_listed_with_its_reason_and_logged_when_not_started: with a cgroup memory
-    limit of 512 MiB, Odoo runs one additional profile (PaaS formula); the second is disabled memory_capacity with
-    required_memory_mib (256 + 3 x 100), blocked with blocked_reason memory_capacity."""
+async def test_odoo_below_joint_memory_floor_lists_extra_profiles_as_blocked(tmp_path, log_scan, monkeypatch):
+    """At 512 MiB Odoo's joint body/reply plan cannot fit. The default stays available and both extras are listed
+    as memory_capacity, preserving their identities and the existing blocked response shape."""
     monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: 512)
     data = setup(tmp_path, extras=(B, C))
     async with multi_profile_runtime(PRODUCT, data, children=children_of(data, (B, C))) as runtime:
         await settle(runtime, 'configured')
         watch(log_scan, data)
         rows = (await Panel(runtime, await csrf_of(runtime)).list())[0]['profiles']
-    assert rows[1]['disabled_reason'] is None and rows[1]['status'] == 'running'
-    assert rows[2] == {'id': C, 'label': LABELS[C], 'port': 18001, 'is_default': False,
-                       'disabled_reason': 'memory_capacity', 'required_memory_mib': 556, 'status': 'blocked',
-                       'blocked_reason': 'memory_capacity'}
+    assert rows[0]['status'] == 'running'
+    for row, profile_id, port in zip(rows[1:], (B, C), (18000, 18001)):
+        assert row['id'] == profile_id and row['port'] == port
+        assert row['disabled_reason'] == row['blocked_reason'] == 'memory_capacity'
+        assert row['status'] == 'blocked'
+        assert row['required_memory_mib'] == 256 + (2 if profile_id == B else 3) * 100
 
 
 # ---- the echo and the global settings (contract 3.1, 3.4; DQ-13; FM-08, FM-12) ----
@@ -620,6 +622,43 @@ async def test_no_profile_is_created_while_only_the_default_profile_is_served(tm
         response = await panel.create(NEW_LABELS[0])
         assert (response.status_code, response.json()['detail']) == (409, {'code': 'profile_limit_reached', 'limit': 0})
         assert tree_of(data) == before and not (data / '.profiles.json.operations.json').exists()
+
+
+@pytest.mark.parametrize('limit,available,activated', [
+    (2048, 4096, False), (3072, 4096, True), (None, None, False),
+])
+async def test_odoo_memory_plan_fails_closed_without_revoking_default_or_extra_tokens(
+        tmp_path, log_scan, monkeypatch, limit, available, activated):
+    from mcp_admin_core import request_budget
+    data = setup(tmp_path, extras=(B,))
+    before_index = index_bytes(data)
+    before_default = stored(data)
+    before_extra = stored(profiles.Layout(data).profile(B))
+    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: limit)
+    monkeypatch.setattr(profiles, 'available_memory_mib', lambda: available)
+    async with multi_profile_runtime(PRODUCT, data, children=children_of(data)) as runtime:
+        watch(log_scan, data)
+        manager = runtime.manager
+        assert manager.odoo_memory_enabled is activated
+        if activated:
+            assert manager.capacity.limit == 5
+            assert manager.reply_memory is not None
+            assert manager.budget.limits.small_minimum == request_budget.SMALL_REQUEST_BYTES
+        else:
+            assert manager.capacity.limit == 0 and manager.reply_memory is None
+            assert manager.budget.limits.small_minimum == 0
+            assert manager.get(B).disabled['disabled_reason'] == 'memory_capacity'
+            panel = Panel(runtime, await csrf_of(runtime))
+            denied = await panel.create(NEW_LABELS[0])
+            assert denied.status_code == 409
+            assert denied.json()['detail']['code'] == 'profile_memory_insufficient'
+            assert denied.json()['detail']['limit'] == 0
+    # A pinned child may create its own child/ directory while starting; the
+    # capacity decision must leave identity and index bytes intact.
+    assert index_bytes(data) == before_index
+    assert stored(data) == before_default
+    assert stored(profiles.Layout(data).profile(B)) == before_extra
+    assert not profiles.Layout(data).profile(C).exists()
 
 
 # ---- write protection (contract 3.5; DQ-15; §8.8 #34; FM-06, FM-07, FM-24) ----

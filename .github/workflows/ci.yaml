@@ -101,8 +101,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ matrix.app }}:${{ matrix.app == 'headscale' && '0.4.19' || '0.4.14' }}
-          build-args: BUILD_VERSION=${{ matrix.app == 'headscale' && '0.4.19' || '0.4.14' }}
+          tags: local/mcp-${{ matrix.app }}:${{ matrix.app == 'odoo' && '0.5.1' || matrix.app == 'headscale' && '0.4.19' || '0.4.14' }}
+          build-args: BUILD_VERSION=${{ matrix.app == 'odoo' && '0.5.1' || matrix.app == 'headscale' && '0.4.19' || '0.4.14' }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python3 packaging/install_scanners.py "$RUNNER_TEMP/scanners"

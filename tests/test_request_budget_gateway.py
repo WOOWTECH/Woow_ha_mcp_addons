@@ -26,6 +26,7 @@ import httpx
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from multi_profile_runtime import Children, multi_profile_runtime
 from mcp_admin_core import gateway, profiles
 from mcp_admin_core.products import ProductStore, TOOLS
@@ -463,11 +464,18 @@ async def test_a_client_leaving_while_its_refused_body_is_drained_is_no_error(tm
 
 async def test_the_budget_is_made_with_the_apps(tmp_path, monkeypatch):
     """PaaS round 2 P2-C (the budget made at startup, not at the first request): make_apps derives a switched-off
-    add-on's budget when it is called (one account of the product); a switched-on ProfileManager derives one budget for
-    the add-on when it is made (every profile the product may run). No environment variable is read (contract 9)."""
+    add-on's budget when it is called (one account of the product); a switched-on Odoo ProfileManager derives its
+    joint request/reply budget for all six possible profiles when it is made. No environment variable is read."""
     from mcp_admin_core import profile_runtime
 
     made = limits(monkeypatch, 16, 16)
+    ceiling_reads = []
+
+    def ceiling():
+        ceiling_reads.append(True)
+        return 3072, 'cgroup'
+
+    monkeypatch.setattr(rb(), 'memory_ceiling', ceiling)
     configure(tmp_path / 'odoo', 'odoo')
     store = ProductStore(tmp_path / 'odoo', 'odoo')
     try:
@@ -475,7 +483,10 @@ async def test_the_budget_is_made_with_the_apps(tmp_path, monkeypatch):
             _, app = gateway.make_apps(store, TOOLS['odoo'], to_child)
         assert made == [('odoo', False)] and app.state.body_budget.budget.used() == 0
         manager = profile_runtime.ProfileManager(store, 'odoo', TOOLS['odoo'], lambda *a, **k: None)
-        assert made[-1] == ('odoo', True) and manager.budget.limits.total == 16 * MiB
+        assert made == [('odoo', False)] and len(ceiling_reads) == 1
+        assert manager.odoo_memory_enabled and manager.reply_memory is not None
+        assert manager.budget.limits.total == rb().odoo_switched_total_bytes(3072, 6, 'cgroup')
+        assert manager.budget.limits.small_minimum == 64 * 1024
     finally:
         store.close()
 
@@ -519,7 +530,8 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
 
 
 @pytest.mark.parametrize('product', golden.PRODUCTS)
-async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product):
+async def test_every_products_runtime_reads_under_the_budget_and_the_guard(tmp_path, log_scan, monkeypatch, product,
+                                                                           switched_off):
     """Not gated (contract 1.2; PaaS #155's apps/<product>/tests/test_request_structure_guard.py): every product's
     production runtime (run_product; apps/n8n/run.py for n8n), switched off, serves its MCP listener with the add-on's
     own budget (one account of the product's child estimate; here a 2 GiB cgroup ceiling, the default profile's share
@@ -640,7 +652,7 @@ async def test_a_declared_length_beside_a_chunked_framing_does_not_escape_the_id
 
 
 async def test_the_production_listener_charges_and_watches_a_chunked_body_that_states_a_small_length(
-        tmp_path, log_scan, monkeypatch):
+        tmp_path, log_scan, monkeypatch, switched_off):
     """Review MF-1 over a real socket: the add-on's own uvicorn 0.38.0 and h11 0.16.0 (run_product's listener). A POST
     that states Content-Length: 10 and sends its body chunked is charged as its chunks arrive (here 1 MiB) and, once it
     stalls, gets the idle 408 (0.3 s here) with Connection: close, not the whole-read limit's (5 s here); the child
@@ -797,7 +809,13 @@ def extra_child(data, profile_id=B, port=18000):
 
 @asynccontextmanager
 async def switched(tmp_path, monkeypatch, log_scan, total_mib, per_mib):
+    # These cases exercise exact per-profile/global quotas with small test
+    # budgets. Odoo's switched-on startup now derives a joint request/reply
+    # limit directly, so pin that source as well as the generic off-mode one.
     limits(monkeypatch, total_mib, per_mib)
+    monkeypatch.setattr(rb(), 'memory_ceiling', lambda: (3072, 'cgroup'))
+    monkeypatch.setattr(rb(), 'odoo_switched_limits', lambda ceiling, accounts, source: rb().BudgetLimits(
+        total=int(total_mib * MiB), per_profile=int(per_mib * MiB), small_minimum=64 * 1024))
     data = setup(tmp_path)
     children = Children()
     children.add(3000, GatewayChild('default', PRODUCT, data))

@@ -16,6 +16,7 @@ from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS, child_spec
 from test_real_products import connection, rpc
 from test_expansion_policy import call
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 import asyncio
 from pathlib import Path
 import subprocess
@@ -204,7 +205,7 @@ def fake_odoo():
         server.shutdown(); server.server_close(); thread.join(timeout=5)
 
 
-async def test_genuine_child_reports_a_missing_id_only_read_as_not_found(tmp_path):
+async def test_genuine_child_reports_a_missing_id_only_read_as_not_found(tmp_path, switched_off):
     with fake_odoo() as (url, events, failures, state):
         store = ProductStore(tmp_path / 'state', 'odoo')
         store.update(connection=connection('odoo', url))

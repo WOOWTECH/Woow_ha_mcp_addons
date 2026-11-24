@@ -11,6 +11,7 @@ import threading
 import xmlrpc.client
 
 import httpx
+import pytest
 
 from owned_runtime import Endpoint
 from mcp_admin_core.gateway import make_apps
@@ -21,6 +22,12 @@ from test_expansion_policy import call
 from test_expansion_runtime import payload
 from test_real_products import connection, rpc
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
+
+# HM-19a: written for the switched-off add-on (tests/switch_modes.py). A real child here talks to a loopback fake
+# backend, which the child of a switched-on product refuses (HM-20: WOOW_MCP_DENY_LOOPBACK=1, tested both ways in
+# tests/test_backend_loopback.py); the child's behavior under test is the same in both modes.
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 FIELDS = {'name': 'char', 'active': 'boolean'}
 # 0.2.0: the pinned handler as published (no B2 scope fills these in): the one check this fake Odoo answers.

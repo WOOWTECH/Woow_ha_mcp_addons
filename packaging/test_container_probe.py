@@ -65,6 +65,16 @@ class HeadscaleBackendTests(unittest.TestCase):
         probe.OFFLINE.set()
         self.assertEqual(self.client.get(self.url, headers={'Authorization': 'Bearer DUMMY'}).status_code, 503)
 
+    def test_switched_odoo_outage_observes_actual_http_failure(self):
+        probe.container_profiles.ODOO_OUTAGE_CHECKS.clear()
+        self.addCleanup(probe.container_profiles.ODOO_OUTAGE_CHECKS.clear)
+        probe.OFFLINE.set()
+        with patch.object(probe, 'APP', 'odoo'), switched('odoo'):
+            response = self.client.post(self.url.replace('/api/v1/health', '/xmlrpc/2/common'), content=b'')
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(len(probe.container_profiles.ODOO_OUTAGE_CHECKS), 1)
+        self.assertIsInstance(probe.container_profiles.ODOO_OUTAGE_CHECKS[0], float)
+
     def test_headscale_requires_private_non_loopback_bind_address(self):
         with patch.object(probe.socket, 'gethostname', return_value='candidate'), \
              patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
@@ -126,10 +136,12 @@ class SwitchedOnMockBackendTests(unittest.TestCase):
 # parts (review MF-3).
 BASE = 'd922d3c'
 # The switched-on parts beyond BASE's, by kind ('branch': an `if ... features.enabled(...)` statement, which must hand
-# over to container_profiles; 'container_profiles' and 'features': the two imports): none. BASE has HM-13b's (the
+# over to container_profiles; 'container_profiles' and 'features': the two imports). BASE has HM-13b's (the
 # features import, check_restored_start's branch) and HM-16's (the import of container_profiles and three branches
 # handing over to it: mock_bind_host, fixture_snapshot, run). A slice that adds one for a switched-on product lists it.
-ADDED_BEYOND_BASE = ()
+# Release 44971234030: Odoo's switched-on two-failure outage contract.
+# Both new branches delegate to container_profiles; the legacy path is unchanged.
+ADDED_BEYOND_BASE = ('branch', 'branch')
 
 
 def is_switched_on_branch(node):
@@ -218,8 +230,8 @@ class SingleProfilePathTests(unittest.TestCase):
         run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
                    if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
         branches = [node for node in ast.walk(run) if is_switched_on_branch(node)]
-        self.assertEqual(len(branches), 1)
-        branch = branches[0]
+        self.assertEqual(len(branches), 2)
+        branch = branches[-1]
         self.assertEqual(ast.unparse(branch.test), 'features.enabled(APP)')
         self.assertEqual([ast.unparse(statement) for statement in branch.body],
                          ['await container_profiles.stage(sys.modules[__name__], client)'])

@@ -35,6 +35,7 @@ import pytest
 
 from admin_write_headers import reviewed_headers
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch these tests pin)
 from mcp_admin_core import owner_defaults
 from mcp_admin_core.backend_edit import FIELDS
 from mcp_admin_core.capabilities import ManagementOptions
@@ -46,7 +47,10 @@ from test_single_profile_golden import (ADMIN, CONNECTIONS, GENUINE_CLIENT, INGR
                                         NoProcessSupervisor, answer, compact, configure, production_runtime,
                                         secrets_of, settle, stored)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # every new test runs under the HM-01 log scan
+# HM-19a: HM-01 pins the add-on with every product switched off, whatever the repository switches on (Odoo from 0.5.0;
+# tests/switch_modes.py): what every product that stays off serves, and what an emergency switch-off release serves.
+# tests/test_router_passthrough.py runs these tests again switched on.
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # every new test runs under the HM-01 log scan
 FIXTURES = Path(__file__).parent / 'fixtures/owner_defaults'
 # ui.SecurityHeaders: on every management answer (bb48449).
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; "

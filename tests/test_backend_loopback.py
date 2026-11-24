@@ -877,7 +877,8 @@ async def test_every_profile_s_real_child_refuses_its_loopback_fake_backend_end_
     monkeypatch.setattr(health_module, 'HEALTH_INTERVAL', 0.5)  # every profile's first health check within a second
     extra, label = 'b' * 24, 'Loopback fake B'
     data = tmp_path / 'data'
-    with backend('odoo') as (default_url, default_calls, _), backend('odoo') as (extra_url, extra_calls, _):
+    with backend('odoo', bind_host='127.0.0.1') as (default_url, default_calls, _), \
+            backend('odoo', bind_host='127.0.0.1') as (extra_url, extra_calls, _):
         store = ProductStore(data, 'odoo')
         store.update(connection=connection('odoo', default_url), writes_enabled=False, enabled_write_tools=[])
         store.close()

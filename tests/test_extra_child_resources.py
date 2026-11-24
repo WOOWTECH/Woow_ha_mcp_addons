@@ -185,6 +185,8 @@ def test_resources_an_unprivileged_child_cannot_have_degrade_to_one_warning(prob
 
 
 # ---- memory (contract 5) ----
+# Exercise the HM-09 child checks on EMQX: HM-19c admits extra Odoo children only when its entire
+# switched-on request/reply memory plan fits, so low-ceiling Odoo is covered by test_profile_admin_api.
 
 async def save(rig, profile_id):
     """The panel saves the profile's connection unchanged (a save starts the child again)."""
@@ -202,13 +204,13 @@ async def restart(rig, profile_id):
 
 
 async def test_low_memory_holds_a_save_or_restart_but_never_the_boot(tmp_path, log_scan, monkeypatch):
-    """Odoo needs 100 + 256 MiB per additional child: with 300 MiB available the boot still starts B (no check at
+    """EMQX needs 160 + 256 MiB per additional child: with 300 MiB available the boot still starts B (no check at
     boot), but the panel's save is saved and its child not started (blocked, memory_capacity) and so is its restart
-    (202 with blocked_reason); the default profile is never checked; with 400 MiB the restart starts B again."""
+    (202 with blocked_reason); the default profile is never checked; with 500 MiB the restart starts B again."""
     available = {'mib': 300}
     monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: None)
     monkeypatch.setattr(profiles, 'available_memory_mib', lambda: available['mib'])
-    async with manager_rig(tmp_path, extras=1) as rig:
+    async with manager_rig(tmp_path, product='emqx', extras=1) as rig:
         watch(log_scan, rig)
         b, = rig.extras
         await rig.manager.launch()
@@ -221,11 +223,11 @@ async def test_low_memory_holds_a_save_or_restart_but_never_the_boot(tmp_path, l
         answered = await restart(rig, b)
         assert answered.status_code == 202 and answered.json()['blocked_reason'] == 'memory_capacity'
         assert any(f'[profile={profiles.log_id(b)} port={rig.ports[b]}]: not started (memory_capacity): 300 MiB of '
-                   'memory available, 356 MiB needed' in line for line in lifecycle_lines(log_scan))
+                   'memory available, 416 MiB needed' in line for line in lifecycle_lines(log_scan))
         default = await restart(rig, 'default')
         assert default.status_code == 202 and default.json()['blocked_reason'] is None
         await until(lambda: rig.pid('default') is not None)
-        available['mib'] = 400
+        available['mib'] = 500
         answered = await restart(rig, b)
         assert answered.status_code == 202 and answered.json()['blocked_reason'] is None
         await until(lambda: rig.pid(b) is not None)
@@ -239,7 +241,7 @@ async def test_low_memory_holds_a_save_or_restart_but_never_the_boot(tmp_path, l
 async def test_unreadable_memory_starts_the_child_and_says_so(tmp_path, log_scan, monkeypatch):
     monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: None)
     monkeypatch.setattr(profiles, 'available_memory_mib', lambda: None)
-    async with manager_rig(tmp_path, extras=1) as rig:
+    async with manager_rig(tmp_path, product='emqx', extras=1) as rig:
         watch(log_scan, rig)
         b, = rig.extras
         await rig.manager.launch()
@@ -252,18 +254,18 @@ async def test_unreadable_memory_starts_the_child_and_says_so(tmp_path, log_scan
 
 
 async def test_a_cgroup_memory_limit_disables_the_profiles_past_the_paas_formula(tmp_path, log_scan, monkeypatch):
-    """memory.max of 256 + 3 x 100 MiB runs three Odoo children: the default and two additional ones (PaaS: max(1,
-    (556 - 256) // 100) - 1 = 2). The third is disabled memory_capacity (required_memory_mib 656), never started; with
+    """memory.max of 256 + 3 x 160 MiB runs three EMQX children: the default and two additional ones (PaaS: max(1,
+    (736 - 256) // 160) - 1 = 2). The third is disabled memory_capacity (required_memory_mib 896), never started; with
     the cgroup limit MemAvailable is not read."""
     def forbidden():
         raise AssertionError('MemAvailable read although the cgroup limit decides')
-    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: 556)
+    monkeypatch.setattr(profiles, 'memory_limit_mib', lambda: 736)
     monkeypatch.setattr(profiles, 'available_memory_mib', forbidden)
-    async with manager_rig(tmp_path, extras=3) as rig:
+    async with manager_rig(tmp_path, product='emqx', extras=3) as rig:
         watch(log_scan, rig)
         b, c, d = rig.extras
-        assert rig.manager.capacity == profiles.capacity('odoo', 556)
-        assert rig.entry(d).disabled == {'disabled_reason': 'memory_capacity', 'required_memory_mib': 656}
+        assert rig.manager.capacity == profiles.capacity('emqx', 736)
+        assert rig.entry(d).disabled == {'disabled_reason': 'memory_capacity', 'required_memory_mib': 896}
         await rig.manager.launch()
         await rig.manager.start_all()
         assert rig.pid(b) and rig.pid(c) and rig.supervisor(d).status == 'blocked'

@@ -673,3 +673,45 @@ async def stage(probe, client):
     print(f'PASS multi-profile: default + {len(created)} profiles up in {up:.1f} s; routing, child bearer, resources, '
           f'SIGKILL, stop in {stopped:.1f} s; {entries} entries; restore tree: every profile revoked and its old '
           f'credentials refused, sentinel rebuilt')
+
+
+# Metadata only, recorded by the owned backend after it chooses a real HTTP 503.
+# Odoo's private probe makes a fresh XML-RPC client; an offline /common request
+# fails that check before authentication or any object read can follow.
+ODOO_OUTAGE_CHECKS = []
+
+
+def record_odoo_outage(path):
+    assert path == '/xmlrpc/2/common', 'unexpected Odoo outage request'
+    ODOO_OUTAGE_CHECKS.append(time.monotonic())
+
+
+async def odoo_outage(probe, client, ready_url=MCP + '/health/ready'):
+    """Check HM-09's two-failure contract, not an arbitrary phase of its 15 s clock.
+
+    Each failed backend observation has the original 22 s deadline. The first
+    must still leave readiness healthy; the second must make it unavailable.
+    Count actual failed HTTP requests, so a transient 503 while the monitor is
+    checking cannot pass for the second verdict. No runtime clock or health
+    state is altered. Caller still checks PID stability, ping and shutdown.
+    """
+    baseline = len(ODOO_OUTAGE_CHECKS)
+    started = time.monotonic()
+    probe.OFFLINE.set()
+    for number, expected in ((1, 200), (2, 503)):
+        try:
+            async with asyncio.timeout(22):
+                while len(ODOO_OUTAGE_CHECKS) < baseline + number:
+                    await asyncio.sleep(.05)
+                # Require a stable public result, not the check-in-progress
+                # snapshot. The second backend check must not rescue the first.
+                stable = 0
+                while stable < 3:
+                    assert len(ODOO_OUTAGE_CHECKS) == baseline + number, 'extra outage check before verdict'
+                    status = (await client.get(ready_url)).status_code
+                    stable = stable + 1 if status == expected else 0
+                    await asyncio.sleep(.25)
+        except TimeoutError:
+            raise AssertionError(f'Odoo outage check {number}: expected stable HTTP {expected} within 22 s') from None
+        print(f'container/mock Odoo outage check {number}: HTTP {expected} '
+              f'after {time.monotonic() - started:.2f}s; NOT HA E2E')

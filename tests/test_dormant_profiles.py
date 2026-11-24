@@ -14,6 +14,7 @@ import json
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
+from switch_modes import switched_off  # noqa: F401  (fixture: HM-19a, the switch a test pins)
 from mcp_admin_core import profiles, restore_detect as rd, restore_lock
 from mcp_admin_core.config import ConfigError
 from multi_profile_runtime import Children, multi_profile_runtime
@@ -135,7 +136,7 @@ def test_switched_off_with_profile_data_a_restore_revokes_everything_before_the_
     assert record['restore'] is not None and record['dormant'] is not None
 
 
-async def test_the_bootstrap_of_a_dormant_add_on_only_adds_dormant_profiles(tmp_path, log_scan):
+async def test_the_bootstrap_of_a_dormant_add_on_only_adds_dormant_profiles(tmp_path, log_scan, switched_off):
     """Contract 1.2: switched off with profile data, 8099 and 8081 are today's (no /api/profiles, no X-MCP-Profile,
     only the default profile served) and the bootstrap has one more field, dormant_profiles; a dormant profile's old
     token gets an unknown token's bytes."""

@@ -10,8 +10,10 @@
   shows identity fields. UNWIRED is empty now; the scans stay for the next module that is not wired yet. The 8081 and
   8099 answers stay those HM-01 froze (tests/test_single_profile_golden.py, tests/test_mcp_contract_freeze.py,
   tests/test_admin_contract_freeze.py).
-- The switch: MULTI_PROFILE_PRODUCTS is empty; features.enabled() reads it at every call (never bound at import), so
-  an integration test can switch a product on with a subprocess preamble (tests/test_real_products.py style).
+- The switch: MULTI_PROFILE_PRODUCTS is exactly SWITCHED_ON below, the products whose version-bump PR switched them on
+  (Odoo from 0.5.0, HM-19a; that PR changes both), each released at 0.5.0 or later; features.enabled() reads it at
+  every call (never bound at import), so an integration test can switch a product on or off with a subprocess preamble
+  (tests/test_real_products.py style).
 - Zero rewrite: a state.json bb48449 wrote (one installed add-on per product, tests/fixtures/upgrade_zero_rewrite)
   starts the production runtime without a single changed byte and without any new multi-profile file (plan §7.3);
   on a single-profile installation every read of the data layer leaves /data/mcp exactly as it was; creating profiles
@@ -34,7 +36,7 @@ import typing
 import pytest
 
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core import features, products, profiles, restore_detect
+from mcp_admin_core import features, products, profiles, restore_detect, version_for_product
 from mcp_admin_core.products import ProductState, ProductStore, profile_initial_state
 from multi_profile_runtime import multi_profile_runtime
 from test_restore_detection import after_tick
@@ -159,15 +161,63 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
         assert {'mcp_admin_core.restore_lock', 'mcp_admin_core.restore_detect'} <= set(loaded), loaded
 
 
-def test_multi_profile_is_switched_off_for_every_product():
-    assert features.MULTI_PROFILE_PRODUCTS == frozenset() and type(features.MULTI_PROFILE_PRODUCTS) is frozenset
+# The products switched on in the repository: only a product's version-bump PR (the owner approves and merges it; plan
+# 3.3, 11.3) adds a product to features.MULTI_PROFILE_PRODUCTS, and it adds the product here in the same PR, so every
+# change of the switch shows in this test's diff (HM-07's exact pin); a release that switches a product off again
+# (plan 7.4, docs/operations/update-backup-rollback.md: the emergency release template) takes it out of both. A feature
+# PR changes neither. HM-19a, the Odoo 0.5.0 release PR, switched Odoo on (R1).
+SWITCHED_ON = frozenset({'odoo'})
+
+
+def test_a_product_is_switched_on_only_by_its_release():
+    """The switch is exactly SWITCHED_ON (HM-07's pin); the second guard (the design of HM-23's review S-2): a
+    switched-on product can have profiles (DQ-28) and its release version is 0.5.0 or later (DQ-32). Every other
+    product reads as switched off, and an unknown name is an error."""
+    switched = features.MULTI_PROFILE_PRODUCTS
+    assert type(switched) is frozenset
+    assert switched == SWITCHED_ON, 'the switch changed without its version-bump PR naming the change in SWITCHED_ON'
     assert features.KNOWN_PRODUCTS == frozenset(typing.get_args(products.Product))
-    assert not any(features.enabled(product) for product in features.KNOWN_PRODUCTS)
-    # Only an upgrade PR (the owner approves and merges it) adds a product, and only one that can have profiles.
-    assert all(profiles.supports_profiles(p) for p in features.MULTI_PROFILE_PRODUCTS)
+    assert_released(switched)
+    assert {product for product in features.KNOWN_PRODUCTS if features.enabled(product)} == switched
     for value in ('bogus', 'Odoo', '', None):
         with pytest.raises(ValueError):
             features.enabled(value)
+
+
+def assert_released(switched):
+    """The second guard: every switched-on product is a known product that can have profiles (DQ-28), at a release
+    version of 0.5.0 or later (DQ-32)."""
+    assert switched <= features.KNOWN_PRODUCTS, switched
+    for product in switched:
+        assert profiles.supports_profiles(product), f'{product} cannot have profiles (DQ-28)'
+        version = version_for_product(product)
+        assert tuple(int(part) for part in version.split('.')) >= (0, 5, 0), f'{product} {version} is below 0.5.0'
+
+
+def test_a_switch_without_its_release_fails(monkeypatch):
+    """Both guards on a switch a feature PR would have changed. The pin: a switch with one product more or one less
+    than SWITCHED_ON fails, even with every product released at 0.5.0. The second guard on its own: Odoo and EMQX at a
+    version below 0.5.0 are refused and at 0.5.0 pass; OpenDesign (no profiles, DQ-28) is refused at any version."""
+    from mcp_admin_core import PRODUCT_VERSIONS
+    switchable = sorted(product for product in features.KNOWN_PRODUCTS if profiles.supports_profiles(product))
+    assert {'odoo', 'emqx'} <= set(switchable) and 'opendesign' not in switchable
+    for product in switchable:
+        monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.5.0')
+    for product in switchable:
+        changed = SWITCHED_ON ^ {product}
+        assert_released(changed)  # past the second guard: only the pin refuses it
+        monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', changed)
+        with pytest.raises(AssertionError, match='SWITCHED_ON'):
+            test_a_product_is_switched_on_only_by_its_release()
+    for product in ('odoo', 'emqx'):
+        monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.4.99')
+        with pytest.raises(AssertionError, match='below 0.5.0'):
+            assert_released(frozenset({product}))
+        monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.5.0')
+        assert_released(frozenset({product}))
+    monkeypatch.setitem(PRODUCT_VERSIONS, 'opendesign', '0.5.0')
+    with pytest.raises(AssertionError, match='cannot have profiles'):
+        assert_released(frozenset({'opendesign'}))
 
 
 def test_the_switch_is_read_at_every_call(monkeypatch):
@@ -178,9 +228,11 @@ def test_the_switch_is_read_at_every_call(monkeypatch):
 
 
 def test_a_subprocess_preamble_switches_a_product_on():
-    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"odoo"}); '
+    # HM-19a: the repository switches Odoo on, so the preamble switches a product the repository leaves off (EMQX) on
+    # and Odoo off: it sets exactly the switch the subprocess needs, both ways.
+    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"emqx"}); '
             'import mcp_admin_core.run_product; '
-            'print("ENABLED", features.enabled("odoo"), features.enabled("n8n"))')
+            'print("ENABLED", features.enabled("emqx"), features.enabled("odoo"))')
     result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, cwd=ROOT, timeout=120,
                             env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
                                  'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')})
@@ -263,7 +315,7 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
     data = installed(tmp_path, raw)
     before = start_facts(data)
     if not switched_on:
-        running = production_runtime(product, data)
+        running = switched_off_runtime(product, data)  # HM-19a: off whatever the repository switches on
     elif product == 'n8n':
         running = n8n_switched_on(data)
     else:
@@ -280,6 +332,15 @@ async def test_a_state_bb48449_wrote_starts_without_any_rewrite(tmp_path, log_sc
         expected |= {profiles.SENTINEL_NAME, profiles.INSTANCE_RECORD_NAME}
     assert set(after) - set(before) == expected
     assert not profiles.has_profile_data(data)
+
+
+@contextlib.asynccontextmanager
+async def switched_off_runtime(product, data):
+    """HM-19a (tests/switch_modes.py): the production runtime with every product switched off."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset())
+        async with production_runtime(product, data) as runtime:
+            yield runtime
 
 
 @contextlib.asynccontextmanager
