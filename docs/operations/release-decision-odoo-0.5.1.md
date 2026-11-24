@@ -1,9 +1,8 @@
-# Odoo 0.5.1（多帳號首發 R1，取代未上架的 0.5.0）發佈紀錄（草稿）
+# Odoo 0.5.1（多帳號首發 R1，取代未上架的 0.5.0）發佈紀錄
 
-狀態：**本機提交完成，尚未推送、未建置映像**。這是 Odoo 一個產品（`woow_mcp_odoo`）的發版：版號 0.4.14 → 0.5.1。0.5.0 已推到 GHCR，
-但從未上架 Store（Store 上目前是 0.4.14），使用者拿不到；0.5.1 是第一個上架的多帳號版，使用者從 0.4.14 直接升級。
-發佈到 WOOW App Store 的每一步（建置、候選驗收、推 GHCR、HAOS 驗收、合併）都**待負責人批准**；本紀錄是推送前的草稿，
-推 GHCR 與驗收之後再補證據（同 [0.5.0 草稿](release-decision-odoo-0.5.0.md) 的做法）。
+狀態：**映像已發佈到 GHCR 並通過展示機驗收（2026-11-24），待合併上架**。這是 Odoo 一個產品（`woow_mcp_odoo`）的發版：版號 0.4.14 → 0.5.1。
+0.5.0 已推到 GHCR，但從未上架 Store（Store 上目前是 0.4.14），使用者拿不到；0.5.1 是第一個上架的多帳號版，使用者從 0.4.14 直接升級。
+合併 PR #137 即上架 WOOW App Store；合併前只補這份紀錄與驗收紀錄（只改 `docs/`）。
 
 ## 為什麼是 0.5.1
 
@@ -37,15 +36,29 @@
 | 4 | `addons/odoo/config.yaml` 的 `version` | `0.5.1` |
 | 5 | `apps/odoo/Dockerfile` 的 `ARG BUILD_VERSION` | `0.5.1` |
 | 6 | `.github/workflows/ci.yaml` 2 處、`release.yaml` 4 處 | `validate.py` 產生的三路運算式（`odoo` 為 `'0.5.1'`） |
-| 7 | 本檔 `docs/operations/release-decision-odoo-0.5.1.md` | 推 GHCR 之後補證據 |
+| 7 | 本檔 `docs/operations/release-decision-odoo-0.5.1.md` | 推 GHCR、展示機驗收之後補證據（本次） |
 
 CHANGELOG（`addons/odoo/CHANGELOG.md`、根目錄 `CHANGELOG.md`）、`upgrade-notes.yaml`（`to_version: "0.5.1"`、`from_version: "0.4.14"`）、`addons/odoo/DOCS.md`、
 `README.md` 等使用者看得到的「0.5.0 起」都改成 0.5.1，並寫明 0.5.0 沒有上架、0.5.1 修 F1。
 
-## 驗收與批准（全部待負責人批准）
+## 驗收與批准
 
-1. 推送分支、開 PR：待負責人。
-2. 候選建置與容器驗收（`release.yaml` gate → candidate）、HM-19c 量測（只記錄，不擋發版）：待負責人批准。
-3. 推 GHCR（`public-release` 核准）：待負責人批准；之後補證據。
-4. HM-19b 以 0.5.1 重做（含 F1 的官方 SDK 回歸：額外帳號常駐 GET 時 `tools/list`／`tools/call` 成功；預設帳號 5 個用戶端時 `tools/call` 成功）：待展示機。
-5. Store 乾跑與上架（從 0.4.14 直接升級到 0.5.1）：待負責人批准。
+依負責人 2026-11-23「整套一次授權」：每個產品過完所有關卡（CI、審查、容量驗收）才發佈；GitHub 的發佈核准以 API 代按，改版號 PR 也代為合併，每一步回報。
+
+| # | 步驟 | 結果 |
+|---|---|---|
+| 1 | 推送分支、開 PR | PR #137（`release/odoo-0.5.1-20261123`，頭 `403e4c8`，以 #135 的 `1e9adfb` 為基準只往上加提交；取代 #135） |
+| 2 | 兩份獨立審查、最終驗證 | 通過，沒有必修項；採納的建議：串流上限 1 → 2 MiB 並測最壞事件、契約用字改精確、補重連測試、寫明驗收預期。F1 回歸測試在基準 `1e9adfb` 上會失敗、在頭上通過 |
+| 3 | 候選建置與容器驗收 | `release.yaml` run 45207734799：gate（2026-11-23 16:19Z）、candidate（16:23Z）成功；`image.tar` sha256 `da4296aa59bf61daf48db9e6ed40f9243759ba854f298b4613f240a4aa194a2a`、203,360,256 位元組；映像 ID 由 tar 內 config 自行算出，與 handoff 一致 |
+| 4 | Store 升級乾跑（展示機，0.4.14 → 0.5.1） | PASS（2026-11-24 00:4x 台北）：兩版都 60 秒不退出、不重啟，資料保留，hassio 網路 ID 與 IPAM 不變 |
+| 5 | 推 GHCR | 以 API 核准 `public-release`，publish 成功（2026-11-23 16:33Z）：manifest `sha256:9f05fbcb4eb95376f897bcf2734ea66a30634ef5c3c85c80ba9e9d8db2c8ec2b`、映像 ID `sha256:12b97d0d5730aa956450bd748a36f2280f21cefc95c743aba24e9153ed51b6b8` |
+| 6 | PR 檢查 | 映像發佈後重跑 readiness 與 Upgrade comparison，全部 success |
+| 7 | 展示機 HAOS 驗收（HM-19b 第二輪） | PASS，**F1 不再重現**（官方 SDK 1.32.2 用戶端全部成功）；細節、偏離與已知限制見 [ha-test-odoo-0.5.1](ha-test-odoo-0.5.1.md) |
+| 8 | HM-19c 量測 | 只記錄、不擋發版（負責人 2026-11-23）；這一版沒有重跑 |
+| 9 | 合併上架 | 本證據提交之後合併 #137 |
+
+## 已知限制（不擋這一版，細節見 [ha-test-odoo-0.5.1](ha-test-odoo-0.5.1.md)）
+
+- 經 Cloudflare 開 HA 時，面板不能儲存「瀏覽器來源檢查」設定（Cloudflare 壓縮把 ETag 改成弱 ETag，面板只接受強 ETag）。只影響這一張卡片；
+  預設值照常運作，從區網開 HA 可以儲存。下一版修。負責人 2026-11-24 決定先發。
+- 額外帳號只有 1 張回覆票券（已接受的設計）：Claude.ai 並行送出的兩個工具呼叫，有一個會回 `-32003`（忙碌），Claude 自動重試成功。
