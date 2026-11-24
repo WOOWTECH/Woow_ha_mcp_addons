@@ -74,5 +74,6 @@ Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升�
 ## 已知限制（不擋這一版，細節見 [ha-test-litellm-0.5.0](ha-test-litellm-0.5.0.md)）
 
 - **經 Cloudflare 開 HA 時，面板不能儲存「瀏覽器來源檢查」設定**（F2，與 Odoo 0.5.1 同一份面板）：Cloudflare 壓縮把 ETag 改成弱 ETag，面板只接受強 ETag。只影響這一張卡片，預設值照常運作；從區網開 HA 可以儲存。下一版三個產品與 Odoo 一起修。負責人 2026-11-24 決定先發。
+- 後續（2026-11-25）：F2 在維修版修好了：面板也把 Cloudflare 這類代理改成的弱 ETag（`W/"…"`）當成同一個版本，送出時照舊送強的 `If-Match`，add-on 的比對沒有放寬；帳號清單有同樣的問題（唯讀、「全部撤銷」停用），一起修（`docs/multi-profile/unreleased-changes.md` A11）。上面寫的是這一版映像的行為，沒有改。
 - 容量：每帳號最多 50 條後端連線、四個帳號 200 條的 FD／記憶體／TLS 飽和沒有在 J6412 量（縮減容量跑只記錄、這一版沒有跑）。
 - HA Core：`ha_role.py` 只認到 Core 2026.11.2；目標 HAOS 比 2026.11.2 新時要先補審。
