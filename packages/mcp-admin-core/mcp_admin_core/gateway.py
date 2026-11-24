@@ -1672,6 +1672,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
                 return JSONResponse(redact.redact_secrets(diagnostics(), masks(state)), headers=headers)
             if name == "token/reveal" and request.method == "POST":
+                if getattr(state, "product", None) == "headscale":
+                    return JSONResponse({"detail": "Not Found"}, status_code=404, headers=headers)
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
                 if review_required is not None and review_required():
