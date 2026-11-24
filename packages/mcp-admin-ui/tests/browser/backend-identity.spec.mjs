@@ -393,3 +393,15 @@ test('a URL the server withholds cannot be compared: any new value asks for its 
   await expect(page.locator('#patch-password-action')).toHaveValue('set');
   await expect(page.locator('#patch-password-origin')).toHaveText('伺服器不顯示原網址，無法確認是同一台伺服器：請重新輸入，不會沿用已儲存的憑證。');
 });
+
+test('HM-26: with profiles the help under the Headscale connection form says one server per profile and a key of its own; switched off, today\'s', async ({page, request}) => {
+  await reset(request, {product: 'headscale', parity: true, profiles: {}});
+  await open(page, '/backend');
+  await expect(page.locator('#connection-help')).toContainText('建議每個帳號在 Headscale 各建一把');
+  await expect(page.locator('#connection-help')).toContainText('停用 headscale_api_keys 的建立、作廢與刪除');
+  await expect(page.locator('#connection-help')).not.toContainText('只管理同一個 Headscale 執行個體');
+  await reset(request, {product: 'headscale', parity: true});
+  await open(page, '/backend');
+  await expect(page.locator('#connection-help')).toContainText('這個 Add-on 只管理同一個 Headscale 執行個體');
+  await expect(page.locator('#connection-help')).not.toContainText('每個帳號');
+});

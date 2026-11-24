@@ -346,7 +346,7 @@ class Runtime:
         assert self.process.returncode == 0
 
 
-@pytest.mark.parametrize('product', ['odoo', 'emqx'])
+@pytest.mark.parametrize('product', ['odoo', 'emqx', 'headscale'])  # HM-26: Headscale's 0.5.0 runs these hooks too
 @pytest.mark.parametrize('switched_on', [True, False], ids=['old-off-new-on', 'off-both'])
 async def test_the_hooks_pass_an_upgrade_of_the_real_runtime_and_only_read(tmp_path, log_scan, product, switched_on):
     """As the Store's upgrade test runs them: seed once the old version started on an empty /data (unconfigured, as the

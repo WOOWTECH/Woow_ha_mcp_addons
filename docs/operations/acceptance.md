@@ -289,6 +289,35 @@ virtual key，各自的帳號只看得到自己的模型」。每一步照上面
 - **清理（T-29）**：刪掉帳號 B 與 T-02 建的帳號（舊 token 立刻失效）、刪掉測試副本（在在用的 app 上做的，由負責人還原預設帳號的後端）、
   負責人撤銷兩把 key，合成憑證掃描 0 命中。
 
+### Headscale 開通版（0.5.0）在 HAOS 要加的項目（HM-26）
+
+`tests/test_headscale_multi_profile.py` 在 CI 用兩台假伺服器驗了：每個帳號的子程式只讀自己帳號的 state、照自己帳號的政策（直連也一樣）、
+只認自己的 child token；每個帳號的 key 只送到自己設定的那台（同一台同 key、同一台不同 key、另一台各一個帳號：DQ-26 的兩種形態）；
+受限帳號的 `headscale_api_keys` create 閘道與子程式都擋；存政策只重啟該帳號的子程式，別的帳號的 session 不斷；網址改到別台要重填 key；
+每個帳號的密鑰網址只放 `https://claude.ai`；伺服器拒絕 key 時開通的監看照 DQ-25 退避。這些是 LOCAL/MOCK，不是 HA 證據。HAOS 上用真的
+Headscale 再驗，**每一步先問使用者**：
+
+- 真後端身分（使用者批准建立，驗完撤銷並記清理證明，T-29）：在 QA 用的 Headscale 上建 2～3 把**專用、短效期**的 API key（同一台：
+  一把給預設帳號與一個額外帳號共用、一把給另一個額外帳號自己用；CF-15 同 key、不同 key 各一次）。寫入只對一個專用的測試使用者
+  （例如 `hm26-test`）與它的 preauth key 做，不碰正式的使用者、節點、路由與 ACL 政策（`headscale_policy` 只做 get、check、diff，
+  不做 apply）。**驗收全程不呼叫 `headscale_api_keys` 的 create**（它會發出一把不在任何帳號 state 裡的整台管理 key）。
+- 多台：QA 只有一台 Headscale 時，「一帳號一台」在 HAOS 上沒有驗，只有 CI 的兩台假伺服器驗了（上一段；HM-05 的
+  `tests/test_profile_runtime.py::test_each_child_is_started_on_its_own_state_directory_and_port[headscale]` 也是每帳號不同網址與 key）。
+  要在 HAOS 驗，使用者要另外提供第二台 QA 用的 Headscale；沒有就在驗收紀錄寫明這是已知限制。
+- T-02：Headscale 額外帳號上限 3（第 4 個 409 `profile_limit_reached`，`limit` 3）。
+- T-04（Headscale 版，契約第 9 節 #137、#138）：同一台、同一把 key、不同政策的兩個帳號：唯讀帳號（政策拒絕所有寫入，包括
+  `headscale_api_keys` 的 create、expire、delete）的寫入被擋（閘道與子程式都擋，伺服器沒收到）、另一個做得到；受限帳號的
+  `headscale_api_keys` create、expire、delete 經閘道與直連子程式都擋、伺服器沒收到（只送會被擋的呼叫）；在 Headscale 撤銷某個帳號
+  自己的那把 key 後，只有那個帳號的呼叫失敗（`HEADSCALE_UPSTREAM_ERROR`、401）、它的健康監看進入認證退避，其他帳號照常。
+- T-05、T-08、T-09、T-13：P9 kit 照 [P9 kit](ha-p9-kit.md)（`--cross`、`--temp-profile`、`childkill`）。
+- T-07：存一個帳號的政策，只有它的子程式換 PID，別的帳號的 session 不斷。
+- T-20：0.4.19 → 0.5.0 升級後預設帳號的 token、兩條網址、`state.json` 位元不變（Store `verify`）；回退與再升級照 T-20。
+- T-21：還原（full、partial、加密）後每個帳號照守門撤銷、核對後重發，子程式照常起來（還原放寬的權限在子程式讀之前收回）。
+- T-24、T-27：真 Claude.ai 用兩個帳號的密鑰網址各連一次；別的瀏覽器 Origin 403；記下 Claude.ai 送的 Origin（S14）。
+- 清理（T-29）：撤銷這次建的 key（`headscale apikeys expire`）之後，在 Headscale 跑 `headscale apikeys list`，確認只剩驗收前就有的 key、
+  沒有多出來的（只記 prefix 與數目，不記 key）；結果寫進清理證明。
+- 上面「每次升版都要重驗」的四項照做。
+
 ## 故障處置界線
 
 缺少／失效角色（非 owner／系統管理員）的 MANAGEMENT 403 屬預期封鎖，不是要求提高 HA 權限。readiness503 要分
