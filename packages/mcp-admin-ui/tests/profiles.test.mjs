@@ -712,6 +712,35 @@ test('HM-12 review S-7: a backend save of a switched-on Odoo answered 503 state 
   assert.equal(await run(unavailable, {product: 'nextcloud'}), `${UNAVAILABLE} ${OUTCOME}`);
   assert.equal(await run(unavailable, {product: 'nextcloud', switched: false}), UNAVAILABLE);
   assert.equal(await run(denied, {switched: false}), UNAVAILABLE);
+  // Hermes is not identity-bound, including when profiles are enabled.
+  assert.equal(await run(unavailable, {product: 'hermes'}), UNAVAILABLE);
+  assert.equal(await run(unavailable, {product: 'hermes', operation: 'backend'}), UNAVAILABLE);
+  assert.equal(await run(unavailable, {product: 'hermes', switched: false}), UNAVAILABLE);
+  assert.equal(await run(denied, {product: 'hermes'}), UNAVAILABLE);
+});
+
+// A refused identity-bound save names the relevant fields; Hermes keeps the general review message.
+test('HM-24: the review-wait copy of a backend save names the identity fields of the save\'s own product', async () => {
+  const {identityBound, identityChange} = panelContracts;
+  assert.deepEqual(Object.keys(identityChange ?? {}).sort(), [...identityBound].sort());
+  const WAITS = '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。';
+  const saveWaits = names => `改後端身分（${names}）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。`;
+  const held = () => Response.json({error: 'request denied', detail: {code: 'restore_review_required'}}, {status: 409});
+  const run = async (product, {switched = true, operation = 'backend/patch'} = {}) => {
+    const api = new AdminApi(mount, saving(product, held, {switched}).fetcher, memoryStorage());
+    await api.bootstrap();
+    let caught = null;
+    try { await api.mutate(operation, operation === 'policy' ? {writes_enabled: false, disabled: [], enabled_write_tools: []}
+      : {changes: {dashboard_username: 'DUMMY-user-two'}}, revisionOf(DEFAULT_PROFILE)); } catch (error) { caught = error; }
+    assert.ok(caught instanceof ApiError && caught.status === 409 && caught.code === 'restore_review_required');
+    return caught.message;
+  };
+  assert.equal(await run('odoo'), `${WAITS} ${saveWaits('Odoo 的網址、資料庫或使用者')}`);
+  assert.equal(await run('hermes'), WAITS);
+  assert.equal(await run('hermes', {operation: 'backend'}), await run('hermes'));
+  // Another operation, a product whose token is not bound to its backend: the review copy alone.
+  assert.equal(await run('hermes', {operation: 'policy'}), WAITS);
+  assert.equal(await run('emqx'), WAITS);
 });
 
 // HM-22 review MF-1: a backend save of a profile whose restore review waits, refused because it would rotate the token

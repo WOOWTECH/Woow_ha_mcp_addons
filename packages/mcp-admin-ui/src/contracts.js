@@ -188,6 +188,7 @@ export const urlSecrets = {
 };
 // HM-12 (DQ-05; contract 3.1, section 9 #113 and HM-12's panel rows): the products whose MCP token is bound to the backend identity once
 // switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ). HM-22: Nextcloud too.
+// Hermes is not in it: it keeps its token on a backend identity change, matching PaaS (HM-24, 2026-11-20).
 export const identityBound = ['odoo', 'nextcloud'];
 // HM-22 review MF-1 (HM-24's shape): the fields whose change is a new backend identity (the add-on's identity_fields.rotating_fields),
 // as the panel names them for each product of identityBound (api.js: a backend save held for its profile's restore review says

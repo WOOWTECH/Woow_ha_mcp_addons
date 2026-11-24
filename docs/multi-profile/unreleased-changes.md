@@ -133,6 +133,9 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 發版時另外驗：第 5 節。HM-33 筆記交發版片定的兩件，0.4.14 這樣處理：`addons/hermes/README.md`、`DOCS.md` 沒補「Hermes Agent v0.17.0
   or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的
   CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
+- 開通那一版（Hermes 的升版 PR，把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Hermes 自己的 CHANGELOG 句子在 HM-24 筆記第 9 節
+  （`docs/provenance/ha-multiprofile-HM-24-20261119.md`；HM-24 審查 S-7）。HM-24 受開關管（檔頭第 2 點），還沒開通的版本不寫、也不刪這一行；
+  開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.4 EMQX
 
@@ -222,6 +225,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-27 | #116 | `fcd0b22` | 密鑰網址的服務層級 Origin 清單（預設 report-only）、`/api/origin-policy`、面板「瀏覽器來源檢查」卡片；還原時封存政策旁的收據 | 不讀不寫 `origin-policy.json`、`/api/origin-policy` 照舊 404、密鑰網址照舊不看 Origin、面板不畫卡片（2026-11-19 HM-18 補列） |
 | HM-21 LiteLLM 開通的功能 PR | 合併後補 | 合併後補 | 沒有程式：只有測試（`tests/test_litellm_multi_profile.py`）與文件；映像只多 `docs/provenance/` 的筆記 | 沒有任何變化；開通時的句子見第 3.5 節 |
 | HM-22 | 合併後補 | 合併後補 | Nextcloud 開通的功能片：換 url、username 換 token（url 照伺服器與存的路徑比）、面板 `identityBound` 加 Nextcloud；面板等核對時被擋的存檔說明寫自己產品的身分欄位（`identityChange`，HM-22 審查 MF-1） | 換身分不換 token，回應沒有新欄位；面板的提示與請求不變（Odoo 的說明文字逐字不變） |
+| HM-24 | 合併後補 | 合併後補 | Hermes 與 PaaS 一致：換後端身分不換 token；仍保留來源變更重填秘密及帳號隔離 | 換身分不換 token，回應、面板與子程式照舊；Odoo 的說明文字逐字不變 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 

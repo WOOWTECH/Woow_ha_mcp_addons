@@ -1,12 +1,14 @@
 # 差異來源對照（FEATURE-MATRIX、G6 §5 → 刻意差異表或測試）
 
+> 2026-11-20 定案：#134（原稿 #129）改為與 PaaS 相同，Hermes 換後端不自動輪替 token；FM-81／FM-153 中相反的 Hermes 描述為歷史內容。
+
 > HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（說明欄的決策狀態、FM-146 的負責片）；2026-11-17 文件同步重產
 > （FM-154～156、各片補的差異表第 87～117 列、文末「差異表每一列的來處」）；2026-11-19 HM-18 重產（DQ-35、DQ-45 已定，
-> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）；2026-11-20 整合候選新增 #129～#130；2026-11-23 火車 A 整合分支併入 HM-22 Nextcloud，列號重編為第 131～133 列（第 131、132 列經 T-03、T-07 對到，第 133 列寫出處）。
-> 本候選以 repo 外 wave5/hm21-hm23-generator/gen_trace.py 重產，雜湊見同目錄 SHA256SUMS；Nextcloud 三列與 T-03、T-07 的對到是整合時手補（產生器未含，下次重產要加進 T 與 ORIGIN 表）。
+> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）；2026-11-20 整合候選新增 #129～#130；2026-11-23 火車 A 整合分支併入 HM-22 Nextcloud，列號重編為第 131～133 列（第 131、132 列經 T-03、T-07 對到，第 133 列寫出處）；2026-11-25 火車 B 整合分支併入 HM-24 Hermes，列號重編為第 134～136 列（經 FM-86、FM-153 對到）。
+> 本候選以 repo 外 wave5/hm21-hm23-generator/gen_trace.py 重產，雜湊見同目錄 SHA256SUMS；Nextcloud 三列與 T-03、T-07 的對到是整合時手補（產生器未含，下次重產要加進 T 與 ORIGIN 表）；Hermes 三列與 FM-86、FM-153 的對到、檔頭與結論的列數也是整合時手補（同樣要在重產時加進產生器的對照表）。
 > 原產生器說明如下：
 > （重產指令與輸入版本見 `docs/provenance/ha-multiprofile-docs-sync-20261117.md`，HM-18 的改動見
-> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，HM-22 的見 `docs/provenance/ha-multiprofile-HM-22-20261119.md`，原本的指令見
+> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，HM-22 的見 `docs/provenance/ha-multiprofile-HM-22-20261119.md`，HM-24 的見 `docs/provenance/ha-multiprofile-HM-24-20261119.md` 第 15 節，原本的指令見
 > `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節；腳本與輸入的 SHA-256 以 repo 外的
 > `wave0/hm00-check/SHA256SUMS` 為準），「原文」欄逐字取自計畫產物（repo 外）：
 > `FEATURE-MATRIX-zh-TW.md` 第 2 節的「HA 平台差異」欄、`gaps/G6-delivery.md` 第 5 節的「HA 期望值與差異」欄。
@@ -19,7 +21,7 @@
 - 其餘 44 列寫「—」（沒有平台差異），但「—」不等於行為相同：每列都人工看過、寫了結論（「—」的列那一節）。23 列有差異、對到差異表；19 列照 PaaS（有的另指差異表裡相關的列）；2 列是流程或文件。
 - G6 §5 的 T-01～T-29 共 29 列，每列都對到 §8.8 的列或某個測試。
 - 對不上的已經補成差異表第 44～79 列（HM-00 補列）；看「—」列時找到的差異補成第 80～86 列（審查後補列）。只對到測試的列，說明欄寫了為什麼不是差異。
-- 差異表現在有 133 列：第 87～133 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 124 列；其餘 9 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
+- 差異表現在有 136 列：第 87～136 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 127 列；其餘 9 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
 - 「對到」欄的測試：「既有」是 bb48449 已有的檔；「HM-xx」是計畫中的新測試（`acceptance-matrix.md` 的測試檔登記表）。
 
 ## FEATURE-MATRIX「HA 平台差異」欄
@@ -91,7 +93,7 @@
 | FM-82 | 同庫多帳號時 Odoo 端負載＝帳號數×每帳號並行；主機 CPU 共用 | §8.8 #60；`tests/test_odoo_multi_profile.py`（HM-12） | — |
 | FM-83 | PaaS「沒存 methods 時全帳號共用容器 env」在 HA 不適用（隔離更好） | §8.8 #61 | — |
 | FM-84 | PaaS「兩種 429」只適用 PaaS；HA 監控要用閘道自己的訊號 | §8.8 #62 | — |
-| FM-86 | K-14（兩 Dashboard 共用簽章金鑰時 cookie 互信）在 HA MCP 路徑不適用 | §8.8 #63 | — |
+| FM-86 | K-14（兩 Dashboard 共用簽章金鑰時 cookie 互信）在 HA MCP 路徑不適用 | §8.8 #63、#134、#135、#136 | — |
 | FM-87 | PaaS 一個唯讀開關、HA 逐支授權；兩邊都每帳號一份 | §8.8 #64 | — |
 | FM-88 | 同一台、同一把 key 的兩帳號，子程式讀錯 state 時連線比對擋不下來（政策是唯一分權） | `tests/test_headscale_multi_profile.py`（HM-26，暫定名） | 政策是唯一分權；文件建議每帳號不同 API key |
 | FM-89 | 整份 PUT backend 本來就要帶完整連線 | §8.8 #41、#115 | 開通後新來源的判定見 #115（HM-12） |
@@ -222,9 +224,9 @@
 | FM-145 | 預設帳號的收據 key 不變 | 照 PaaS；`packages/mcp-admin-ui/tests/browser/profiles.spec.mjs`（HM-11） | `get()` 兩種格式都收 |
 | FM-146 | Store 發佈前的非 PR run | §8.8 #73 | 升版步驟加確認（計畫 §11.3 第 9、11 步）：Odoo 由 HM-19a、HM-19b 做（計畫 §17），其他產品由各自的升版 PR 做；HM-17 只做發版基礎（FM-104），沒有對應的程式 |
 | FM-152 | 改來源要重填秘密 | §8.8 #41、#115、#117；`tests/test_new_origin_secret.py`（HM-12） | DQ-40 ⑨；判定與面板表單的細節見 #115、#117（HM-12） |
-| FM-153 | 換身分換 token | §8.8 #40、#113、#114、#116；`tests/test_odoo_identity_rotation.py`（HM-12） | DQ-40 ⑩；存檔的回應、途中失敗與面板見 #113、#114、#116（HM-12）；PaaS #154（2026-11-15）起 Nextcloud 也換 |
+| FM-153 | 換身分換 token | §8.8 #40、#113、#114、#116、#134；`tests/test_odoo_identity_rotation.py`（HM-12）；`tests/test_hermes_multi_profile.py`（HM-24） | DQ-40 ⑩；存檔的回應、途中失敗與面板見 #113、#114、#116（HM-12）；PaaS #154（2026-11-15）起 Nextcloud 也換 |
 
-## 差異表每一列的來處（`contract.md` 第 9 節 #1～#133）
+## 差異表每一列的來處（`contract.md` 第 9 節 #1～#136）
 
 反查表：上面三張表的「對到」欄，哪些 FEATURE-MATRIX、G6 §5 的列對到差異表的這一列。沒有任何列對到的，寫出處。「項目」欄照 `contract.md` 第 9 節。
 
@@ -363,3 +365,6 @@
 | 131 | Nextcloud 換身分時網址怎麼比 | T-03 | — |
 | 132 | Nextcloud 存政策何時重啟子程式 | T-07 | — |
 | 133 | 換身分成功時的 log | — | HM-22 補的列（對照 PaaS #154）：Nextcloud 換身分成功時的 log |
+| 134 | Hermes 換身分換 token 的範圍 | FM-86、FM-153 | — |
+| 135 | Hermes Dashboard 登入限流 | FM-86 | — |
+| 136 | 長的 Hermes chat 佔名額 | FM-86 | — |

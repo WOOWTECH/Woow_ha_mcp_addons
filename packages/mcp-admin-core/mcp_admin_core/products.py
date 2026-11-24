@@ -324,8 +324,9 @@ def check_saved_destinations(state, previous=None):
 # the products whose MCP token is bound to one backend identity once they are switched on: Odoo (PaaS #131,
 # woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS) and, HM-22 (plan 9 Nextcloud
 # row), Nextcloud: its url and username, not its app password (PaaS #154, woow-mcp-server 0f94aa4
-# apps/nextcloud/nextcloud_mcp_admin/routers/config.py IDENTITY_KEYS). Hermes (HM-24) joins with its own slice;
-# identity_fields.TOKEN_ROTATING already names its fields.
+# apps/nextcloud/nextcloud_mcp_admin/routers/config.py IDENTITY_KEYS). Hermes (HM-24) is not in it: as PaaS (owner,
+# 2026-11-20) a Hermes backend identity change retains the existing MCP token (contract section 9 #134), so the fields
+# identity_fields.TOKEN_ROTATING names for it are data that nothing acts on. Other protections still apply.
 IDENTITY_BOUND = frozenset({'odoo', 'nextcloud'})
 
 
@@ -369,8 +370,8 @@ def identity_rebound(previous, candidate) -> bool:
     url, username) names another identity in candidate (same_identity), a cleared connection included (PaaS
     patch_connection_bound: a cleared identity field is a change; were it not, clearing and then saving another account
     would keep the token, as a first setup does). The first setup (no connection saved yet), a revoked token and a
-    change of the password alone keep the token as they do today. Switched off, never (plan 3.3: the token stays, byte
-    for byte)."""
+    change of a password or key alone keep the token as they do today. Switched off, never (plan 3.3: the token stays,
+    byte for byte)."""
     product = getattr(previous, 'product', 'n8n')
     if product not in IDENTITY_BOUND or not features.enabled(product):
         return False
