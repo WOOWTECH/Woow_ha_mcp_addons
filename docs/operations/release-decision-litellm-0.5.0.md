@@ -1,80 +1,78 @@
-# LiteLLM 0.5.0（多帳號 train A）發佈紀錄（草稿）
+# LiteLLM 0.5.0（多帳號 train A）發佈紀錄
 
-狀態：**升版分支準備完成、尚未建 PR、映像尚未建置；所有關卡都還是待做**。這是 `woow_mcp_litellm` 一個產品的發版：LiteLLM 開通多帳號、版號 0.4.14 → 0.5.0，與 train A 的另外兩個產品同一批（LiteLLM、Nextcloud、EMQX；train A，一個升版 PR、各產品各自 `release.yaml`）。
-Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升來源版本；Odoo 0.5.0 是更早一個、獨立的發版（[Odoo 發佈紀錄](release-decision-odoo-0.5.0.md)）。（Odoo 後來改發 0.5.1，見 [Odoo 0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)；本紀錄下面寫的 `odoo` 0.5.0 是併入 0.5.1 之前的現況，合併後 `VERSION_OVERRIDES` 與六路運算式裡的 `odoo` 是 0.5.1。）
-合併升版 PR 就是發佈到 WOOW App Store：下面每一步都**待批准**。這份草稿**不宣稱映像、HAOS、真後端或商店驗收**；那些要先過關卡，再取證，再把本檔改成最終紀錄（HM-17：readiness 只認推送之後寫的、並寫明版本與 slug 的發佈紀錄）。
+狀態：**映像已發佈到 GHCR 並通過展示機驗收（2026-11-24），待合併上架**。這是 `woow_mcp_litellm` 一個產品的發版：LiteLLM 開通多帳號、版號 0.4.14 → 0.5.0，與火車 A 的另外兩個產品同一批（LiteLLM、Nextcloud、EMQX；一個升版 PR #136、各產品各自的 `release.yaml` run）。
+Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升來源版本；Odoo 0.5.1 是先一步、獨立的發版（[Odoo 0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)，2026-11-24 已上架）。
+合併 PR #136 即上架 WOOW App Store；合併前只補這份紀錄與驗收紀錄（只改 `docs/`）。
 
 ## 範圍
 
 - **只有 LiteLLM**（`woow_mcp_litellm`）：`features.MULTI_PROFILE_PRODUCTS` 加 `litellm`（與 `odoo`、其他兩個火車 A 產品一起），`addons/litellm/`、`apps/litellm/Dockerfile` 的版號 0.5.0。功能依據：#125／#133 的 LiteLLM 部分（HM-21，整合於 PR #134）。
-- 不在範圍：Hermes（#128）、Headscale（#130）、n8n（#129）的開關與版號（第二批，各自另有缺口，見 `docs/multi-profile/`）；OpenDesign 與 Odoo Manage 不開放多帳號（DQ-28）。共用預設版號 `VERSION` 維持 0.4.14，0.5.0 是 LiteLLM 自己的版號線（DQ-32），和 Odoo 0.5.0、Headscale 0.4.19 一樣寫在 `VERSION_OVERRIDES`。
+- 不在範圍：Hermes（#128）、Headscale（#130）、n8n（#129）的開關與版號（第二批，各自另有缺口，見 `docs/multi-profile/`）；OpenDesign 與 Odoo Manage 不開放多帳號（DQ-28）。共用預設版號 `VERSION` 維持 0.4.14，0.5.0 是 LiteLLM 自己的版號線（DQ-32），和 Odoo 0.5.1、Headscale 0.4.19 一樣寫在 `VERSION_OVERRIDES`。
 - 路線：這條線只用 GitHub（`.github/workflows/release.yaml`：gate → candidate → publish，publish 在 `public-release` environment 核准，只收 `release/*` 分支）。
 
 ## 來源
 
-- 分支 `release/train-a-0.5.0-20261123`：底是整合分支 PR #134 的 head `d8fe2912487199e197ca2410ce51e2a34a108309`（Nextcloud #126、LiteLLM／EMQX #133 與審查 F-1～F-4 修正，CI 綠），再以 merge commit 併入 Odoo 發版頭 `27c17b3e99b6662d9afacec8a4234a0c71aa331e`（`release/odoo-0.5.0-20261119`，PR #131），讓它預期 #131 合併後的 `claude-delivery`。Odoo 若因修正而改 head（0.5.1），本分支要重新對齊、候選作廢重跑。
-- 升版 commit：開關、版號資料、測試釘選與帳本（第一個）；CHANGELOG、DOCS、README、`upgrade-notes.yaml`、`unreleased-changes.md`（第二個）；本紀錄（第三個）。推送後 head 只能再加 commit、不 rebase、不 force push；映像從觸發當下凍結的 PR head 建，之後的證據 commit 只加紀錄檔（發版鎖）。
+- 分支 `release/train-a-0.5.0-clean-20261123`（PR #136，base `claude-delivery`）：乾淨重建的火車 A（Nextcloud #126、LiteLLM／EMQX #133 與整合審查 F-1～F-4 修正）
+  先併入 Odoo 0.5.0 的發版頭 `1e9adfb`（`26fbaa2`），Odoo 改發 0.5.1 之後再以 merge commit 併入 Odoo 0.5.1 的發版頭 `403e4c8`（`bd772e6`，PR #137）；
+  之後只加兩個容器探針修正（`33a5989` 開通產品的停機判定給兩次檢查的時間、`84483b7` 對應埠時略過還沒 exec 的子程式；負責人 2026-11-24 同意）。
+- 開關、版號與文件：`bb99908`（開關、版號資料、測試釘選與帳本）、`81b2671`（CHANGELOG、DOCS、README、upgrade notes）、`4f97b10`／`6635624`（本紀錄草稿與本機檢查）。
+- Odoo 0.5.1 已於 2026-11-24 合併（`5f7ee36`）並上架；本分支與新的 `claude-delivery` 合併無衝突。映像從 PR head `84483b7` 建（發版鎖），之後的證據提交只改 `docs/`。
 
 ## 版號資料（[release](release.md)「升版時要改的版號資料」）
 
 | # | 檔 | 改成 |
 |---|---|---|
-| 1 | `packaging/validate.py` 的 `VERSION_OVERRIDES` | `{'odoo': '0.5.0', 'emqx': '0.5.0', 'litellm': '0.5.0', 'nextcloud': '0.5.0', 'headscale': '0.4.19'}`（`VERSION` 維持 0.4.14） |
+| 1 | `packaging/validate.py` 的 `VERSION_OVERRIDES` | `{'odoo': '0.5.1', 'emqx': '0.5.0', 'litellm': '0.5.0', 'nextcloud': '0.5.0', 'headscale': '0.4.19'}`（`VERSION` 維持 0.4.14） |
 | 2 | `packaging/inputs.json` 的 `version_overrides` | 同上 |
 | 3 | `packages/mcp-admin-core/mcp_admin_core/__init__.py` 的 `PRODUCT_VERSIONS` | 同上；帳本 `runtime-patches.json` 的摘要與雜湊同步 |
 | 4 | `addons/litellm/config.yaml` 的 `version` | `0.5.0` |
 | 5 | `apps/litellm/Dockerfile` 的 `ARG BUILD_VERSION` | `0.5.0` |
-| 6 | `.github/workflows/ci.yaml` 2 處、`release.yaml` 4 處 | `validate.py` 產生的六路運算式（`odoo`、`emqx`、`litellm`、`nextcloud` 是 0.5.0，`headscale` 是 0.4.19，其餘 0.4.14） |
-| 7 | `docs/operations/release-decision-litellm-0.5.0.md` | 本檔（推 GHCR 之後改成最終紀錄） |
+| 6 | `.github/workflows/ci.yaml` 2 處、`release.yaml` 4 處 | `validate.py` 產生的六路運算式（`odoo` 是 0.5.1，`emqx`、`litellm`、`nextcloud` 是 0.5.0，`headscale` 是 0.4.19，其餘 0.4.14） |
+| 7 | `docs/operations/release-decision-litellm-0.5.0.md` | 本檔（推 GHCR、展示機驗收之後補證據，本次） |
 
-- **運算式本機求值**（`packaging/test_validate.py` 的規則，`&&` 先於 `||`）：`app=odoo`→0.5.0、`emqx`→0.5.0、`litellm`→0.5.0、`nextcloud`→0.5.0、`headscale`→0.4.19、`n8n`／`hermes`／`opendesign`→0.4.14，`ci.yaml` 與 `release.yaml` 兩組結果相同；`packaging/validate.py` 通過。三路形式 GitHub 在 Odoo 的候選（2026-11-22，tag `local/mcp-odoo:0.5.0`）算過；六路是同一種串接多幾段，**GitHub 還沒算過**，候選建置的 tag 檢查就是驗證（算錯時 `supply_chain.py candidate` 在推送前停，不燒版號）。
+- **運算式本機求值**（`packaging/test_validate.py` 的規則，`&&` 先於 `||`）：`app=odoo`→0.5.1（併入 Odoo 0.5.1 之後）、`emqx`→0.5.0、`litellm`→0.5.0、`nextcloud`→0.5.0、`headscale`→0.4.19、`n8n`／`hermes`／`opendesign`→0.4.14，`ci.yaml` 與 `release.yaml` 兩組結果相同；`packaging/validate.py` 通過。三路形式 GitHub 在 Odoo 的候選（2026-11-22，tag `local/mcp-odoo:0.5.0`）算過；六路是同一種串接多幾段，**GitHub 還沒算過**，候選建置的 tag 檢查就是驗證（算錯時 `supply_chain.py candidate` 在推送前停，不燒版號）。
 - 開關：`features.py` 的 `MULTI_PROFILE_PRODUCTS` 是 `{'odoo', 'emqx', 'litellm', 'nextcloud'}`，`tests/test_upgrade_zero_rewrite.py` 的 `SWITCHED_ON` 同步（精確釘選；EMQX 那一行見 HM-23 審查 S-2）。Hermes、Headscale、n8n 仍關。
 
-## 批准表（GitHub 路線；全部待做）
+## 驗收與批准
 
-| 步驟 | 誰做 | 要負責人批准 | 狀態 |
-|---|---|---|---|
-| 1. 升版分支（`release/train-a-0.5.0-20261123`）：Odoo 發版頭 `27c17b3` 併入整合分支 `d8fe291`，再加開關、版號與文件 commit | 代理 | 否（只推分支，不開 PR） | 本機完成，推送見「來源」 |
-| 2. 秘密預檢、帳本預檢、packaging 驗證、受影響測試 | 代理 | 否 | 本機完成（「本機檢查」一節）；以 GitHub CI（root、Python 3.12.3、0 skip）為準 |
-| 3. 建 PR（Odoo #131 合併之後以新 `claude-delivery` 為底再合併一次、確認 Odoo 內容零差異）；PR `checks` 綠 | 代理／CI | 開 PR 本身否；合併要 | **未做**（使用者指示「先不開 PR」） |
-| 4. `release.yaml`（`app=litellm`、`source_sha`＝凍結的 head）gate＋candidate：建置、容器驗收（多帳號階段首次對此產品真跑）、供應鏈閘門、J1900；不推 GHCR | 代理觸發／GitHub 託管機器 | **要**（每次觸發；publish 停在等待時可 Reject，什麼都不推、不燒版號） | **待批准／未觸發** |
-| 5. 推 GHCR 前乾跑 Store 升級測試（N100，0.4.14 Release 映像 → 候選 `image.tar`，加 `upgrade-check/seed`、`verify`） | 代理 | **要** | **未做** |
-| 6. 展示機（J6412）真後端驗收（下一節），先局部備份、測後清理 | 代理依清單 | **要**（主機、真後端身分的建立與清理） | **未做** |
-| 7. 推 GHCR（`release.yaml` 的 publish；推了就燒 0.5.0，之後修正只能發 0.5.1） | 負責人／被授權的代理在 GitHub 核准 `public-release` | **要** | **未做** |
-| 8. 證據 commit（本檔改成最終紀錄、`ha-test-litellm-0.5.0.md`，只加紀錄檔）→ `checks`、`readiness`、`Upgrade comparison`、`Release train` 在 PR head 綠 | 代理／CI | 否 | **未做** |
-| 9. 合併（＝上架 WOOW App Store），merge commit | 負責人（或明確授權的代理，記錄授權原文） | **要** | **未做** |
-| 10. 合併 commit 上 `woow-addon-release.yml` 與 `release-train.yml` 的非 PR run 成功、`woow_mcp_litellm-v0.5.0` 正式 Release；Store 同步後從 Store 安裝或升級再驗（UC-08、UC-10、sentinel；記 Supervisor 版本） | 代理 | **要** | **未做** |
+依負責人 2026-11-23「整套一次授權」：每個產品過完所有關卡（CI、審查、驗收）才發佈；GitHub 的發佈核准以 API 代按，改版號 PR 也代為合併，每一步回報。
+容量與極端壓力只記錄、不擋發版；不做完整備份還原與主機重開（同一天的決定）。
 
-## 展示機真後端驗收（步驟 6 要做的）
+| # | 步驟 | 結果 |
+|---|---|---|
+| 1 | 推送分支、開 PR | PR #136（`release/train-a-0.5.0-clean-20261123`，頭 `84483b7`，以 Odoo 0.5.1 的發版頭為底；取代舊的火車 A 分支） |
+| 2 | 審查 | 整合分支審查 F-1～F-4 已修（PR #134）；兩個容器探針修正負責人 2026-11-24 同意（「單純放寬等待時間」、「照建議修探測」） |
+| 3 | 候選建置與容器驗收 | `release.yaml` run 45299044628（`app=litellm`、source `84483b7`）：gate（2026-11-24 00:40:22–01:22:45Z）、candidate（01:22:48–01:27:20Z）成功；`image.tar` sha256 `42b59e4bdd09c705eb89955a14bdd37130b546a4f17c41a87e227dd64144c8b4`、226,699,776 位元組；映像 ID 由 tar 內 config 自行算出，與 handoff 一致 |
+| 4 | Store 升級乾跑（展示機，0.4.14 → 候選 `image.tar`） | PASS（2026-11-24 12:46–13:01 台北，三個產品依序）：兩個 phase 都 60 秒不退出、不重啟 |
+| 5 | 推 GHCR | 以 API 核准 `public-release`，publish 成功（2026-11-24 05:33:55–05:34:54Z）：manifest `sha256:7487f1dd30950a66140beb13e68953d00118a184b50e4e8b0147f7503a93b4a6`、映像 ID `sha256:4c391c21ebd2af65e9f8d3f6187fd2b9f78307e016db229028512df03a6a4219` |
+| 6 | PR 檢查 | 映像發佈後重跑 readiness 與 Upgrade comparison：checks、readiness、Upgrade comparison（compare、runtime）、Release train 全部 success |
+| 7 | 展示機 HAOS 驗收 | PASS（2026-11-24 15:43–16:43 台北，J6412、Core 2026.7.2、OS 18.1、Supervisor 2026.11.0）；細節、偏離與已知限制見 [ha-test-litellm-0.5.0](ha-test-litellm-0.5.0.md) |
+| 8 | 容量 | 只記錄、不擋發版；驗收時記了 T-17（閘道、子程式、容器記憶體與停機秒數，見驗收紀錄）；縮減容量跑沒有跑 |
+| 9 | 合併上架 | 三個產品（LiteLLM、Nextcloud、EMQX）都驗收通過；本證據提交之後合併 #136 |
 
-- 驗收步驟寫在 `docs/operations/acceptance.md` 對應產品小節與 P9 套件（`docs/operations/ha-p9-kit.md`）；一次只測一個產品、先做局部備份、測後清理（移除測試 app、演練備份、測試庫、HA 測試管理員、`/share` 與 `/addons` 暫存、金鑰）、記錄當時 load。展示機近滿載（load 約 3.4／4 核、可用 RAM 約 6.9 GiB），不能和其他重負載並行；04:00 台北每日備份要避開 03:30–05:00。
-- 後端：展示機（J6412 HAOS 18.1）上的 LiteLLM 後端 add-on `9663031d_woow-litellm` 0.1.8（執行中；11/23 唯讀盤點約 683 MiB、healthy）。
-- 需要先備好、由主對話建立並事後刪除的後端身分：
-  - 兩把「各限一個模型」的 virtual key（A、B；不用 master key），在**測試副本**（同 0.4.14 的做法）或負責人指定的實例建立，測完撤銷；key 只經面板或 P9 `--backend-file`（0600）填，不印、不存。
-  - 一把沒有寫入權限的 key（驗 T-10：B 的 key 沒有權限的寫入被 LiteLLM 拒絕；負責人決定要不要做）。
-  - 記下動手前預設帳號原本的後端（不記秘密），清理時還原。
-- T 列：T-01（版本與 digest）、T-02（第 4 個額外帳號回 409 `profile_limit_reached`）、T-03（每帳號 token 互異；換 key 不換 token）、**T-04**（兩把 key 的 N×N）、T-05（P9 `--cross`、`--temp-profile`）、T-06、**T-07**（存 B 的政策只重啟 B）、T-08、T-09、T-11、T-12、T-13、T-14、T-17（子程式 RSS／PSS 對 160 MiB）、T-18、T-20、T-21、T-23（容器）、T-24、T-25、T-27、T-29（合成憑證掃描與清理證明）；另加 50 條連線與獨立健康探測在真 LiteLLM 上的行為。
-- 每次升版都要重驗的四項：UC-08（完整還原）、sentinel 穩定性、UC-10（Ingress）、Supervisor 版本記錄。
+## 展示機真後端驗收
 
-## 還擋著發版的事
+做完了，結果在 [ha-test-litellm-0.5.0](ha-test-litellm-0.5.0.md)：測的是發佈到 GHCR 的映像（由 Supervisor 自己拉），升級起點是 Store 上的 0.4.14（映像 ID `e9e31155baa5`）；
+每個改狀態的步驟前有加密的局部備份、守門通過才動；測完刪除測試 add-on、測試憑證、HA 測試管理員與這一輪的備份，只留後端的加密保護備份給負責人決定。
 
-1. **Odoo HM-19c 要先過**（共用核心）：閘道層的放大倍數、位元組預算與全域最壞值只在 Odoo 首發量，`unreleased-changes.md` 第 5 節第 5 點明說 HM-31 預算任何產品下一版都會帶出去，所以 Odoo 在 J6412 的容量放行（候選 run 45085095296，展示機量測進行中）通過之前，LiteLLM 不能發。這是**前置依賴，不是每產品重做一套閘道容量驗收**。
-2. **Odoo #131 先合併**：本分支預期 #131 合併後的 `claude-delivery`；合併後要以新 `claude-delivery` 為底再合併一次（merge commit）、確認 Odoo 內容零差異、PR 的 checks 再綠。Odoo 若發 0.5.1，本分支候選全部作廢重跑。
-3. **容量（未量測，明文列為發版前要做）**：`apps/litellm/PARITY.md` 寫明每帳號最多 50 條後端連線、四個帳號 200 條加健康探測，測試只用本機假後端；**發版前要在具代表性的小型 HAOS 硬體（J6412）量測飽和下的檔案描述符、記憶體與 TLS／CPU（含四個帳號與慢速 DNS），並用結果驗證記憶體與 FD 准入假設**。常數 `CHILD_MEMORY_MIB['litellm']=160`、額外帳號上限 3、最壞所需 256＋4×160＝896 MiB（公式，無 LiteLLM 實測數字）。展示機可用 RAM 約 6.9 GiB、load 3.4／4 核，一次只能測一支。
-4. **整合分支審查的殘留**：F-6（資源假設未量測）併入上一項；PR #134 的 head `d8fe291` 在 GitHub 上 checks、readiness、Upgrade comparison（compare 與 runtime）、Release train 都是 success（2026-11-23 查），但那是整合分支、不含本升版 commit；整合分支沒有真映像冒煙。
-5. **LiteLLM 的工具權限變更**（三個主動工具要 `create`、唯讀從 18 變 15 個）屬於不受開關管、單帳號使用者也看得到的行為改變，已寫進 CHANGELOG 與 `upgrade-notes.yaml`；升級比對要不要另列由 `Upgrade comparison` 判定。
-6. **CI 與候選首次真跑**：容器驗收的多帳號階段與 HM-20 tripwire 對 LiteLLM 是第一次、六路版號運算式是第一次；本機是 Python 3.13、一般使用者，29 案要 root／Chromium，CI 是 root＋CPython 3.12.3＋`/workspace/WOOWTECH` 路徑，本機綠不等於 CI 綠。
-7. **J1900 指令集檢查**（DQ-42）在 candidate job 內建；J1900 沒有實機，以 QEMU `-cpu Nehalem` 檢查替代（使用者已接受只在 J6412 量測）。
-8. **HA Core**：`ha_role.py` 只認到 Core 2026.11.2；展示機 Core 2026.7.2 沒問題，目標 HAOS 若比 2026.11.2 新要先補審。
+## 發版前的關卡（草稿時列的阻擋事項，現況）
+
+1. **Odoo HM-19c**：負責人 2026-11-23 決定 HM-19c 極端壓力只記錄、不擋發版；Odoo 0.5.1 已上架（#137，2026-11-24）。
+2. **Odoo 先合併**：Odoo 改發 0.5.1（#137 取代 #131／#135）；本分支以 Odoo 0.5.1 的發版頭 `403e4c8` 為底（`bd772e6`），候選全部在 `84483b7` 上重建；#137 合併後與新 `claude-delivery`（`5f7ee36`）合併無衝突。
+3. **容量（未量測）**：只記錄、不擋發版；展示機驗收記了 T-17（閘道 61 MiB、子程式 102 MiB、容器 129 MiB、停機 2 秒）。發版前要量的 FD／TLS／慢速 DNS 飽和沒有量（縮減容量跑沒有跑），列為已知限制。
+4. **整合審查殘留 F-6**：併入上一項。真映像冒煙由候選的容器驗收與展示機驗收完成。
+5. **LiteLLM 的工具權限變更**（三個主動工具要 `create`、唯讀 18 → 15）：已寫進 CHANGELOG 與 `upgrade-notes.yaml`，Upgrade comparison success。
+6. **CI 與候選首次真跑**：CI 綠。候選容器驗收的多帳號階段第一次真跑時，探針的停機判定太短、對應埠時撞到還沒 exec 的子程式；兩個探針修正（不改產品）後通過。
+7. **J1900 指令集檢查**：candidate job 內建（QEMU `-cpu Nehalem`），candidate 成功。
+8. **HA Core**：`ha_role.py` 只認到 Core 2026.11.2；展示機 Core 2026.7.2 沒問題，列已知限制。
 
 ## 本機檢查（一般使用者；以 GitHub CI 為準）
 
 - 2026-11-23，分支 head 推送前，一般使用者、Python 3.13、`/tmp/ha-mp-*` 短 TMPDIR（用完刪除）：`scripts/secret_precheck.py` 0 命中、`scripts/ledger_precheck.py` OK（0 漂移）、`packaging/validate.py` 通過；`packaging` unittest 371 案過（5 skip）；面板 Node 測試 119 過、建置與 closure 檢查過；全套 pytest 分兩輪（第一輪中途短 TMPDIR 被外部清掉，之後的案例重跑）加受影響檔案的最後一輪：沒有開關相關的失敗，唯一因為開通而紅的案例（LiteLLM 真子程式的錯誤本體測試讀到開著的開關）已改成自己指定 `switched_off`。
 - 本機沒跑到或不能算的案例（以 CI 為準，root、CPython 3.12.3、Node 26、Chromium、0 skip）：需要 root 的（`test_restore_detection` 的 root 案例、`test_owned_executable`、`test_profile_store` 的 uid 10001 案例）；需要 Chromium 與 playwright 的（`test_owned_browser*`、`test_owned_ui`）；n8n 的 better-sqlite3 原生模組在本機 Node 22 回退成 sql.js 的兩個案例（`test_boundary`、`test_n8n_catalog_copy`，CI 用 Node 26）；`test_request_structure` 的 CPU 比較案例（Odoo 發版頭的測試，本機負載高時 guard 比 decode 慢，兩次都 0.0354 對 0.0318 秒）。這些不宣稱 CI 綠。
 
-## 發佈前的預期
+## 已知限制（不擋這一版，細節見 [ha-test-litellm-0.5.0](ha-test-litellm-0.5.0.md)）
 
-- 映像推上 GHCR 之前，`readiness` 會因 `amd64-mcp-litellm:0.5.0` 拉不到、本檔不是最終紀錄而失敗，`Upgrade comparison` 也會因新版映像還沒發佈而失敗（0.4.14 同樣）。不放寬規則。
-- 升版比對要求時才建 `addons/litellm/upgrade-notes.yaml`（根目錄 `upgrade-notes.yaml` 已有 0.5.0 條目）；接受漏洞先請負責人同意。
-
-這份紀錄不宣稱映像、HAOS、正式後端或商店驗收；那些要在關卡通過、批准後另外取證。
+- **經 Cloudflare 開 HA 時，面板不能儲存「瀏覽器來源檢查」設定**（F2，與 Odoo 0.5.1 同一份面板）：Cloudflare 壓縮把 ETag 改成弱 ETag，面板只接受強 ETag。只影響這一張卡片，預設值照常運作；從區網開 HA 可以儲存。下一版三個產品與 Odoo 一起修。負責人 2026-11-24 決定先發。
+- 容量：每帳號最多 50 條後端連線、四個帳號 200 條的 FD／記憶體／TLS 飽和沒有在 J6412 量（縮減容量跑只記錄、這一版沒有跑）。
+- HA Core：`ha_role.py` 只認到 Core 2026.11.2；目標 HAOS 比 2026.11.2 新時要先補審。

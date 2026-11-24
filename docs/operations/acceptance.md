@@ -208,7 +208,7 @@ LOCAL 的對應在 `tests/test_nextcloud_multi_profile.py`（假 Nextcloud、真
 4. **存政策只重啟該帳號**（T-07）：存 B 的工具政策，診斷頁 B 的子程式 `starts` 加一、A 的不變（診斷頁沒有 PID；add-on log 的
    `MCP child [profile=… pid=…]: started` 看得到新 PID，但同一個帳號 60 秒內只寫一行），A 的用戶端不斷線。
 5. **只由 token 決定帳號**（T-05、T-23）：P9 `--cross`（兩種接法、跨帳號 session 404、隨機 token）；容器探針的多帳號階段。
-6. **節流單位**（UC-12，未確認）：讓 B 用錯的 App 密碼失敗登入幾次（子程式每次啟動只失敗一次：在面板重新啟動 B 的子程式或重新存 B 的後端，
+6. **節流單位**（UC-12，2026-11-24 展示機確認：**以來源位址計**；見 [ha-test-nextcloud-0.5.0](ha-test-nextcloud-0.5.0.md)。B 用錯密碼存 5 次後，add-on 的位址記 4 次、新登入延遲 1,600 ms，同一個 add-on 的其他帳號的新登入也被延遲；已登入的連線不受影響）：讓 B 用錯的 App 密碼失敗登入幾次（子程式每次啟動只失敗一次：在面板重新啟動 B 的子程式或重新存 B 的後端，
    每次多一次；延遲隨同一來源的失敗次數變長，只失敗一次可能量不出來），量 A 接著的登入有沒有變慢或 429；用
    `occ security:bruteforce:attempts <add-on 的位址>` 直接讀那個位址的紀錄，看 Nextcloud 的暴力破解防護是以位址還是使用者計。會在真的
    Nextcloud 留下失敗登入紀錄，做完用 `occ security:bruteforce:reset <add-on 的位址>`（或管理頁）清除。結果寫進 DOCS（每個帳號共用
