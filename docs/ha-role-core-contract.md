@@ -23,7 +23,7 @@ added.
   `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
   non-system user who is the owner or in `system-admin`.
 
-## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), 2026.11.2 (Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud 0.4.14; Headscale 0.4.19), and 2026.11.3 (maintenance release of 2026-11-25)
+## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), 2026.11.2 (Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud 0.4.14; Headscale 0.4.19), and 2026.11.3 (maintenance release of 2026-11-25: Odoo 0.5.2, EMQX, LiteLLM and Nextcloud 0.5.1, n8n and Hermes 0.4.15, Headscale 0.4.20)
 
 Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
 each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
@@ -66,7 +66,7 @@ the 2026.11.2 tag (commit `ff5d56b8`). The `11.3` column is the 2026.11.3 tag (c
 
 - Outside the 25 files: the tag comparison (52 commits, 95 files) changes no file under `auth/`, `components/auth/`, `components/websocket_api/`, `components/http/`, `components/hassio/`, `components/config/`, `components/onboarding/` or `components/person/`. Besides integrations and tests it changes the version constants (`const.py`, `pyproject.toml`), the frontend pin (20261028.5 to 20261028.6), integration requirements, `input_text/entity.py` and `helpers/config_validation.py` (a configuration error names a section's keys instead of printing its values); none of them is on the `config/auth/list` path or in the Supervisor handshake.
 - Supervisor 2026.11.0 (tag `c1c6f0a754c0656eb1af189f11009f1cfc4b3e28`, released 2026-11-06) ships `supervisor/api/proxy.py` blob `cab849dc`, byte-identical to 2026.10.5 (downloaded at both tags), so the `auth_required`/`auth_ok` frames and the proxy filter keep the reviewed shape.
-- No published image accepts 2026.11.2 yet: Headscale 0.4.18 and the other products' 0.4.13 images deny it. Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud accept it from 0.4.14; Headscale from 0.4.19.
+- Images that accept 2026.11.2: Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud from 0.4.14, Headscale from 0.4.19. Headscale 0.4.18 and the other products' 0.4.13 images deny it.
 
 2026.11.3 review (2026-11-25): the exact GitHub tag commit is Core `92da9f154079459b9e547126f9bd9fce726de16a` (11.3; Core's stable channel offers it as the default on 2026-11-25), compared to reviewed 11.2 `ff5d56b825a0fb66b03d01bc297d49e206cdaba3`; 11.3 is 43 commits ahead of 11.2 and none behind. Every one of the 25 consumed and adjacent files is byte-identical between 11.2 and 11.3: each file was downloaded at both tags and its git blob recomputed, and the blobs equal the GitHub git tree listings of both tags and, for 11.2, [the 2026.11.2 record](provenance/ha-core-2026-11-2-blobs.json). No hunk to read in those files; the consumed contract is unchanged. Full blob SHAs, tag commits and the tag comparison are in [the 2026.11.3 record](provenance/ha-core-2026-11-3-blobs.json).
 
@@ -74,7 +74,7 @@ the 2026.11.2 tag (commit `ff5d56b8`). The `11.3` column is the 2026.11.3 tag (c
 - `components/auth/indieauth.py` (+5 −1, read in full): `fetch_redirect_uris`, which fetches a login client's `client_id` page to read its `redirect_uri` links, now opens its own `aiohttp` session with `max_line_size` and `max_field_size` set to `MAXIMUM_HEADER_SIZE` (65536; that constant is in `helpers/aiohttp_client.py`, unchanged between the tags). It is called by `verify_redirect_uri`, which the HTTP login flow (`components/auth/login_flow.py`) uses to validate an OAuth/IndieAuth client. That is not the `config/auth/list` path (a WebSocket command of `components/config/auth.py`, unchanged) and not the Supervisor handshake, and the hunk does not touch `User`, groups, `require_admin` or the result envelope.
 - `core_config.py` (+3 −2, read in full): `Config._async_update` now sets the time zone first, so an invalid one raises before any other field changes. The auth provider and multi-factor configuration of the same file (`auth_manager_from_config`) lies outside the hunks. `const.py` only changes `PATCH_VERSION` from 2 to 3.
 - Supervisor: the stable channel (`version.home-assistant.io/stable.json`, 2026-11-25) is still Supervisor 2026.11.0. Its `supervisor/api/proxy.py` was downloaded again at the 2026.11.0 and 2026.10.5 tags and has blob `cab849dc` at both, so the `auth_required`/`auth_ok` frames and the proxy filter keep the reviewed shape.
-- No published image accepts 2026.11.3 yet. The maintenance release prepared on 2026-11-25 carries it together with the later-patch rule below; until it is published, every published image denies 2026.11.3.
+- Images that accept 2026.11.3, together with the later-patch rule below: the maintenance release of 2026-11-25, that is Odoo 0.5.2, EMQX, LiteLLM and Nextcloud 0.5.1, n8n and Hermes 0.4.15, Headscale 0.4.20 (and OpenDesign's source 0.4.15). Every earlier image (Odoo 0.5.1 and before, EMQX, LiteLLM and Nextcloud 0.5.0 and before, n8n and Hermes 0.4.14 and before, Headscale 0.4.19 and before) denies 2026.11.3.
 
 The 0.4.13 images continue to deny these Core versions. Only an image rebuilt and accepted for a new product release includes this reviewed allowlist. Headscale 0.4.14 was the first such release; Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud carry the allowlist from their 0.4.14 release.
 
@@ -165,7 +165,7 @@ Owner decision 2026-11-25 (DQ-35, [decisions](multi-profile/decisions.md)): a re
 release of a month already in `_HA_VERSIONS` is accepted without waiting for an add-on release; a new month is still
 reviewed first ("reviewed 2026.11 means 2026.11.x is accepted"). Before, every Core update, a patch release included,
 locked the management panel (403) of every installed add-on until an add-on release listed it. This is a change to a
-permission check, so it was reviewed separately before it entered the maintenance release (status in the decision log).
+permission check, so it needs a separate review before it enters a release: it first enters the maintenance release of 2026-11-25 (Odoo 0.5.2, EMQX, LiteLLM and Nextcloud 0.5.1, n8n and Hermes 0.4.15, Headscale 0.4.20); the status of that review is in the decision log (DQ-35).
 
 **The rule** (`ha_role._later_patch`; its table `_REVIEWED_MONTHS` is computed from `_HA_VERSIONS` when the module loads,
 not per request, and cannot be changed at run time):

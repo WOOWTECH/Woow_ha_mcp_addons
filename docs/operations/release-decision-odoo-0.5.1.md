@@ -61,5 +61,5 @@ CHANGELOG（`addons/odoo/CHANGELOG.md`、根目錄 `CHANGELOG.md`）、`upgrade-
 
 - 經 Cloudflare 開 HA 時，面板不能儲存「瀏覽器來源檢查」設定（Cloudflare 壓縮把 ETag 改成弱 ETag，面板只接受強 ETag）。只影響這一張卡片；
   預設值照常運作，從區網開 HA 可以儲存。下一版修。負責人 2026-11-24 決定先發。
-- 後續（2026-11-25）：F2 在維修版修好了：面板也把 Cloudflare 這類代理改成的弱 ETag（`W/"…"`）當成同一個版本，送出時照舊送強的 `If-Match`，add-on 的比對沒有放寬；帳號清單有同樣的問題（唯讀、「全部撤銷」停用），一起修（`docs/multi-profile/unreleased-changes.md` A11）。上面寫的是這一版映像的行為，沒有改。
+- 後續（2026-11-25）：F2 在維修版修好了：面板也把 Cloudflare 這類代理改成的弱 ETag（`W/"…"`）當成同一個版本，送出時照舊送強的 `If-Match`，add-on 的比對沒有放寬；帳號清單的 ETag 用同一個讀法，一起修；但在 Cloudflare 上量到不受影響（2026-11-25 在真的 HA 加 Cloudflare 上量，瀏覽器的 `Accept-Encoding: gzip, deflate, br, zstd`）：`api/origin-policy`（94 位元組）被 Cloudflare 壓成 br、ETag 變弱，所以卡片不能存；`api/profiles`（161 位元組）由 Home Assistant 自己先壓 gzip、ETag 維持強；只有前面的代理改寫 HA 沒壓縮的回應時才可能變弱，例如用戶端不收壓縮（`docs/multi-profile/unreleased-changes.md` A11）。上面寫的是這一版映像的行為，沒有改。
 - 額外帳號只有 1 張回覆票券（已接受的設計）：Claude.ai 並行送出的兩個工具呼叫，有一個會回 `-32003`（忙碌），Claude 自動重試成功。
