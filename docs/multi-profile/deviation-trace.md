@@ -365,7 +365,7 @@
 | 131 | Nextcloud 換身分時網址怎麼比 | T-03 | — |
 | 132 | Nextcloud 存政策何時重啟子程式 | T-07 | — |
 | 133 | 換身分成功時的 log | — | HM-22 補的列（對照 PaaS #154）：Nextcloud 換身分成功時的 log |
-| 134 | Hermes 換身分換 token 的範圍 | FM-86、FM-153 | — |
+| 134 | Hermes 換身分與 token | FM-86、FM-153 | — |
 | 135 | Hermes Dashboard 登入限流 | FM-86 | — |
 | 136 | 長的 Hermes chat 佔名額 | FM-86 | — |
 | 137 | Headscale 帳號的形態（DQ-26） | FM-88、T-04 | — |
