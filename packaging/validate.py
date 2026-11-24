@@ -22,11 +22,11 @@ PRODUCTS = ('odoo', 'n8n', 'hermes', 'opendesign', 'emqx', 'litellm', 'nextcloud
 # (0.1.4 was the last); its source stays in apps/odoo-manage and the shared core, and is still tested.
 RETIRED = ('odoo-manage',)
 URL = 'https://github.com/WOOWTECH/Woow_ha_mcp_addons'
-VERSION = '0.4.14'
+VERSION = '0.4.15'
 # Products on a version line of their own; every other product ships VERSION. A version bump changes this data and the
 # files validate() binds to it (manifest, Dockerfile default, inputs.json, core PRODUCT_VERSIONS). The workflows'
 # version expressions are generated from it (version_expression) and compared verbatim (HM-17).
-VERSION_OVERRIDES = {'odoo': '0.5.1', 'emqx': '0.5.0', 'litellm': '0.5.0', 'nextcloud': '0.5.0', 'headscale': '0.4.19'}
+VERSION_OVERRIDES = {'odoo': '0.5.2', 'emqx': '0.5.1', 'litellm': '0.5.1', 'nextcloud': '0.5.1', 'headscale': '0.4.20'}
 TITLES = dict(zip(PRODUCTS, ('Odoo', 'n8n', 'Hermes', 'OpenDesign', 'EMQX', 'LiteLLM', 'Nextcloud', 'Headscale')))
 # The app a builder workflow builds: ci.yaml's matrix, release.yaml's dispatch input.
 SELECTORS = {'ci': 'matrix.app', 'release': 'inputs.app'}

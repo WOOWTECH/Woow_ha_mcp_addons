@@ -125,8 +125,8 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local/mcp-${{ inputs.app }}:${{ inputs.app == 'odoo' && '0.5.1' || inputs.app == 'emqx' && '0.5.0' || inputs.app == 'litellm' && '0.5.0' || inputs.app == 'nextcloud' && '0.5.0' || inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}
-          build-args: BUILD_VERSION=${{ inputs.app == 'odoo' && '0.5.1' || inputs.app == 'emqx' && '0.5.0' || inputs.app == 'litellm' && '0.5.0' || inputs.app == 'nextcloud' && '0.5.0' || inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}
+          tags: local/mcp-${{ inputs.app }}:${{ inputs.app == 'odoo' && '0.5.2' || inputs.app == 'emqx' && '0.5.1' || inputs.app == 'litellm' && '0.5.1' || inputs.app == 'nextcloud' && '0.5.1' || inputs.app == 'headscale' && '0.4.20' || '0.4.15' }}
+          build-args: BUILD_VERSION=${{ inputs.app == 'odoo' && '0.5.2' || inputs.app == 'emqx' && '0.5.1' || inputs.app == 'litellm' && '0.5.1' || inputs.app == 'nextcloud' && '0.5.1' || inputs.app == 'headscale' && '0.4.20' || '0.4.15' }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
       - name: Pinned scanners (public checksum-verified binaries)
         run: python packaging/install_scanners.py "$RUNNER_TEMP/scanners"
@@ -223,7 +223,7 @@ jobs:
         run: |
           set -eu
           python packaging/supply_chain.py verify "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"
-          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:${{ inputs.app == 'odoo' && '0.5.1' || inputs.app == 'emqx' && '0.5.0' || inputs.app == 'litellm' && '0.5.0' || inputs.app == 'nextcloud' && '0.5.0' || inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}"
+          IMAGE="ghcr.io/woowtech/amd64-mcp-$APP:${{ inputs.app == 'odoo' && '0.5.2' || inputs.app == 'emqx' && '0.5.1' || inputs.app == 'litellm' && '0.5.1' || inputs.app == 'nextcloud' && '0.5.1' || inputs.app == 'headscale' && '0.4.20' || '0.4.15' }}"
           TESTED_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["image_id"])' "$RUNNER_TEMP/candidate-evidence/candidate/subject.json")"
           docker tag "$TESTED_ID" "$IMAGE"
           test "$(docker image inspect "$IMAGE" --format '{{.Id}}')" = "$TESTED_ID"
@@ -232,7 +232,7 @@ jobs:
         run: python packaging/registry_gate.py public "$APP" "$RUNNER_TEMP/candidate-evidence/candidate"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: published-evidence-${{ inputs.app }}-${{ inputs.app == 'odoo' && '0.5.1' || inputs.app == 'emqx' && '0.5.0' || inputs.app == 'litellm' && '0.5.0' || inputs.app == 'nextcloud' && '0.5.0' || inputs.app == 'headscale' && '0.4.19' || '0.4.14' }}-${{ github.sha }}
+          name: published-evidence-${{ inputs.app }}-${{ inputs.app == 'odoo' && '0.5.2' || inputs.app == 'emqx' && '0.5.1' || inputs.app == 'litellm' && '0.5.1' || inputs.app == 'nextcloud' && '0.5.1' || inputs.app == 'headscale' && '0.4.20' || '0.4.15' }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/candidate-evidence/candidate/subject.json
             ${{ runner.temp }}/candidate-evidence/candidate/sbom.syft.json

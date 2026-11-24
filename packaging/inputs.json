@@ -13,8 +13,8 @@
     "nextcloud",
     "headscale"
   ],
-  "version": "0.4.14",
-  "version_overrides": {"odoo": "0.5.1", "emqx": "0.5.0", "litellm": "0.5.0", "nextcloud": "0.5.0", "headscale": "0.4.19"},
+  "version": "0.4.15",
+  "version_overrides": {"odoo": "0.5.2", "emqx": "0.5.1", "litellm": "0.5.1", "nextcloud": "0.5.1", "headscale": "0.4.20"},
   "os_security_upgrades": {
     "snapshot": "20261104T124343Z",
     "suite": "bookworm-security",
