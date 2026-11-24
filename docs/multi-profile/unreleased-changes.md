@@ -153,7 +153,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的
   CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
 - 開通那一版（Hermes 的升版 PR，把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Hermes 自己的 CHANGELOG 句子在 HM-24 筆記第 9 節
-  （`docs/provenance/ha-multiprofile-HM-24-20261119.md`；HM-24 審查 S-7）。HM-24 受開關管（檔頭第 2 點），還沒開通的版本不寫、也不刪這一行；
+  （`docs/provenance/ha-multiprofile-HM-24-20261119.md`；HM-24 審查 S-7；第 2 句的「換身分換 token」已被 2026-11-20 的定案取代，見該筆記末，不可照抄）。HM-24 受開關管（檔頭第 2 點），還沒開通的版本不寫、也不刪這一行；
   開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.4 EMQX

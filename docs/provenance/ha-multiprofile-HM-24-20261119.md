@@ -411,4 +411,6 @@ commit 照 DQ-36 不加署名行；用 clone 設定的身分 commit。審查前�
 
 契約第 9 節的列號本片原用 #129～#131。整合分支（`integ/train-b-20261125`，基準主線 `092b1b5`，第 9 節最後一列是 #133）先收本片，三列依「後合併的重編」慣例改為 #134～#136；本筆記內與 `contract.md`、`acceptance-matrix.md`、`deviation-trace.md`、`decisions.md`、`threat-model.md`、`docs/operations/acceptance.md`、`docs/operations/update-backup-rollback.md`、帳本 `change` 的相關引用同步改號。內文「Odoo #131」指 PaaS 的議題，沒有改。
 
-整合時另外照 2026-11-20 的定案（Hermes 換後端身分保留 MCP token，與 PaaS 一致）處理：`products.IDENTITY_BOUND` 維持 `{odoo, nextcloud}`、面板 `identityBound` 同，沒有 Hermes；HM-22 加進去的 Nextcloud 說明與本片的 Hermes 定案兩邊都留。上面第 4.1、12 節與審查處理的「Hermes 也綁身分、補上 Dashboard 也換」是 2026-11-19 的歷史描述，已被定案取代（契約開頭、`decisions.md` 開頭的定案）。
+整合時另外照 2026-11-20 的定案（Hermes 換後端身分保留 MCP token，與 PaaS 一致）處理：`products.IDENTITY_BOUND` 維持 `{odoo, nextcloud}`、面板 `identityBound` 同，沒有 Hermes；HM-22 加進去的 Nextcloud 說明與本片的 Hermes 定案兩邊都留。
+
+**本筆記裡「Hermes 也綁後端身分、換 token」的描述都是 2026-11-19 的歷史，已被這個定案取代**，程式與測試（`tests/test_hermes_multi_profile.py` 已照定案改寫）、契約、`decisions.md` 開頭的定案為準：結論的第 2、3、5、6、9 點、第 2～4.1 節、第 6、7 節寫的測試與突變、第 10 節 T-03 一點、第 12～14 節的待確認與審查處理都屬此類。**第 9 節 Hermes 開通版的 CHANGELOG 句子第 2 句（`The MCP token of a profile is bound to its Hermes identity: … rotates that profile's token`）已不成立，Hermes 的升版 PR 不可照抄**：要寫成換 Gateway 網址、Dashboard 網址或使用者（含補上或清空 Dashboard）保留原權杖，舊網址仍可用並連到新後端，與 PaaS 一致；第 4 句「Saving another identity」也要改成「Saving another backend」之類，不再說輪替。
