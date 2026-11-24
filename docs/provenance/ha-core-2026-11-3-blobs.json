@@ -1,0 +1,345 @@
+{
+ "core_tags": {
+  "2026.11.2": "ff5d56b825a0fb66b03d01bc297d49e206cdaba3",
+  "2026.11.3": "92da9f154079459b9e547126f9bd9fce726de16a"
+ },
+ "supervisor_tags": {
+  "2026.10.5": "fdba115f215c61f7a02c7c0567263785cfcf0034",
+  "2026.11.0": "c1c6f0a754c0656eb1af189f11009f1cfc4b3e28"
+ },
+ "stable_channel": {
+  "checked": "2026-11-25",
+  "source": "https://version.home-assistant.io/stable.json",
+  "supervisor": "2026.11.0",
+  "homeassistant": "2026.11.3"
+ },
+ "method": "2026-11-25, anonymous public reads only: GitHub git trees API listings (recursive) of both Core tags, the compare 2026.11.2...2026.11.3 and git ls-remote of the Core and Supervisor tags; every file downloaded from raw.githubusercontent.com at both tags with its git blob recomputed (blob <size>\\0<bytes>); the recomputed blobs equal the tree listings of both tags and, for 2026.11.2, ha-core-2026-11-2-blobs.json. Supervisor api/proxy.py downloaded at both Supervisor tags and recomputed the same way.",
+ "files": [
+  {
+   "repo": "core",
+   "path": "components/websocket_api/auth.py",
+   "versions": {
+    "2026.11.2": "244484bfa86026fd57fcd2a31eb79d8da9b26f92",
+    "2026.11.3": "244484bfa86026fd57fcd2a31eb79d8da9b26f92"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/messages.py",
+   "versions": {
+    "2026.11.2": "f1f543e2257720b625774633ecb671864f2d54e8",
+    "2026.11.3": "f1f543e2257720b625774633ecb671864f2d54e8"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/decorators.py",
+   "versions": {
+    "2026.11.2": "d5df7f88646daf7a4b217500a5192e90aa20c13f",
+    "2026.11.3": "d5df7f88646daf7a4b217500a5192e90aa20c13f"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/connection.py",
+   "versions": {
+    "2026.11.2": "e031b7c429bd6348c0a6957b4b0101896f59db5f",
+    "2026.11.3": "e031b7c429bd6348c0a6957b4b0101896f59db5f"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/http.py",
+   "versions": {
+    "2026.11.2": "da44d879478d17bafb29f34e2e87359c6ae8a250",
+    "2026.11.3": "da44d879478d17bafb29f34e2e87359c6ae8a250"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/commands.py",
+   "versions": {
+    "2026.11.2": "03297e0820d912f98f3441476e00c96fdbfe53dc",
+    "2026.11.3": "03297e0820d912f98f3441476e00c96fdbfe53dc"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/__init__.py",
+   "versions": {
+    "2026.11.2": "a00ab2af2e6a9805cb99981ea53d5a340f252a56",
+    "2026.11.3": "a00ab2af2e6a9805cb99981ea53d5a340f252a56"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/websocket_api/const.py",
+   "versions": {
+    "2026.11.2": "f1eb480dd114117779a3abf4ca2e310c338d900e",
+    "2026.11.3": "f1eb480dd114117779a3abf4ca2e310c338d900e"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/config/auth.py",
+   "versions": {
+    "2026.11.2": "75b0c88b916dbc8970afbf4041e1e463690029a8",
+    "2026.11.3": "75b0c88b916dbc8970afbf4041e1e463690029a8"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/config/__init__.py",
+   "versions": {
+    "2026.11.2": "784ba83b89fbbb51e7b40e8a91a16d17cd93b6cd",
+    "2026.11.3": "784ba83b89fbbb51e7b40e8a91a16d17cd93b6cd"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "auth/__init__.py",
+   "versions": {
+    "2026.11.2": "851a64b7b32f340b589236d8aebea282814df6bb",
+    "2026.11.3": "851a64b7b32f340b589236d8aebea282814df6bb"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "auth/auth_store.py",
+   "versions": {
+    "2026.11.2": "13ecdfc657a2c6ad97e9e59601932df50648c111",
+    "2026.11.3": "13ecdfc657a2c6ad97e9e59601932df50648c111"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "auth/const.py",
+   "versions": {
+    "2026.11.2": "05b9e6d7ad6f0bdb4db2e0b0ecfb69af42dbbe21",
+    "2026.11.3": "05b9e6d7ad6f0bdb4db2e0b0ecfb69af42dbbe21"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "auth/models.py",
+   "versions": {
+    "2026.11.2": "7342e9d4b8e9aee392cf112f59f1b718db3feb83",
+    "2026.11.3": "7342e9d4b8e9aee392cf112f59f1b718db3feb83"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "auth/permissions/__init__.py",
+   "versions": {
+    "2026.11.2": "aeab7ff8193d4f343115c9152c020c241a2aff4d",
+    "2026.11.3": "aeab7ff8193d4f343115c9152c020c241a2aff4d"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/hassio/__init__.py",
+   "versions": {
+    "2026.11.2": "a35b70ef1ad856b0fea9e6141f6296deb40bd4e4",
+    "2026.11.3": "a35b70ef1ad856b0fea9e6141f6296deb40bd4e4"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/http/auth.py",
+   "versions": {
+    "2026.11.2": "6188a2be73e2856fa0f652dd5b8ceba67f5ad785",
+    "2026.11.3": "6188a2be73e2856fa0f652dd5b8ceba67f5ad785"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/http/auth_util.py",
+   "versions": {
+    "2026.11.2": "4eed144347b036d85dc0a74b61b9769c6121e3e6",
+    "2026.11.3": "4eed144347b036d85dc0a74b61b9769c6121e3e6"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "helpers/json.py",
+   "versions": {
+    "2026.11.2": "c0b2468059d8f44aca5f65539f05a6e9d2e1ded7",
+    "2026.11.3": "c0b2468059d8f44aca5f65539f05a6e9d2e1ded7"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "util/json.py",
+   "versions": {
+    "2026.11.2": "1f8e6a0e3dcfffd440beab938573720014d3692c",
+    "2026.11.3": "1f8e6a0e3dcfffd440beab938573720014d3692c"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/onboarding/views.py",
+   "versions": {
+    "2026.11.2": "21eb4a5f0eb9774e87663be06d8f117f05977ab8",
+    "2026.11.3": "21eb4a5f0eb9774e87663be06d8f117f05977ab8"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/http/const.py",
+   "versions": {
+    "2026.11.2": "b4d160ab1ac66f7cd0fc64b41393dd5c9d162257",
+    "2026.11.3": "b4d160ab1ac66f7cd0fc64b41393dd5c9d162257"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/http/__init__.py",
+   "versions": {
+    "2026.11.2": "4a6e5e214363073f3d508b756f43239055e9d063",
+    "2026.11.3": "4a6e5e214363073f3d508b756f43239055e9d063"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/hassio/const.py",
+   "versions": {
+    "2026.11.2": "006649f53350b668d1aa5eace50ee0290187ed0e",
+    "2026.11.3": "006649f53350b668d1aa5eace50ee0290187ed0e"
+   },
+   "changed": false
+  },
+  {
+   "repo": "core",
+   "path": "components/hassio/auth.py",
+   "versions": {
+    "2026.11.2": "4f728ec81f41c807851d69f298ab45c676f10f7f",
+    "2026.11.3": "4f728ec81f41c807851d69f298ab45c676f10f7f"
+   },
+   "changed": false
+  },
+  {
+   "repo": "supervisor",
+   "path": "supervisor/api/proxy.py",
+   "versions": {
+    "2026.10.5": "cab849dccb0f3a5d448166ea1b66f6850a334587",
+    "2026.11.0": "cab849dccb0f3a5d448166ea1b66f6850a334587"
+   },
+   "changed": false
+  }
+ ],
+ "also_read": [
+  {
+   "repo": "core",
+   "path": "components/hassio/websocket_api.py",
+   "versions": {
+    "2026.11.2": "17b6b99235ccd94110ea5511db1f66aaf427e658",
+    "2026.11.3": "17b6b99235ccd94110ea5511db1f66aaf427e658"
+   },
+   "changed": false,
+   "why": "_async_check_ingress_access: Core creates an ingress session for an add-on whose panel is admin-only (panel_admin: true, set by every add-on here) only for an admin user; named in docs/ha-role-core-contract.md as a second gate, which the verifier does not rely on"
+  }
+ ],
+ "tag_comparison": {
+  "range": "2026.11.2...2026.11.3",
+  "commits": 43,
+  "files_changed": 76,
+  "contract_paths": [
+   "homeassistant/auth/",
+   "homeassistant/components/auth/",
+   "homeassistant/components/websocket_api/",
+   "homeassistant/components/http/",
+   "homeassistant/components/hassio/",
+   "homeassistant/components/config/",
+   "homeassistant/components/onboarding/",
+   "homeassistant/components/person/"
+  ],
+  "contract_paths_changed": [
+   "homeassistant/components/auth/indieauth.py"
+  ],
+  "changed_outside_integrations_and_tests": [
+   "homeassistant/components/frontend/manifest.json",
+   "homeassistant/const.py",
+   "homeassistant/core_config.py",
+   "homeassistant/package_constraints.txt",
+   "packages/pylint-home-assistant/pylint_home_assistant/generated/mdi_icons.py",
+   "pyproject.toml",
+   "requirements_all.txt"
+  ],
+  "integrations_changed": [
+   "alexa_devices",
+   "auth",
+   "blink",
+   "clicksend_tts",
+   "earn_e_p1",
+   "fritz",
+   "frontend",
+   "go2rtc",
+   "hydrawise",
+   "hydroquebec_peak",
+   "iometer",
+   "marketplace",
+   "midea",
+   "modbus",
+   "mqtt",
+   "nintendo_parental_controls",
+   "rest_command",
+   "shelly",
+   "smartthings",
+   "sonos",
+   "stream",
+   "switcher_kis",
+   "tasmota",
+   "tuya",
+   "twilio_call",
+   "unifi",
+   "vizio",
+   "vodafone_station",
+   "webostv"
+  ],
+  "contract_path_diffs_read": [
+   {
+    "path": "homeassistant/components/auth/indieauth.py",
+    "blob_2026.11.3": "40e1ff372786d3f359d60239cd5a5b44008f1f4e",
+    "lines": "+5 -1",
+    "change": "fetch_redirect_uris (client_id page fetch of the HTTP login flow) opens its own aiohttp session with max_line_size and max_field_size set to MAXIMUM_HEADER_SIZE (65536, helpers/aiohttp_client.py, unchanged); called by verify_redirect_uri, which the HTTP login flow (components/auth/login_flow.py) uses; not config/auth/list and not the Supervisor handshake"
+   }
+  ],
+  "outside_diffs_read": [
+   {
+    "path": "homeassistant/core_config.py",
+    "blob_2026.11.3": "694bbcbd0e950499aecf0ca7e52e4760c30a2080",
+    "lines": "+3 -2",
+    "change": "Config._async_update sets the time zone first so an invalid one raises before any field changes; the auth provider and MFA configuration in the same file (auth_manager_from_config) is outside the hunks"
+   },
+   {
+    "path": "homeassistant/const.py",
+    "blob_2026.11.3": "6d953113a2c16034ec8798c4dea7281d2a285286",
+    "lines": "+1 -1",
+    "change": "PATCH_VERSION 2 to 3"
+   }
+  ]
+ }
+}

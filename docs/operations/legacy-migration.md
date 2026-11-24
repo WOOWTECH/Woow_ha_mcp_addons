@@ -84,7 +84,8 @@ runtime stopped, the same restore is `--restore-policy /data/mcp/owner-defaults-
 ### When the panel refuses an unreviewed Core
 
 The panel, and with it the restore and keep actions, works only on the Home Assistant Core releases the add-on version
-reviewed; on any other Core it answers 403 「這個 HA Core 版本尚未審核：<版本>」 and changes nothing, while MCP keeps
+reviewed and, from the 2026-11-25 maintenance release, on later patch releases of those months; on any other Core (a new
+month, a pre-release) it answers 403 「這個 HA Core 版本尚未審核：<版本>」 and changes nothing, while MCP keeps
 serving with the migrated all-on policy (the role check does not apply to MCP). Then:
 
 1. **Recommended:** update the add-on to a version that has reviewed this Core, then restore from the panel. The

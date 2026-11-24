@@ -614,7 +614,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
 | ③ | 有界讀 body（同今天） | 400／403（讀到一半斷線）／408／413／415（要 JSON 的路徑 `Content-Type` 不是 `application/json`） | 不看 |
 | ④ | 斷線監看 | 403 | 不看 |
 | ⑤ | 方法表與**不讀任何 state** 的格式檢查（JSON 形狀、鍵集合）；未知的 `/api/*` 操作照今天在角色檢查之後才回 404 | 固定 400／405，沒有細節 | 不看 |
-| ⑥ | **角色檢查一**（`final_role`） | 403（Core 未審帶 `core_version_unreviewed`） | 不看 |
+| ⑥ | **角色檢查一**（`final_role`） | 403（Core 版本未放行時帶 `core_version_unreviewed`；已審查月份的後續修補版放行，#30） | 不看 |
 | ⑦ | 解析 `X-MCP-Profile`（帳號範圍路徑） | 400 `profile_id_required`／`profile_id_invalid`；404 `profile_not_found`；索引壞 503 `profile_index_corrupt` | 看 |
 | ⑧ | 拿鎖：帳號增刪改用全域 CRUD 鎖，帳號範圍用該帳號 `mutation_lock`；最多等 2 秒 | 503 | — |
 | ⑨ | 讀 state、依 state 驗證（今天 `admin_action` 的格式驗證） | 固定 400 | 看 |
@@ -769,7 +769,7 @@ HM-13c 審查修正（MF-1、S-2）：
 路由。HM-10 審查 S-1：撤銷之前先依 id 順序拿每個已登錄額外帳號自己的鎖（第 3.2 節 ⑧；任一把 2 秒拿不到就 503，什麼都不撤銷、不改名、
 不留收據），一直拿到該帳號移除登錄為止，所以撤銷只做一次：索引改名之後，8081 不再路由任何帳號目錄的 token（含隔離開始時正在輪替的
 新 token），隔離前拿的 If-Match 也寫不進被撤銷的 state。
-面板 403（Core 未審）時這個動作也用不了。HM-10 定案：開機時 `profiles/` 列不出來（不是目錄、是連結或別的 uid 的）也算索引不能用
+面板 403（Core 版本未放行：新月份、預覽版或其他格式，#30）時這個動作也用不了。HM-10 定案：開機時 `profiles/` 列不出來（不是目錄、是連結或別的 uid 的）也算索引不能用
 （8081 全部 503、bootstrap 是 `corrupt`，HM-08）；這時若沒有索引檔可隔離，隔離回 409 `config_conflict`，什麼都不撤銷、不留收據：
 修好 `profiles/` 之後重啟 add-on 才恢復（隔離解決不了）。
 
@@ -843,7 +843,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN` | 422 | 開通的產品 `backend/patch` 把一條後端網址改到另一個來源（scheme、host 或 port；沒寫 port 用 80／443），卻沒帶那條網址會送去、而且已存的秘密（`identity_fields.URL_SECRETS`：Odoo `password`；Odoo Manage `api_key`；n8n `key` 與 `mcp_access_token`；Hermes `gateway_url`→`gateway_api_key`、`dashboard_url`→`dashboard_password`；EMQX `api_key` 與 `api_secret`；LiteLLM `master_key`；Nextcloud `app_password`；Headscale `api_key`；OpenDesign 沒有秘密）。帶了就算（值不限；可為 null 的帶 null＝清掉，不會送過去）；同一個來源（只改路徑、大小寫、寫出預設 port）不需要；網址清空或第一次設定不需要；同一台主機的其他寫法（結尾的點、IPv4 的其他寫法）算不同來源（安全的方向）；`backend` 整份取代一定帶秘密，不檢查。HM-12 定案：在 If-Match 與 `backend_fixed` 之後，什麼都不寫、不重起子程式 | `code`（本體 `{"error":"request denied","detail":{"code":"CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}`；以例外回，沒有回聲） | ⑪ | 不出現（沒開通照今天：`Hc/backend_edit.py:1-5` 刻意允許換網址沿用已存的秘密） | 只有 Headscale，422 `{"detail":"CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}`（字串）；比整條網址（`base_url`、`paas_base_url`） | §8.8 #41、#115（DQ-40 ⑨） | 新 | HM-12、HM-26；`tests/test_new_origin_secret.py` |
 | `owner_defaults_unavailable` | 409 | 額外帳號的 owner-defaults 操作（HM-10 定案：不管目錄裡有什麼，在 If-Match 之後）；沒有標記的 state | `code`（形狀 C：本體另帶 `error:"owner_defaults_unavailable"`） | ⑪ | 照今天 | 沒有同名代碼（owner-defaults 只在預設帳號） | HA 既有 | 既有 | HM-10；`tests/test_profile_admin_api.py` |
 | `config_apply_failed` | 503 | 已存檔，但重啟該帳號子程式失敗。開通、綁身分的產品（`products.IDENTITY_BOUND`：Odoo、Nextcloud）換身分時 token 已換，本體在 `saved` 後多帶 `token_rotated:true`（HM-12） | `code`（形狀 D：`saved:true`＋`detail`＋`configuration`，沒有 `error`） | 提交後 | 照今天 | 沒有同名代碼 | HA 既有 | 既有 | HM-09、HM-10、HM-12 |
-| `core_version_unreviewed` | 403 | HA Core 版本不在白名單（只有角色檢查會帶；identity 的 403 沒有 detail） | `code`、`ha_version` | ⑥／⑩ | 照今天 | 沒有平台門檻 | §8.8 #30 | 既有 | HM-19a（每次升版補審） |
+| `core_version_unreviewed` | 403 | HA Core 版本不在白名單、也不是已審查月份的後續修補版（只有角色檢查會帶；identity 的 403 沒有 detail） | `code`、`ha_version` | ⑥／⑩ | 照今天 | 沒有平台門檻 | §8.8 #30 | 既有 | HM-19a（每次升版補審） |
 | `unsupported` | 409 | 產品沒提供 `backend/test`、`child/restart` 或 `diagnostics`（`child/restart` 在 If-Match、Idempotency-Key 檢查之後才判斷） | 沒有 `detail`（形狀 E：`{"error":"unsupported"}`） | ⑪ | 照今天 | 沒有同名回應 | HA 既有 | 既有 | HM-10（帳號範圍照今天）；HM-01 凍結 |
 | `backend_check_failed` | 503 | `backend/test` 20 秒內沒做完或丟出例外 | 沒有 `detail`（形狀 E：`{"error":"backend_check_failed"}`） | ⑪（執行測試時） | 照今天 | 各產品的連線測試失敗回 200 `{"success":false,"message":<文字>}`（例如 `apps/odoo/odoo_mcp_admin/routers/config.py:143-166`） | HA 既有（不回伺服器文字，同 §8.8 #49） | 既有 | HM-10（測選定帳號）；HM-01 凍結 |
 | `backend_fixed` | 409 | 產品不允許從面板改後端（`backend_can_edit` 為否）時 `PUT backend`、`backend/patch`（在 If-Match 檢查之後） | 沒有 `detail`（形狀 E：`{"error":"backend_fixed"}`） | ⑪ | 照今天 | 沒有同名回應 | HA 既有 | 既有 | HM-10；HM-01 凍結 |
@@ -1320,7 +1320,7 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 27 | endpoint | 不存，用瀏覽器 origin | 存在預設 state、全域；額外帳號的 bootstrap 顯示它，`PUT endpoint` 409 `endpoint_global` | Ingress 和 MCP 不同源（FM-12）；DQ-13 已定（2026-11-15 17:4x） | 部署 |
 | 28 | 沒填連線的子程式 | 5 個產品照起；n8n 額外帳號起文件模式（R06 PR-n8n-01） | 都不起；n8n 預設照起；n8n 額外帳號沒後端時所有工具回 `backend_not_configured`（DQ-22 已定，2026-11-19 08:4x 使用者採用建議） | 省記憶體（FM-45） | 部署 |
 | 29 | 日誌 | 每帳號 Logs 5,000 筆／2 MiB、SSE；保留 2 個剛刪除帳號（Pc/routers/logs.py:59-65） | 每帳號子程式輸出 200 筆／128 KiB 快照；管理程序紀錄在 add-on log（帶 id 前 8 碼）；刪除就釋放 | HA 既有診斷模型（FM-65） | 部署 |
-| 30 | 面板 403（Core 未審） | 沒有平台門檻 | 整個面板 403，任何帳號都撤銷不了，只能停 add-on | HA 角色驗證契約（FM-70） | 部署 |
+| 30 | 面板 403（Core 版本未放行） | 沒有平台門檻 | 整個面板 403，任何帳號都撤銷不了，只能停 add-on。已審查月份的後續修補版自動放行（審過 2026.11 就放行 2026.11.x；2026-11-25 維修版起），新月份、預覽版、比該月審過的最早版本更早的修補版與其他格式才 403 | HA 角色驗證契約（FM-70）；同月份修補版自動放行是負責人 2026-11-25 的決定（DQ-35，`docs/ha-role-core-contract.md`） | 部署 |
 | 31 | 管理 API 沒帶帳號 | 當 default | 開通後 400 `profile_id_required` | fail closed（I12；DQ-40 ①） | 加嚴 |
 | 32 | `X-MCP-Profile` 格式錯 | 404（Pc/profiles.py:611-614） | 400 `profile_id_invalid`（在角色檢查後） | 分清「格式錯」與「不存在」 | 加嚴 |
 | 33 | 管理回應帶帳號回聲 | 沒有 | 有，面板比對 | fail closed（DQ-40 ②） | 加嚴 |
@@ -1493,3 +1493,4 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | v1 定稿（HM-22 合併 claude-delivery） | 2026-11-19 | HM-22 | 把 `claude-delivery` `95b7e9d`（HM-18 的 PR #122：契約定稿、第 1.4 節、DQ-04 與 DQ-22 定案後 #28 的 HA 欄、#47 的類型改部署、#62 的類型改既有；PR #123 P9 計畫產生器；PR #124 測試工具的 port 碰撞）用 merge commit 合進本片（不 rebase、不 force push）：主線第 9 節最後仍是第 128 列，本片的第 131～133 列不必改號（仍是暫定：HM-21、HM-23～HM-26 也從 #131 起編，後合併的一方重編）。解衝突時以 HM-18 的定稿文字為底，本片加的都留：第 9 節說明段 HM-18 改寫的第 118～128 列三行在前、本片那行在後；本節 HM-18 的三列在前、本片的兩列與這一列在後。合併後跟著改：第 1.4 節第 16 點補開通的 Nextcloud（url 或 username 換 token，url 的比法見 #131；本片第 3.1 節 `backend` 列的事實，不是新規則）；`deviation-trace.md` 用 repo 外產生器的暫存複本重產（T-03 加 #131、T-07 加 #132，同 `acceptance-matrix.md`；#133 寫出處；檔頭一句），第 9 節說明段本片那行改成重產後的說法。第 3、4 節的規則、差異表的列與錯誤代碼都沒改 |
 | v1 定稿（火車 A 整合分支） | 2026-11-23 | 整合 | 整合分支 `integ/train-a-0.5.0-20261123` 併入 #133（HM-21 LiteLLM 加 HM-23 EMQX 的 PaaS 對齊整合候選，取代 #125、#127）與 #126（HM-22 Nextcloud）：第 9 節 HM-22 的三列由 #129～#131 依「後合併的重編」改成 #131～#133（#129 LiteLLM、#130 EMQX 不動），`acceptance-matrix.md`、`deviation-trace.md`、`decisions.md` 與 HM-22 筆記的引用跟著改。規則內容、錯誤代碼與其他列沒改；產品開關仍全關，版號不變。 |
 | v1 定稿（0.5.1，F1） | 2026-11-23 | Odoo 0.5.1 | 負責人 2026-11-23 決定「修好再發 0.5.1」：GET 串流不占回覆票券。第 2.4 節 GET 串流列與說明（上限 24／8、乾淨結束的位元組上限、WARNING）；第 5 節表格（GET 串流上限回 24／8，加每串流 2 MiB／128 KiB 一列）與 HM-19c 容量修訂段（撤回 3／1，加全域最壞記憶體算式的 `ODOO_STREAM_RESERVE_MIB`＝128，六帳號需要量 2,839 → 2,967 MiB（審查後由 1 MiB／64 改為 2 MiB／128））；第 6 節 HM-19c 修訂段。票券本身（64 MiB、512 MiB、3／1、不排隊、POST 回 200＋`-32003`＋`Retry-After: 5`）不變 |
+| v1 定稿（維修版，Core 白名單） | 2026-11-25 | 維修版 | 負責人 2026-11-25 決定「同月份修補版自動放行」（DQ-35 補記；審過 2026.11 就放行 2026.11.x，新月份仍要先審）：第 9 節 #30 與第 4.1 節 `core_version_unreviewed` 列、第 3.2 節 ⑥ 與第 3.6 節的一句改成「Core 版本未放行」（已審查月份的後續修補版放行）；規則、風險與不變的防線在 `docs/ha-role-core-contract.md`。其餘的規則內容、錯誤代碼與列號沒改；產品開關與版號不變 |

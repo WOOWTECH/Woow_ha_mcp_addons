@@ -1,7 +1,9 @@
 # HA role check: reviewed Core releases
 
 `packages/mcp-admin-core/mcp_admin_core/ha_role.py` decides whether the user behind an admin request is an HA owner or
-administrator. This page records why it accepts the Core releases listed in `_HA_VERSIONS` and how a release is added.
+administrator. This page records why it accepts the Core releases listed in `_HA_VERSIONS`, which later patch releases of those months it
+accepts without a review of their own (since 2026-11-25, see "Later patch releases of a reviewed month") and how a release is
+added.
 
 ## Who produces what
 
@@ -13,15 +15,15 @@ administrator. This page records why it accepts the Core releases listed in `_HA
   `sys_create_background_task` instead of `sys_create_task`, the frames and the filter are unchanged) terminates the add-on handshake:
   it sends `{"type": "auth_required", "ha_version": <version>}` and `{"type": "auth_ok", "ha_version": <version>}`,
   where the version is the Core version Supervisor has recorded (`sys_homeassistant.version`), and checks the add-on's
-  `SUPERVISOR_TOKEN` itself. The verifier requires exactly these keys, a listed version, and the same version in both
-  frames (the agreement only fails during an update race). Supervisor updates are frozen during tests and pinned for
+  `SUPERVISOR_TOKEN` itself. The verifier requires exactly these keys, a listed version (or a later patch release of a
+  listed month, see below), and the same version in both frames (the agreement only fails during an update race). Supervisor updates are frozen during tests and pinned for
   the build (Supervisor 2026.09.3); a different frame shape fails closed.
 - **The consumed Core contract** (Supervisor-to-Core leg): `config/auth/list` behind `require_admin`, its per-user fields
   `id`, `is_owner`, `is_active`, `system_generated`, `group_ids`, `local_only`, the result envelope
   `{id, type: "result", success, result}`, and the admin group id `system-admin`. The verifier allows only an active,
   non-system user who is the owner or in `system-admin`.
 
-## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), and 2026.11.2 (Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud 0.4.14; Headscale 0.4.19)
+## Review of 2026.7.2–2026.9.4, 2026.10.0 (0.1.6), 2026.10.1 (0.1.9), 2026.10.2–2026.10.4 (0.4.2), 2026.11.0–2026.11.1 (Headscale 0.4.14), 2026.11.2 (Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud 0.4.14; Headscale 0.4.19), and 2026.11.3 (maintenance release of 2026-11-25)
 
 Git blob SHAs (first 8 characters) of the Core files that produce or can change that contract, from the GitHub tree of
 each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
@@ -65,6 +67,14 @@ the 2026.11.2 tag (commit `ff5d56b8`). The `11.3` column is the 2026.11.3 tag (c
 - Outside the 25 files: the tag comparison (52 commits, 95 files) changes no file under `auth/`, `components/auth/`, `components/websocket_api/`, `components/http/`, `components/hassio/`, `components/config/`, `components/onboarding/` or `components/person/`. Besides integrations and tests it changes the version constants (`const.py`, `pyproject.toml`), the frontend pin (20261028.5 to 20261028.6), integration requirements, `input_text/entity.py` and `helpers/config_validation.py` (a configuration error names a section's keys instead of printing its values); none of them is on the `config/auth/list` path or in the Supervisor handshake.
 - Supervisor 2026.11.0 (tag `c1c6f0a754c0656eb1af189f11009f1cfc4b3e28`, released 2026-11-06) ships `supervisor/api/proxy.py` blob `cab849dc`, byte-identical to 2026.10.5 (downloaded at both tags), so the `auth_required`/`auth_ok` frames and the proxy filter keep the reviewed shape.
 - No published image accepts 2026.11.2 yet: Headscale 0.4.18 and the other products' 0.4.13 images deny it. Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud accept it from 0.4.14; Headscale from 0.4.19.
+
+2026.11.3 review (2026-11-25): the exact GitHub tag commit is Core `92da9f154079459b9e547126f9bd9fce726de16a` (11.3; Core's stable channel offers it as the default on 2026-11-25), compared to reviewed 11.2 `ff5d56b825a0fb66b03d01bc297d49e206cdaba3`; 11.3 is 43 commits ahead of 11.2 and none behind. Every one of the 25 consumed and adjacent files is byte-identical between 11.2 and 11.3: each file was downloaded at both tags and its git blob recomputed, and the blobs equal the GitHub git tree listings of both tags and, for 11.2, [the 2026.11.2 record](provenance/ha-core-2026-11-2-blobs.json). No hunk to read in those files; the consumed contract is unchanged. Full blob SHAs, tag commits and the tag comparison are in [the 2026.11.3 record](provenance/ha-core-2026-11-3-blobs.json).
+
+- Outside the 25 files: the tag comparison (43 commits, 76 files) changes one file under a contract path, `components/auth/indieauth.py`, and none under `auth/`, `components/websocket_api/`, `components/http/`, `components/hassio/`, `components/config/`, `components/onboarding/` or `components/person/`. The rest is 28 other integrations (mostly device and service integrations) and their tests, the frontend pin (20261028.6 to 20261028.8, in `components/frontend/manifest.json`, `package_constraints.txt` and the pylint plugin's `FRONTEND_VERSION`), the version constants (`const.py`, `pyproject.toml`), integration requirements (`requirements_all.txt`) and `core_config.py`; none of them is on the `config/auth/list` path or in the Supervisor handshake.
+- `components/auth/indieauth.py` (+5 −1, read in full): `fetch_redirect_uris`, which fetches a login client's `client_id` page to read its `redirect_uri` links, now opens its own `aiohttp` session with `max_line_size` and `max_field_size` set to `MAXIMUM_HEADER_SIZE` (65536; that constant is in `helpers/aiohttp_client.py`, unchanged between the tags). It is called by `verify_redirect_uri`, which the HTTP login flow (`components/auth/login_flow.py`) uses to validate an OAuth/IndieAuth client. That is not the `config/auth/list` path (a WebSocket command of `components/config/auth.py`, unchanged) and not the Supervisor handshake, and the hunk does not touch `User`, groups, `require_admin` or the result envelope.
+- `core_config.py` (+3 −2, read in full): `Config._async_update` now sets the time zone first, so an invalid one raises before any other field changes. The auth provider and multi-factor configuration of the same file (`auth_manager_from_config`) lies outside the hunks. `const.py` only changes `PATCH_VERSION` from 2 to 3.
+- Supervisor: the stable channel (`version.home-assistant.io/stable.json`, 2026-11-25) is still Supervisor 2026.11.0. Its `supervisor/api/proxy.py` was downloaded again at the 2026.11.0 and 2026.10.5 tags and has blob `cab849dc` at both, so the `auth_required`/`auth_ok` frames and the proxy filter keep the reviewed shape.
+- No published image accepts 2026.11.3 yet. The maintenance release prepared on 2026-11-25 carries it together with the later-patch rule below; until it is published, every published image denies 2026.11.3.
 
 The 0.4.13 images continue to deny these Core versions. Only an image rebuilt and accepted for a new product release includes this reviewed allowlist. Headscale 0.4.14 was the first such release; Odoo, n8n, Hermes, EMQX, LiteLLM and Nextcloud carry the allowlist from their 0.4.14 release.
 
@@ -129,22 +139,87 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
    note under the table what changed, and update the heading of that review section.
 4. In the same change, update every other place that spells out the reviewed versions:
    - the comment above `_HA_VERSIONS` in `ha_role.py`;
-   - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these` and remove it from
-     `NEAR_MISSES` and `UNREVIEWED` (they hold, for example, `2026.11.3`; the near-miss tests fail until it is
-     removed), and replace it where it serves as the unreviewed example in
-     `test_wrong_sequence_and_revoked_machine_capability`;
+   - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these`, to the per-release list of
+     `test_core_2026_11_releases_keep_fresh_admin_check` (or its successor for a new month), and to the two tables of
+     the rule's tests (the newest reviewed patch of each month in
+     `test_exactly_the_reviewed_versions_and_the_later_patches_of_reviewed_months_are_accepted` and `_REVIEWED_MONTHS` in
+     `test_the_rule_table_is_computed_from_the_reviewed_list_and_cannot_be_changed_at_run_time`); the range
+     `(reviewed: …)` in `test_an_unreviewed_core_version_denies_with_its_reason_and_one_log_line` names the newest
+     listed version. Then move every example that stood for the version: once it is listed it is neither a later patch
+     (`LATER_PATCHES` and the log tests: use the next patch number) nor unreviewed (`NEAR_MISSES`, `UNREVIEWED`; the
+     near-miss tests fail until it is removed). For the first release of a new month the unreviewed examples move to the
+     month after it (`2026.12.0` today, in `test_wrong_sequence_and_revoked_machine_capability` and the gateway tests);
    - the version-list sentence in [n8n-ha-role.md](n8n-ha-role.md) ("Compatibility is deliberately restricted to …");
    - the new release's `addons/<product>/CHANGELOG.md`, naming the added versions;
    - the supported-version note in that product's `DOCS.md`, `README.md`, the repository `README.md`, and
      `docs/operations/guide.md`. Other products' published images keep their earlier allowlist until separately built.
-5. Ship it in a new add-on release: an installed add-on accepts only the versions listed in its own image.
+5. Ship it in a new add-on release: an installed add-on accepts only the versions listed in its own image and the later
+   patch releases of those months (next section). The first release of a new month always needs steps 1 to 4 and a new
+   add-on release before any installed add-on accepts it.
+6. A later patch release that the rule has been accepting is reviewed the same way at the next add-on release: once it is
+   listed it has a column and its log line stops.
 
-Any version not listed, including pre-releases, later patch releases and differently formatted strings, is refused.
-Next release: the refusal says why. The verifier stops before it sends the machine token (as before) and returns a
-denial that carries the advertised version when it has the form of a Core release or pre-release (`shown_version`;
-any other string is reported as unrecognized and never echoed). The panel then answers its pages with a static page
-"這個 HA Core 版本尚未審核：<version>" and its API with HTTP 403
+## Later patch releases of a reviewed month
+
+Owner decision 2026-11-25 (DQ-35, [decisions](multi-profile/decisions.md)): a release that is later than every reviewed
+release of a month already in `_HA_VERSIONS` is accepted without waiting for an add-on release; a new month is still
+reviewed first ("reviewed 2026.11 means 2026.11.x is accepted"). Before, every Core update, a patch release included,
+locked the management panel (403) of every installed add-on until an add-on release listed it. This is a change to a
+permission check, so it was reviewed separately before it entered the maintenance release (status in the decision log).
+
+**The rule** (`ha_role._later_patch`; its table `_REVIEWED_MONTHS` is computed from `_HA_VERSIONS` when the module loads,
+not per request, and cannot be changed at run time):
+
+- The advertised string is exactly `year.month.patch`: four ASCII digits, a month from 1 to 12 and a patch of one to
+  three ASCII digits, neither padded with zeros (`0` alone is fine). Padding (`2026.09.4`, `2026.10.01`), spaces or a
+  newline around it, a `v` prefix, a pre-release (`b`, `rc`, `.dev`), a fourth number and any non-ASCII digit are
+  refused, and so is a value that is not a string.
+- The year and month already have a release in `_HA_VERSIONS`, and the patch is greater than the newest reviewed patch of
+  that month. With 2026.11.3 reviewed, 2026.11.4 and every later patch of 2026.11 are accepted (2026.11.0 to 2026.11.3 are
+  listed); 2026.7.0 and 2026.7.1 (before the first reviewed release of July, 2026.7.2) are not, and neither are
+  2026.12.0, 2026.6.9 or any other month that is not listed.
+- Nothing else changes. `auth_required` and `auth_ok` must carry the same version; a version that is not accepted is
+  refused before the machine token is sent; every decision is a fresh connection with a fresh `config/auth/list` and no
+  cache; the answer is parsed as strictly as before (a changed shape denies); only an active, non-system user who is the
+  owner or in `system-admin` passes.
+- One add-on log line per version and process, at most 32 (the refusal's own limit, counted apart):
+  `management: Home Assistant Core <version> is accepted as a later patch release of <year>.<month>, which this add-on
+  release reviewed (<first> to <last>); the version itself was not reviewed. The management panel checks the administrator
+  role as for a reviewed release.` No frame, token or user is logged, and a listed version logs nothing.
+
+**Why this is acceptable.** The version string is Supervisor's record of the installed Core, not something a client
+sends; it only says which Core code answers `config/auth/list`. A patch release is a bug-fix release of the code of its
+month, so the contract read for that month is expected to stand. Of the 16 patch releases reviewed so far after a reviewed
+release of the same month (2026.7.3–7.4, 8.1–8.3, 9.1–9.4, 10.1–10.4, 11.1–11.3), 13 changed none of the 21 files of
+the table and 3 changed one each (2026.8.2 `hassio/__init__.py`, 2026.9.3 `onboarding/views.py`, 2026.10.2
+`auth/__init__.py`); in all three the hunks were outside the consumed contract (notes above).
+
+**The risk accepted.** A later patch release could change the contract this verifier consumes (the fields of
+`config/auth/list`, the meaning of `is_owner`, `is_active`, `system_generated` or the `system-admin` group, or who
+`require_admin` lets through) before an add-on release has read it. The strict parsing denies a changed shape, not a
+changed meaning that keeps the shape. The window lasts until the next add-on release reviews that patch release; the
+owner accepted it so that a Core patch update does not lock the panel. The first release of a new month, and its
+pre-releases, are not covered: they need the full review above before any add-on accepts them.
+
+**Defences that stay.** (1) Core creates an Ingress session for an add-on whose panel is admin-only (`panel_admin: true`,
+set by all eight add-ons here) only for an admin user (`components/hassio/websocket_api.py`,
+`_async_check_ingress_access`, read at 2026.11.3). The add-on does not rely on it (the README: `panel_admin` is not an
+authorization); it is a second gate. (2) Every request to the panel is checked against the live role on a fresh
+connection, so a demotion applies to the next request. (3) A string that is not exactly `year.month.patch` of a reviewed
+month is refused before the token is sent. (4) MCP endpoints never used this check and are not affected either way.
+
+## A version that is not accepted
+
+Any other version, including a new month, a patch release before the first reviewed one of its month, pre-releases and
+differently formatted strings, is refused. The refusal says why. The verifier stops before it sends the machine token
+(as before) and returns a denial that carries the advertised version when it has the form of a Core release or
+pre-release (`shown_version`; any other string is reported as unrecognized and never echoed). The panel then answers its
+pages with a static page "這個 HA Core 版本尚未審核：<version>" and its API with HTTP 403
 `{"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": <version or null>}}`; every
-other refusal keeps the fixed `{"error": "request denied"}`. The add-on log gets one line per version and process
-(`management: Home Assistant Core <version> has not been reviewed for this add-on release …`), without any frame, token
-or user. MCP endpoints authenticate with the add-on token only and never use this check, so they keep serving.
+other refusal keeps the fixed `{"error": "request denied"}`. The page and the panel's message say that a later patch
+release of a reviewed month is accepted without a review, so a refused version is a new month, an earlier patch, a
+pre-release or an unrecognized string. The add-on log gets one line per version and process
+(`management: Home Assistant Core <version> has not been reviewed for this add-on release (reviewed: <first> to <last>);
+only a later patch release of a reviewed month is accepted without a review, so the management panel refuses every request
+until an add-on release reviews it. MCP endpoints do not use this check.`), without any frame, token or user. MCP endpoints
+authenticate with the add-on token only and never use this check, so they keep serving.
