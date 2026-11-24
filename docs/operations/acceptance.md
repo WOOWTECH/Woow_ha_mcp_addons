@@ -85,7 +85,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
 **狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。Odoo 0.5.1 的升版 PR（HM-19a）把 `odoo` 加進 `MULTI_PROFILE_PRODUCTS`；
-映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)）。其他產品還沒開通。
+映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)）。LiteLLM、Nextcloud、EMQX 的 0.5.0（火車 A）也開通，各自的發佈紀錄（`release-decision-litellm-0.5.0.md`、`release-decision-nextcloud-0.5.0.md`、`release-decision-emqx-0.5.0.md`）寫明展示機真後端驗收還沒做；其他產品還沒開通。
 
 - **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
   的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。
@@ -194,6 +194,27 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
 7. 讀不到的帳號隔離與 C1-M1 攻擊序只在 LOCAL 驗（HAOS 上不造壞資料）；版本混搭照計畫 §10.6 第 6 點，回退與再升級見 T-20。
 8. 證據記：還原的種類、兩個訊號各自有沒有觸發、上面每一項的結果、版本（T-01）、帳號的 log id。
 
+### Nextcloud 開通的 HAOS 驗收（HM-22 交來；Nextcloud 的升版片做）
+
+LOCAL 的對應在 `tests/test_nextcloud_multi_profile.py`（假 Nextcloud、真的 Nextcloud 子程式）；下面是 HA 層要補的。每一步要使用者批准，
+真後端身分的建立與刪除也是。
+
+1. **前置**（T-01）：記下版本與映像 digest。同一台測試用 Nextcloud 上準備三個專用使用者 A、B、C（C 只給換帳號用），各自建一個 App 密碼；
+   每個人的家目錄放一個只有自己有的標記檔，不分享給別人。
+2. **WebDAV 互看不到**（T-04）：預設帳號接 A、一個額外帳號接 B。各自的 `get_file_tree`、`read_text_file` 只看得到自己的標記檔；拿 A 的網址讀
+   B 的標記檔路徑（反之亦然）都找不到（404）。開放寫入時，寫入只出現在自己的家目錄。
+3. **換帳號換 token**（T-03）：B 的帳號改成 C（username 與 App 密碼）：存檔提示權杖已換新，B 的舊網址兩條入口都失效（Bearer 401、密鑰網址
+   404），新網址只看得到 C 的檔。只換 App 密碼、只把網址的主機改成大寫，權杖都不變。
+4. **存政策只重啟該帳號**（T-07）：存 B 的工具政策，診斷頁 B 的子程式 `starts` 加一、A 的不變（診斷頁沒有 PID；add-on log 的
+   `MCP child [profile=… pid=…]: started` 看得到新 PID，但同一個帳號 60 秒內只寫一行），A 的用戶端不斷線。
+5. **只由 token 決定帳號**（T-05、T-23）：P9 `--cross`（兩種接法、跨帳號 session 404、隨機 token）；容器探針的多帳號階段。
+6. **節流單位**（UC-12，2026-11-24 展示機確認：**以來源位址計**；見 [ha-test-nextcloud-0.5.0](ha-test-nextcloud-0.5.0.md)。B 用錯密碼存 5 次後，add-on 的位址記 4 次、新登入延遲 1,600 ms，同一個 add-on 的其他帳號的新登入也被延遲；已登入的連線不受影響）：讓 B 用錯的 App 密碼失敗登入幾次（子程式每次啟動只失敗一次：在面板重新啟動 B 的子程式或重新存 B 的後端，
+   每次多一次；延遲隨同一來源的失敗次數變長，只失敗一次可能量不出來），量 A 接著的登入有沒有變慢或 429；用
+   `occ security:bruteforce:attempts <add-on 的位址>` 直接讀那個位址的紀錄，看 Nextcloud 的暴力破解防護是以位址還是使用者計。會在真的
+   Nextcloud 留下失敗登入紀錄，做完用 `occ security:bruteforce:reset <add-on 的位址>`（或管理頁）清除。結果寫進 DOCS（每個帳號共用
+   add-on 的位址）與這份文件。
+7. **清理**（T-29）：刪掉額外帳號、撤銷測試用的 App 密碼、刪掉測試使用者；合成憑證清單掃描 0 命中。
+
 ### 每次升版都要重驗（每個開通的產品，每一版）
 
 - **UC-08 還原偵測**：在 QA HAOS 做 full、partial、加密備份各一次還原，記下兩個訊號各自有沒有觸發（`/data/mcp` 屬 root 而留下
@@ -206,6 +227,32 @@ full、partial（只選這個 app）、加密備份各做一輪。每一步都�
 - HM-03a／b 寫回了局部還原的 UC-08、UC-10，以及 sentinel 在 add-on 重啟、冷備份、add-on 更新之後的穩定性（見「多帳號驗收」開頭的狀態；
   2026-11-19 HM-18 補寫 UC-10 與 sentinel）。其餘項目寫回之前，不得宣稱成立，也不得把容器或本機的模擬、或發版前預驗當成這一版的 HA 證據；
   寫回的項目也只對記下的版本成立，每次升版照上面重驗。
+
+### LiteLLM 開通（HM-21；升版 PR 建好候選映像之後才做）
+
+LiteLLM 沒有產品專屬程式（計畫 §9）：帳號能做什麼完全看存進去的 key。HAOS 上要證明的是「同一台 LiteLLM、兩把只限一個模型的
+virtual key，各自的帳號只看得到自己的模型」。每一步照上面的規定先取得使用者批准；本機已涵蓋的項目見
+`tests/test_litellm_multi_profile.py`（LOCAL）。
+
+- **在測試副本上做**：升版 PR 的分支暫時加成商店 repo、裝 LiteLLM 的測試副本（同 0.4.14 的做法，[ha-test-0.4.14.md](ha-test-0.4.14.md)），
+  不動已在用的 LiteLLM MCP app：T-04 會把預設帳號的後端換成 key A。負責人若決定在在用的 app 上做，動手前記下預設帳號原本的後端
+  （只記哪一台 LiteLLM、哪種 key，不記秘密），清理時由負責人還原。
+- **後端身分（負責人建立、刪除；證據只記不含秘密的摘要）**：同一台 LiteLLM 上兩把 virtual key，A 只允許模型 a、B 只允許模型 b；
+  不用 master key（面板也這樣建議）。key 只經面板或 P9 的 `--backend-file`（0600）填入，不印、不貼進紀錄。模型名稱不是秘密，可以記。
+- **T-02**：LiteLLM 的額外帳號上限是 3：第 4 個額外帳號 409 `profile_limit_reached`、`limit` 3。
+- **T-04（N×N）**：預設帳號存 key A；面板建帳號 B、存 key B（同一個網址）。兩個帳號各用自己的 token、兩種接法呼叫
+  `litellm_list_models`：預設帳號只列出模型 a、B 只列出模型 b。
+- **T-05**：P9 `--cross`（兩種接法、跨帳號 session 404、隨機 token、`X-MCP-Profile` 不換帳號）與 `--temp-profile`（刪除後舊 token
+  被拒：Bearer 401、密鑰網址 404）。
+- **T-07**：在 B 收回全部寫入授權並停用一支讀取工具，存檔後只有 B 的子程式重起（容器裡兩個子程式的 PID 存檔前後對照，或 add-on
+  log 生命週期那幾行帶的 id 前 8 碼），B 的 tools/list 沒有寫入工具與那支工具；預設帳號的工具清單與 PID 不變。
+- **T-13、T-14、T-17**：同其他開通的產品（P9 `--profile … --modes childkill`、`restart`；每個 LiteLLM 子程式的 RSS 對契約第 5 節
+  暫定的 160 MiB）。
+- **只在 LOCAL 驗**：每個子程式最多 4 條後端連線、一個帳號占滿不影響別的帳號；占滿時健康檢查也拿不到連線，超過 5 秒又碰上檢查
+  （開通後連兩次）就把這個帳號判成 unreachable，新的 tools/call 回 `-32603`「Backend unreachable」直到下一次檢查通過（契約第 9 節
+  #129；要不要放寬或改健康檢查由負責人決定）。要在 HAOS 驗，用 T-04 那台 LiteLLM，負責人決定。
+- **清理（T-29）**：刪掉帳號 B 與 T-02 建的帳號（舊 token 立刻失效）、刪掉測試副本（在在用的 app 上做的，由負責人還原預設帳號的後端）、
+  負責人撤銷兩把 key，合成憑證掃描 0 命中。
 
 ## 故障處置界線
 

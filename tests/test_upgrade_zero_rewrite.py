@@ -165,8 +165,9 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
 # 3.3, 11.3) adds a product to features.MULTI_PROFILE_PRODUCTS, and it adds the product here in the same PR, so every
 # change of the switch shows in this test's diff (HM-07's exact pin); a release that switches a product off again
 # (plan 7.4, docs/operations/update-backup-rollback.md: the emergency release template) takes it out of both. A feature
-# PR changes neither. HM-19a, the Odoo 0.5.0 release PR, switched Odoo on (R1).
-SWITCHED_ON = frozenset({'odoo'})
+# PR changes neither. HM-19a, the Odoo 0.5.0 release PR, switched Odoo on (R1); train A's release branch switched EMQX,
+# LiteLLM and Nextcloud on with their 0.5.0 (HM-23 review S-2: EMQX's exact pin is this line).
+SWITCHED_ON = frozenset({'odoo', 'emqx', 'litellm', 'nextcloud'})
 
 
 def test_a_product_is_switched_on_only_by_its_release():
@@ -196,11 +197,12 @@ def assert_released(switched):
 
 def test_a_switch_without_its_release_fails(monkeypatch):
     """Both guards on a switch a feature PR would have changed. The pin: a switch with one product more or one less
-    than SWITCHED_ON fails, even with every product released at 0.5.0. The second guard on its own: Odoo and EMQX at a
-    version below 0.5.0 are refused and at 0.5.0 pass; OpenDesign (no profiles, DQ-28) is refused at any version."""
+    than SWITCHED_ON fails, even with every product released at 0.5.0. The second guard on its own: each switched-on
+    product at a version below 0.5.0 is refused and at 0.5.0 passes; OpenDesign (no profiles, DQ-28) is refused at any
+    version."""
     from mcp_admin_core import PRODUCT_VERSIONS
     switchable = sorted(product for product in features.KNOWN_PRODUCTS if profiles.supports_profiles(product))
-    assert {'odoo', 'emqx'} <= set(switchable) and 'opendesign' not in switchable
+    assert SWITCHED_ON <= set(switchable) and 'opendesign' not in switchable
     for product in switchable:
         monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.5.0')
     for product in switchable:
@@ -209,7 +211,7 @@ def test_a_switch_without_its_release_fails(monkeypatch):
         monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', changed)
         with pytest.raises(AssertionError, match='SWITCHED_ON'):
             test_a_product_is_switched_on_only_by_its_release()
-    for product in ('odoo', 'emqx'):
+    for product in sorted(SWITCHED_ON):
         monkeypatch.setitem(PRODUCT_VERSIONS, product, '0.4.99')
         with pytest.raises(AssertionError, match='below 0.5.0'):
             assert_released(frozenset({product}))
@@ -228,11 +230,12 @@ def test_the_switch_is_read_at_every_call(monkeypatch):
 
 
 def test_a_subprocess_preamble_switches_a_product_on():
-    # HM-19a: the repository switches Odoo on, so the preamble switches a product the repository leaves off (EMQX) on
-    # and Odoo off: it sets exactly the switch the subprocess needs, both ways.
-    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"emqx"}); '
+    # HM-19a: the repository switches Odoo (and, from train A's release, EMQX, LiteLLM and Nextcloud) on, so the preamble
+    # switches a product the repository leaves off (Hermes) on and Odoo off: it sets exactly the switch the subprocess
+    # needs, both ways.
+    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"hermes"}); '
             'import mcp_admin_core.run_product; '
-            'print("ENABLED", features.enabled("emqx"), features.enabled("odoo"))')
+            'print("ENABLED", features.enabled("hermes"), features.enabled("odoo"))')
     result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, cwd=ROOT, timeout=120,
                             env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
                                  'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')})
@@ -433,3 +436,43 @@ def test_profiles_never_write_the_default_state(tmp_path, log_scan):
     assert set(after) - set(before) == {'profiles.json', 'profiles', *(
         f'profiles/{i}{suffix}' for i in made for suffix in ('', '/.writer.lock', '/state.json'))}
     store.close()
+
+
+# Train A review F-3: the 11/20 Nextcloud validators (no ':' in the username, no control characters) sit on the connection
+# model, which a saved state also passes through when it loads. Every release before 11/20 (0.1.7 on) typed the username
+# as Name (^[A-Za-z0-9_@. -]+$, so a ':' was never storable) and the app password as Credential (printable ASCII, 32..126,
+# which includes ':'). So every state an installed add-on can hold still loads, byte for byte, and nothing is rewritten.
+LEGACY_NEXTCLOUD_LOGINS = [
+    ('plain', 'DUMMY-user', 'DUMMY-upgrade-nextcloud-password'),
+    ('e-mail login', 'dummy.user@example.invalid', 'abcd-efgh-ijkl-mnop-qrst'),
+    ('spaces, dots and dashes', 'Dummy User-2.0', 'DUMMY pass word'),  # inner spaces are printable ASCII
+    ('password with a colon and every printable symbol', 'DUMMY-user', 'a:b' + '!"#$%&\'()*+,-./;<=>?@[\\]^_`{|}~'),
+    ('longest username', 'u' * 256, 'DUMMY-password'),
+]
+
+
+@pytest.mark.parametrize('label, username, password', LEGACY_NEXTCLOUD_LOGINS, ids=[c[0] for c in LEGACY_NEXTCLOUD_LOGINS])
+def test_a_saved_nextcloud_login_of_any_earlier_shape_still_loads_unchanged(tmp_path, log_scan, label, username, password):
+    value = json.loads((ZERO_REWRITE / 'nextcloud.json').read_bytes())
+    value['connection'] = {**value['connection'], 'username': username, 'app_password': password}
+    raw = json.dumps(value, separators=(',', ':')).encode()
+    data = installed(tmp_path, raw)
+    mtime = (data / 'state.json').stat().st_mtime_ns
+    store = ProductStore(data, 'nextcloud')
+    state = store.load()
+    store.close()
+    assert (state.connection.username, state.connection.app_password) == (username, password)
+    assert (data / 'state.json').read_bytes() == raw
+    assert (data / 'state.json').stat().st_mtime_ns == mtime  # not rewritten
+
+
+def test_a_colon_in_a_nextcloud_username_could_never_be_saved_by_an_earlier_release():
+    """The legacy-shape claim above rests on this: a ':' username never reached disk before 11/20 (Name refused it), so
+    refusing it now (HTTP Basic joins username and password with ':') strands no installed add-on."""
+    from pydantic import TypeAdapter, ValidationError
+    from mcp_admin_core.products import Name
+    for username in ('user:name', 'a:', ':a', 'us\x00er', 'us\ter'):
+        with pytest.raises(ValidationError):
+            TypeAdapter(Name).validate_python(username)
+        with pytest.raises(ValidationError):
+            products.NextcloudConnection(url='https://nextcloud.invalid', username=username, app_password='DUMMY-pw')

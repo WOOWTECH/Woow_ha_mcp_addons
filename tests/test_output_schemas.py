@@ -23,6 +23,11 @@ ENTRIES = DATA['entries']
 # output_schemas.json records source-commit bytes. Later source edits get
 # separate current-byte pins so the historical source commit remains verifiable.
 CURRENT_POST_SOURCE_BYTES = {
+    # Private LiteLLM health probe; the reviewed public output schemas remain unchanged.
+    'apps/litellm/vendor/woow_litellm_mcp_server/server.py': (
+        'litellm', '468d00f2f5827e383340000fc95e3b2fa549d3027a00241c941fc6c6d337b263'),
+    # HA EMQX child middleware registration; output schemas are unchanged.
+    'apps/emqx/vendor/emqx_mcp_server/server.py': ('emqx', '96bfac5d9c1cbe74d2df6d74eaebb65af64b9ced39354471bd3540d874d4bc89'),
     'packaging/unit.sh': ('n8n', '11f9b98b98c41777c3deeab8d78195c09577d22f0353ece60f994bd34ebefec4'),
     # The SQL-test tool's public write hint changed; its output pin did not.
     'apps/emqx/vendor/emqx_mcp_server/tools/integration.py': (
@@ -34,6 +39,19 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-32: the EMQX client asks for no idle backend connection (PaaS #135); no tool, schema or handler change.
     'apps/emqx/vendor/emqx_mcp_server/lifespan.py': (
         'emqx', 'acf72dc8655d6b702a600e4e936b4bfddfdb137824747de91022085f21e9d44b'),
+    # HM-23 (PaaS #153): emqx_list_subscriptions' match_topic text (topics.py); emqx_prometheus_stats asks for
+    # text/plain and refuses empty text (cluster.py, errors.py); a value a URL cannot carry gets the fixed
+    # EMQX_DESTINATION_DENIED (_common.py, deps.py). No input or output schema or handler result shape changes.
+    'apps/emqx/vendor/emqx_mcp_server/tools/topics.py': (
+        'emqx', 'd85843f135595d61abde92f7d8b0792df43d78e802149770fca93ed3853ba8cc'),
+    'apps/emqx/vendor/emqx_mcp_server/tools/cluster.py': (
+        'emqx', '4504eeddaf71a69d87acdfb671202f706a20b0199472284bbaee529a83df5dea'),
+    'apps/emqx/vendor/emqx_mcp_server/errors.py': (
+        'emqx', '313642a43e2f82c2260d868385e9eb1e28839ff8decd955fdf4ba178a27758dc'),
+    'apps/emqx/vendor/emqx_mcp_server/tools/_common.py': (
+        'emqx', '4498443ea16462a52621645b3b6625198fe0f20b12166fa7c7c9197557502b67'),
+    'apps/emqx/vendor/emqx_mcp_server/deps.py': (
+        'emqx', 'fef905c6b76e7b07e6a0c67264ae2981e0c4e2aaeb5ebf4a57927ed2eac95261'),
     # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
     # No tool, schema or handler change.
     'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),

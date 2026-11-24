@@ -910,7 +910,7 @@ async def management_exchange(request, identity, slots, read, step):
 
 def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               verify_admin: RoleVerifier | None = None,
-              child_url=CHILD_URL, health=None, backend_changed=None,
+              child_url=CHILD_URL, health=None, backend_changed=None, policy_changed=None,
               server_name="woow-mcp", instructions: str | None = None,
               listing=None, availability=None, management: ManagementOptions | None = None,
               backend_check=None, restart_child=None, diagnostics=None, configuration=None,
@@ -1127,6 +1127,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid request budget")
     if origin_policy is not None and (not callable(origin_policy) or secret_path_allowed_origins is not None):
         raise ValueError("one secret-path Origin rule")  # HM-27: Headscale's own rule, or the add-on's policy
+    if policy_changed is not None and not callable(policy_changed):
+        raise ValueError("invalid policy change handler")
     if stop_child is not None and not callable(stop_child):
         raise ValueError("invalid child stop")
     if reply_worker is not None and not callable(getattr(reply_worker, "run", None)):
@@ -1503,6 +1505,22 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                                 or any(not isinstance(t, str) or t not in tools for t in value["disabled"])):
                             raise ValueError()
                         changes = value
+                    if (name in ('backend', 'backend/patch') and getattr(state, 'product', None) == 'nextcloud'
+                            and isinstance(changes.get('connection'), dict)):
+                        from .products import normalize_nextcloud_url
+                        connection = dict(changes['connection'])
+                        if isinstance(connection.get('url'), str):
+                            normalized = normalize_nextcloud_url(connection['url'])
+                            stored_url = getattr(getattr(state, 'connection', None), 'url', None)
+                            try:
+                                connection['url'] = (stored_url if stored_url and normalize_nextcloud_url(stored_url) == normalized
+                                                     else normalized)
+                            except ValueError:
+                                connection['url'] = normalized
+                        for field in ('username', 'app_password'):
+                            if isinstance(connection.get(field), str):
+                                connection[field] = connection[field].strip()
+                        changes = {**changes, 'connection': connection}
                     # Validate without writing. Store.update revalidates on commit.
                     candidate = type(state).model_validate({**state.model_dump(), **changes})
                     if name in ("backend", "backend/patch"):
@@ -1699,13 +1717,19 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 headers['ETag'] = configuration.etag(updated)
                 body = {'saved': True, 'configuration': configuration.snapshot(updated),
                         'owner_defaults': owner_defaults.view(updated, store.directory)}
-                if restoring and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud', 'headscale') and backend_changed:
+                if restoring and getattr(state, 'product', 'n8n') == 'nextcloud' and policy_changed:
+                    try:
+                        await policy_changed(state, updated)
+                    except Exception:
+                        return JSONResponse({**body, 'detail': {'code': 'config_apply_failed'}}, status_code=503, headers=headers)
+                elif restoring and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud', 'headscale') and backend_changed:
                     # As a saved policy: these children are launched with the policy (READONLY, DISABLED_TOOLS).
                     try:
                         await backend_changed(updated)
                     except Exception:
                         return JSONResponse({**body, 'detail': {'code': 'config_apply_failed'}}, status_code=503,
                                             headers=headers)
+                body['configuration'] = configuration.snapshot(updated)
                 return JSONResponse(body, headers=headers)
             if changes is not None:
                 if name in ("backend", "backend/patch") and not management.backend_can_edit:
@@ -1729,7 +1753,13 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 # An authorized mutation is not undone by losing its HTTP caller.
                 committed.set()
                 headers['ETag'] = configuration.etag(updated)
-                if (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session', odoo_methods.ROUTE) or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud', 'headscale'))) and backend_changed:
+                if name == 'policy' and getattr(state, 'product', None) == 'nextcloud' and policy_changed:
+                    try:
+                        await policy_changed(state, updated)
+                    except Exception:
+                        return JSONResponse({'saved': True, 'detail': {'code': 'config_apply_failed'},
+                                             'configuration': configuration.snapshot(updated)}, status_code=503, headers=headers)
+                elif (name in ('backend', 'backend/patch', 'odoo/write-switches', 'n8n/session', odoo_methods.ROUTE) or (name == "policy" and getattr(state, 'product', 'n8n') in ('emqx', 'litellm', 'nextcloud', 'headscale'))) and backend_changed:
                     try:
                         await backend_changed(updated)
                     except Exception:

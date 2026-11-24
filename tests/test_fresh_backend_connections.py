@@ -10,9 +10,7 @@ the backend drops is not sent again either.
 
 Each scenario runs on two pools:
 - child: the client exactly as the child builds it (lifespan.build_client / make_client through
-  backend_policy.async_client, whose transport builds its own pool, max_connections=4, max_keepalive_connections=0, and
-  drops the limits the product passes). It kept no idle connection before HM-32 either, and HM-32 leaves its cap of 4
-  as it was.
+  backend_policy.async_client: LiteLLM explicitly opts into 50 connections; EMQX retains 4. Both keep no idle connections.
 - asked: the same transport (pinned network backend, destination checks) with its pool built from the limits the
   product's lifespan passes. HM-32 makes both products ask for no idle connection (as PaaS), so they stay right if
   backend_policy ever takes the caller's limits. Red before HM-32: LiteLLM asked for 20 idle connections kept 30 s,
@@ -27,12 +25,13 @@ map to PaaS's tests is in docs/provenance/ha-multiprofile-HM-32-20261117.md.
 """
 import json
 import subprocess
+from contextlib import closing
 
 import pytest
 
 import loopback_backends
 from log_scan import log_scan  # noqa: F401  (fixture)
-from mcp_admin_core.products import DENY_LOOPBACK_ENV, ProductState, child_spec
+from mcp_admin_core.products import DENY_LOOPBACK_ENV, ProductState, ProductStore, child_spec
 
 PRODUCTS = ('litellm', 'emqx')
 POOLS = ('child', 'asked')
@@ -162,6 +161,18 @@ prefix = {'litellm': 'LITELLM_MCP_', 'emqx': 'EMQX_MCP_'}[PRODUCT]
 assert os.environ[prefix + 'BASE_URL'] == 'http://' + NAME, 'the saved URL is the test state one'
 os.environ[prefix + 'BASE_URL'] = 'http://%s:%d' % (NAME, backend.server_port)
 os.environ[prefix + 'REQUEST_TIMEOUT'] = TIMEOUT  # the read timeout a stale socket would cost
+
+if PRODUCT == 'emqx':
+    # The live child policy binds the saved URL and credentials to the server.
+    # The port is known only after the owned backend binds, so update the real
+    # protected ProductStore before importing the child's settings and server.
+    from mcp_admin_core.products import ProductStore
+    from pathlib import Path
+    from contextlib import closing
+    with closing(ProductStore(Path(os.environ['EMQX_MCP_STATE_PATH']).parent, 'emqx')) as store:
+        store.update(connection={'url': os.environ['EMQX_MCP_BASE_URL'],
+                                 'api_key': os.environ['EMQX_MCP_API_KEY'],
+                                 'api_secret': os.environ['EMQX_MCP_API_SECRET']})
 
 import backend_policy
 import fastmcp
@@ -343,9 +354,16 @@ def fake_values_never_logged(log_scan):
 @pytest.fixture(scope='module', params=[(product, pool) for product in PRODUCTS for pool in POOLS], ids='-'.join)
 def observed(request, tmp_path_factory):
     product, pool = request.param
-    state = ProductState(product=product, token='T' * 43, child_token='C' * 43, connection=CONNECTIONS[product])
+    directory = tmp_path_factory.mktemp(f'{product}-{pool}')
+    if product == 'emqx':
+        # Use the same private, durable state a real child reads; never bypass
+        # its policy or fabricate a permissive fallback for this pool test.
+        with closing(ProductStore(directory, product)) as store:
+            state = store.update(token='T' * 43, child_token='C' * 43, connection=CONNECTIONS[product])
+    else:
+        state = ProductState(product=product, token='T' * 43, child_token='C' * 43, connection=CONNECTIONS[product])
     with loopback_backends.allowed():  # once the product is switched on, its child refuses loopback backends (HM-20)
-        spec = child_spec(state, tmp_path_factory.mktemp(f'{product}-{pool}'))
+        spec = child_spec(state, directory)
     assert DENY_LOOPBACK_ENV not in spec.env
     result = subprocess.run([spec.argv[0], '-c', HARNESS, product, pool, str(READ_TIMEOUT)], env=spec.env,
                             cwd=spec.cwd, capture_output=True, text=True, timeout=120)
@@ -359,15 +377,15 @@ def observed(request, tmp_path_factory):
 def test_the_pool_keeps_no_idle_connection(observed):
     """child: backend_policy's own pool. asked: the pool built from the limits the product's lifespan passes (HM-32 asks
     for none, as PaaS: LiteLLM 20 kept 30 s -> 0 with keepalive_expiry dropped, PaaS #139; EMQX 10 -> 0, PaaS #135).
-    HM-32 changes no cap on concurrent connections: the child's pool still allows 4 (backend_policy), and the products
-    still ask for 50 (LiteLLM) and 20 (EMQX), which backend_policy drops. Changing a cap is a decision of its own."""
+    LiteLLM opts into 50 connections; EMQX retains the policy default of 4. The products ask for 50 and 20 respectively."""
     pool, asked = observed['pool'], observed['asked']
     assert observed['asked_all_same'], 'every client the product builds asks for the same pool'
     if observed['pool_kind'] == 'asked':
         assert pool == asked, (pool, asked)
         assert asked['max_connections'] == {'litellm': 50, 'emqx': 20}[observed['product']], asked
     else:
-        assert (pool['max_connections'], pool['max_keepalive_connections']) == (4, 0), pool
+        assert (pool['max_connections'], pool['max_keepalive_connections']) == (
+            {'litellm': 50, 'emqx': 4}[observed['product']], 0), pool
     assert pool['max_keepalive_connections'] == 0, pool
 
 

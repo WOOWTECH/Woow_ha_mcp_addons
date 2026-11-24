@@ -222,7 +222,7 @@ async def test_real_child_fake_backend_and_boundary(tmp_path, product, *, outage
                         {**headers, 'Authorization': 'Bearer ' + state.child_token},
                         {'jsonrpc': '2.0', 'id': 20, 'method': 'tools/list'})
                     upstream_names = {t['name'] for t in raw_list['tools']}
-                    if product in ('odoo', 'odoo-manage', 'nextcloud'):
+                    if product in ('odoo', 'odoo-manage', 'nextcloud', 'litellm'):
                         # The add-on's own private readiness probe (apps/odoo*/launch.py; Nextcloud: the vendored
                         # nextcloud_mcp_server/server.py), not an upstream tool.
                         assert ODOO_HEALTH_PROBE in upstream_names and ODOO_HEALTH_PROBE not in TOOLS[product]

@@ -124,8 +124,8 @@ class LiteLLMConnection(Connection):
 
 class NextcloudConnection(Connection):
     url: URL  # the Nextcloud root URL (NEXTCLOUD_MCP_BASE_URL)
-    username: Name
-    app_password: Credential = Field(repr=False)
+    username: Annotated[str, Field(min_length=1, max_length=256)]
+    app_password: Annotated[str, Field(min_length=1, max_length=8192)] = Field(repr=False)
 
     @field_validator('url')
     @classmethod
@@ -137,8 +137,16 @@ class NextcloudConnection(Connection):
     @classmethod
     def no_outer_whitespace(cls, value):
         # The child strips both and refuses an empty result (exit 2): refuse blank and padded values when saved.
-        if not value.strip() or value != value.strip():
-            raise ValueError('leading/trailing whitespace or blank')
+        if (not value.strip() or value != value.strip()
+                or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+            raise ValueError('invalid credential')
+        return value
+
+    @field_validator('username')
+    @classmethod
+    def basic_username(cls, value):
+        if ':' in value:
+            raise ValueError('invalid username')
         return value
 
 
@@ -314,20 +322,55 @@ def check_saved_destinations(state, previous=None):
 
 # HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑩ (a); contract 3.1, section 9 #40; I11; unreleased):
 # the products whose MCP token is bound to one backend identity once they are switched on: Odoo (PaaS #131,
-# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS). Nextcloud (HM-22) and Hermes
-# (HM-24) join with their own slices; identity_fields.TOKEN_ROTATING already names their fields.
-IDENTITY_BOUND = frozenset({'odoo'})
+# woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS) and, HM-22 (plan 9 Nextcloud
+# row), Nextcloud: its url and username, not its app password (PaaS #154, woow-mcp-server 0f94aa4
+# apps/nextcloud/nextcloud_mcp_admin/routers/config.py IDENTITY_KEYS). Hermes (HM-24) joins with its own slice;
+# identity_fields.TOKEN_ROTATING already names its fields.
+IDENTITY_BOUND = frozenset({'odoo', 'nextcloud'})
+
+
+_NEXTCLOUD_PAGE = re.compile(r"/(index\.php|remote\.php|ocs|apps|login|settings)(/.*)?$", re.IGNORECASE)
+
+
+def normalize_nextcloud_url(value):
+    """Normalize a submitted root URL after validating the entire original destination."""
+    value = value.strip()
+    value = backend_destination(http_url(value))
+    parts = urlsplit(value)
+    host = parts.hostname
+    if ':' in host:
+        host = f'[{host}]'
+    if parts.port is not None and (parts.scheme, parts.port) not in (('http', 80), ('https', 443)):
+        host += f':{parts.port}'
+    return urlunsplit((parts.scheme, host, _NEXTCLOUD_PAGE.sub('', parts.path).rstrip('/'), '', ''))
+
+
+def same_identity(product, name, before, after) -> bool:
+    """Compare Nextcloud URLs after PaaS root normalization; other identity fields compare as stored.
+
+    Path case remains significant and invalid legacy URLs never compare equal to a different value.
+    """
+    if before == after:
+        return True
+    if (name not in identity_fields.SAME_SERVER_URLS.get(product, ()) or not isinstance(before, str)
+            or not isinstance(after, str)):
+        return False
+    try:
+        return normalize_nextcloud_url(before) == normalize_nextcloud_url(after)
+    except ValueError:
+        return False
 
 
 def identity_rebound(previous, candidate) -> bool:
     """Whether saving candidate over previous (gateway.admin_action: backend, backend/patch) moves the MCP token to a
     new backend identity, so that the token is rotated in the same write (ProductStore.rebind): the product is in
     IDENTITY_BOUND and switched on (features.enabled, read at this call), the token is active, a complete connection
-    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username) differs
-    in candidate, a cleared connection included (PaaS patch_connection_bound: a cleared identity field is a change; were
-    it not, clearing and then saving another account would keep the token, as a first setup does). The first setup (no
-    connection saved yet), a revoked token and a change of the password alone keep the token as they do today.
-    Switched off, never (plan 3.3: the token stays, byte for byte)."""
+    is saved, and one of its identity fields (identity_fields.rotating_fields: Odoo url, database, username; Nextcloud
+    url, username) names another identity in candidate (same_identity), a cleared connection included (PaaS
+    patch_connection_bound: a cleared identity field is a change; were it not, clearing and then saving another account
+    would keep the token, as a first setup does). The first setup (no connection saved yet), a revoked token and a
+    change of the password alone keep the token as they do today. Switched off, never (plan 3.3: the token stays, byte
+    for byte)."""
     product = getattr(previous, 'product', 'n8n')
     if product not in IDENTITY_BOUND or not features.enabled(product):
         return False
@@ -335,7 +378,8 @@ def identity_rebound(previous, candidate) -> bool:
     if previous.token is None or before is None:
         return False
     after = getattr(candidate, 'connection', None)
-    return any(getattr(before, name) != getattr(after, name, None) for name in identity_fields.rotating_fields(product))
+    return any(not same_identity(product, name, getattr(before, name), getattr(after, name, None))
+               for name in identity_fields.rotating_fields(product))
 
 # Owner decision 2026-10-27 (the PaaS woow-mcp-server owner_defaults of 2026-10-25, for the HA add-ons): the state
 # field that marks the one-time all-on migration of a legacy (schema 1/2/3) state. Same name as the PaaS marker.
@@ -948,7 +992,7 @@ INSTRUCTIONS = {'headscale': ('Manage one Headscale control server through its n
     'Text tools refuse folders, binary (non UTF-8) files and files over the configured size limit.',
     'list_calendars shows calendar ids; list_tasks reads tasks (VTODO) from them.',
     'Some tools may be absent because the administrator made the server read-only or disabled them.'))}
-PRIVATE_PROBES = ('odoo', 'odoo-manage', 'nextcloud')
+PRIVATE_PROBES = ('odoo', 'odoo-manage', 'nextcloud', 'litellm')
 
 
 def health_probe(product):
@@ -956,6 +1000,8 @@ def health_probe(product):
 
 
 def health_probe_success(product, payload):
+    if product == 'litellm':
+        return probe_success(product, payload)
     if product == 'nextcloud':
         # client.py _fetch_user_id: the OCS answer's ocs.data.id, a non-empty string; any failure is a tool error.
         return (isinstance(payload, dict) and set(payload) == {'ok', 'user_id'} and payload['ok'] is True
@@ -1036,7 +1082,9 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
             argv = (str(python), str(app / 'launch.py'), '--host', '127.0.0.1', '--port', listen)
             return ChildSpec(argv, env, cwd)
         if product == 'emqx':
-            env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret, EMQX_MCP_READONLY='true')
+            env['PYTHONPATH'] += ':' + str(ROOT / 'packages/mcp-admin-core')
+            env.update(EMQX_MCP_BASE_URL=c.url, EMQX_MCP_API_KEY=c.api_key, EMQX_MCP_API_SECRET=c.api_secret,
+                       EMQX_MCP_STATE_PATH=str(directory / 'state.json'), EMQX_MCP_READONLY='true')
             module = 'emqx_mcp_server.server'
         elif product == 'nextcloud':
             # No ALLOWED_HOSTS (the gateway reaches the child as 127.0.0.1, which its Host/Origin guard accepts)
@@ -1058,8 +1106,8 @@ def child_spec(state: ProductState, directory: Path, port: int = CHILD_PORT) -> 
         public_allowed = {name for name in TOOLS[product] if enabled(name, TOOLS[product], state)}
         # Private loopback registration also serves HealthMonitor, independently
         # of public disables. Reserve ONLY the fixed, argument-free read probe:
-        # EMQX GET /nodes or LiteLLM GET /v1/models (never provider /health); Nextcloud's
-        # private woow_backend_probe (OCS GET cloud/user) is not in NAMES and never disabled.
+        # EMQX GET /nodes; LiteLLM and Nextcloud have their own private
+        # woow_backend_probe, not in NAMES and never disabled.
         # Parent authorize/filter_list still enforce every public disable; raw
         # child tools/list is intentionally not the public authorization surface.
         native_allowed = public_allowed | {health_probe(product)[0]}  # the probe HealthMonitor actually calls

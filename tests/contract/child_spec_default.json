@@ -5,6 +5,10 @@
     {
       "slice": "HM-06",
       "change": "the seven Python children (odoo, hermes, opendesign, emqx, litellm, nextcloud, headscale: the twelve cases but odoo-manage's and n8n's) get WOOW_MCP_CHILD_TOKEN={child_token}, the state's child token, right after PYTHONPATH: the child bearer each requires (apps/runtime/session_idle.py). argv, cwd and every other variable are unchanged; odoo-manage and n8n (AUTH_TOKEN, the same child token) are unchanged."
+    },
+    {
+      "slice": "HM-23 child policy",
+      "change": "EMQX's child imports mcp-admin-core and receives EMQX_MCP_STATE_PATH for its own profile's protected state; the live child policy validates this state and its backend identity."
     }
   ],
   "specs": {
@@ -205,11 +209,12 @@
         "HOME={DATA}/child",
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
-        "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime",
+        "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
         "WOOW_MCP_CHILD_TOKEN={child_token}",
         "EMQX_MCP_BASE_URL=https://emqx.invalid",
         "EMQX_MCP_API_KEY=DUMMY-port-emqx-key",
         "EMQX_MCP_API_SECRET=DUMMY-port-emqx-secret",
+        "EMQX_MCP_STATE_PATH={DATA}/state.json",
         "EMQX_MCP_READONLY=false",
         "FASTMCP_CHECK_FOR_UPDATES=off",
         "FASTMCP_SHOW_SERVER_BANNER=false",
@@ -237,11 +242,12 @@
         "HOME={DATA}/child",
         "PYTHONDONTWRITEBYTECODE=1",
         "PYTHONUNBUFFERED=1",
-        "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime",
+        "PYTHONPATH={ROOT}/apps/emqx/vendor:{ROOT}/apps/runtime:{ROOT}/packages/mcp-admin-core",
         "WOOW_MCP_CHILD_TOKEN={child_token}",
         "EMQX_MCP_BASE_URL=https://emqx.invalid",
         "EMQX_MCP_API_KEY=DUMMY-port-emqx-key",
         "EMQX_MCP_API_SECRET=DUMMY-port-emqx-secret",
+        "EMQX_MCP_STATE_PATH={DATA}/state.json",
         "EMQX_MCP_READONLY=false",
         "FASTMCP_CHECK_FOR_UPDATES=off",
         "FASTMCP_SHOW_SERVER_BANNER=false",

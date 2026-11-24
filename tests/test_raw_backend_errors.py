@@ -194,6 +194,9 @@ def refusing_litellm(master):
         thread.join(timeout=5)
 
 
+# Train A: LiteLLM is switched on in the repository, and a switched-on product's child refuses the loopback fake backend
+# this test relays an error body from (HM-20: WOOW_MCP_DENY_LOOPBACK=1); the child's relaying is the same in both modes.
+@pytest.mark.usefixtures('switched_off')
 async def test_real_litellm_child_relays_the_backend_error_body(tmp_path):
     master = 'sk-master-Owned-0815'
     with refusing_litellm(master) as url:

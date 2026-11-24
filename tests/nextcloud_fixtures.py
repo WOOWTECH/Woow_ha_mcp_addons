@@ -3,10 +3,16 @@
 Only dummy credentials; never a real backend. Shapes follow Nextcloud 35 as the vendored child parses them
 (nextcloud_mcp_server/client.py, webdav.py, caldav.py): a 207 multistatus with DAV: props, ETag headers on GET and
 PUT, If-None-Match / If-Match preconditions answered with 412.
+
+HM-22: switched_off, the switch mode Nextcloud's tests of the add-on as it is today pin themselves.
 """
 import base64
 from urllib.parse import quote, unquote, urlsplit
 from xml.sax.saxutils import escape
+
+import pytest
+
+from mcp_admin_core import features
 
 USER = 'tester'
 PASSWORD = 'DUMMY'
@@ -156,3 +162,18 @@ WRITES = [('create_text_file', {'path': 'Owned/new.md', 'content': '# New\n'}),
           ('update_text_file', {'path': 'Documents/notes.md', 'content': '# Notes\nchanged\n', 'expected_etag': 'one'}),
           ('upload_file', {'path': 'Owned/upload.bin', 'content_base64': base64.b64encode(b'\x00\x01owned').decode()}),
           ('delete_file_checked', {'path': 'Documents/old.txt', 'expected_etag': 'old'})]
+
+
+@pytest.fixture
+def switched_off():
+    """HM-22: every product switched off while the test runs, whatever the repository switches on.
+
+    features.MULTI_PROFILE_PRODUCTS is the repository's switch; Nextcloud's version-bump PR adds 'nextcloud' to it
+    (plan 3.3, 11.3; DQ-32). A Nextcloud test written for the add-on as it is today (the single profile; a real child
+    behind a loopback fake backend, which a switched-on product's child refuses: HM-20) asks for this fixture instead
+    of reading the repository's switch, so it tests the same thing after that PR and the PR only flips the switch and
+    the release data. A test that switches a product on inside (tests/multi_profile_runtime.py) still does: that comes
+    after this. A subprocess the test starts reads the repository's switch, not this one."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset())
+        yield

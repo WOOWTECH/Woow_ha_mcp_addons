@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from fastmcp import FastMCP
 
@@ -48,6 +49,9 @@ def gate_from_settings() -> ToolGate:
 
 def build_server(gate: ToolGate | None = None) -> FastMCP:
     """Assemble a server exposing exactly the tools the gate allows."""
+    # Defense in depth (train A review F-1): the environment gate (READONLY, DISABLED_TOOLS) stays active in every
+    # mode, with or without a state path; PolicyMiddleware below is a second, live layer on top of it, never a
+    # replacement. The gateway is the first layer.
     gate = gate if gate is not None else gate_from_settings()
 
     mcp = FastMCP(
@@ -58,6 +62,11 @@ def build_server(gate: ToolGate | None = None) -> FastMCP:
     )
     for module in _MODULES:
         module.register(mcp, gate)
+    # Only the HA launcher supplies a profile-bound state path. Standalone
+    # upstream use retains its environment gate.
+    if os.environ.get("EMQX_MCP_STATE_PATH"):
+        from emqx_child_policy import PolicyMiddleware
+        mcp.add_middleware(PolicyMiddleware(os.environ["EMQX_MCP_STATE_PATH"], settings))
     return mcp
 
 

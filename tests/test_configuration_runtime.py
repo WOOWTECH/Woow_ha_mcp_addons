@@ -108,3 +108,24 @@ def test_unconfigured_and_runtime_without_observer_are_not_claimed_applied(tmp_p
         state=s.update(connection={'gateway_url':'https://fixture.invalid','gateway_api_key':'SYNTHETIC_ONLY'})
         assert t.snapshot(state)['apply_state']=='unknown'
     finally:s.close()
+
+
+def test_gateway_policy_acceptance_preserves_readiness_without_masking_an_unapplied_backend(tmp_path):
+    store, manager, health, tracker = setup_runtime(tmp_path, 'litellm')
+    try:
+        old = store.load()
+        tracker.begin(old)
+        ready(manager, health, 1)
+        assert tracker.snapshot(old)['apply_state'] == 'applied'
+        restricted = store.update(writes_enabled=False, enabled_write_tools=[])
+        tracker.policy_accepted(old, restricted)
+        status = tracker.snapshot(restricted)
+        assert status['apply_state'] == 'applied'
+        assert status['saved_revision'] == status['applied_revision']
+        assert manager.starts == 1
+        pending = store.update(connection={'url': 'https://other.invalid', 'master_key': 'NEW_SYNTHETIC'})
+        tighter = store.update(disabled=['create_key'])
+        tracker.policy_accepted(pending, tighter)
+        assert tracker.snapshot(tighter)['apply_state'] == 'pending'
+    finally:
+        store.close()

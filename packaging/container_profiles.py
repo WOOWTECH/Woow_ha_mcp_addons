@@ -369,9 +369,15 @@ def child_port(argv):
 
 def child_ports(probe, process, proc=Path('/proc')):
     """{port: PID} of the management process's children, by their command lines (world-readable, as the P9 kit's).
-    A child that is gone, or exited and not reaped yet (a zombie's command line is empty), is left out. Two children
-    naming the same port fail."""
+    A child that is gone, or exited and not reaped yet (a zombie's command line is empty), is left out, and so is one
+    that has not exec'd yet: between the management process's fork and the child's exec (a watchdog restart, a start)
+    its command line is the management process's own, which names no port and would read as a second child on 3000
+    (train A emqx candidate, 2026-11-24; owner decision 2026-11-24). Two children naming the same port fail."""
     found = {}
+    try:
+        own = (proc / str(process.pid) / 'cmdline').read_bytes()
+    except OSError:
+        own = None
     for pid in probe.children(process):
         try:
             raw = (proc / pid / 'cmdline').read_bytes()
@@ -379,6 +385,8 @@ def child_ports(probe, process, proc=Path('/proc')):
             continue  # gone already (a watchdog restart in between)
         if not raw:
             continue  # exited, not reaped yet
+        if raw == own:
+            continue  # forked, not exec'd yet: still the management process's command line
         port = child_port(raw.decode('utf-8', 'replace').split('\0'))
         port = CHILD_PORT if port is None else port
         assert port not in found, 'two children on one port'
@@ -684,6 +692,28 @@ ODOO_OUTAGE_CHECKS = []
 def record_odoo_outage(path):
     assert path == '/xmlrpc/2/common', 'unexpected Odoo outage request'
     ODOO_OUTAGE_CHECKS.append(time.monotonic())
+
+
+# The wait for readiness to turn 503 once a switched-on product's backend is offline. Its monitor has tolerance 2 (HM-09,
+# DQ-25): two failed checks in a row, HEALTH_INTERVAL (15 s) apart, so the verdict comes 15 to 30 s after the outage, and
+# a 503 seen while the first check runs is only a snapshot of that check, not the verdict. A product that is not
+# switched on keeps the probe's own 22 s and one 503 (tolerance 1). Owner decision 2026-11-24 (train A candidate
+# failure: litellm, nextcloud and emqx timed out at the 22 s wait): up to 40 s, and three 503 in a row, .25 s apart.
+# Odoo's stage (odoo_outage) runs before this one and is unchanged: afterwards the 503 is already stable.
+OUTAGE_SWITCHED_SECONDS = 40
+OUTAGE_SWITCHED_STABLE = 3
+
+
+async def wait_unready(probe, client, ready_url=MCP + '/health/ready'):
+    stable = 0
+    try:
+        async with asyncio.timeout(OUTAGE_SWITCHED_SECONDS):
+            while stable < OUTAGE_SWITCHED_STABLE:
+                stable = stable + 1 if (await client.get(ready_url)).status_code == 503 else 0
+                await asyncio.sleep(.25)
+    except TimeoutError:
+        raise AssertionError(f'{probe.APP}: expected {OUTAGE_SWITCHED_STABLE} HTTP 503 in a row within '
+                             f'{OUTAGE_SWITCHED_SECONDS} s of the backend going offline') from None
 
 
 async def odoo_outage(probe, client, ready_url=MCP + '/health/ready'):
