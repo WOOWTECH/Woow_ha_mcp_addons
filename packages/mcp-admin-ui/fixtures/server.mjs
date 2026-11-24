@@ -14,7 +14,7 @@ const mounts = [prefix, ''];
 // HM-11: the multi-profile management API as HM-10 serves it (contract.md section 3; the real one is profile_router and
 // profile_admin). Switched off (the default: config.profiles unset) every answer is the single-profile one, as before,
 // X-MCP-Profile is ignored and /api/profiles... is an unknown operation (404, no body). Switched on (config.profiles:
-// true or {extra: [...], orphans, limit, memory, noPort, indexCorrupt, noIndexFile, listStatus, noEtag}) every profile-scoped
+// true or {extra: [...], orphans, limit, memory, noPort, indexCorrupt, noIndexFile, listStatus, noEtag, weakEtag}) every profile-scoped
 // request needs exactly one X-MCP-Profile and every answer of a profile's action echoes it (the ETag of its revision
 // too); /api/profiles lists (with the orphans), creates, renames and deletes profiles and quarantines an unusable index,
 // with the add-on's order of checks. tests/profile-api-cases.json holds what the add-on answers (checked against the
@@ -252,6 +252,9 @@ reset();
 const etag = profile => profile.id === DEFAULT ? `"c1-${profile.revision.toString(16).padStart(64, '0')}"`
   : `"c1-${profile.id}${profile.revision.toString(16).padStart(40, '0')}"`;
 const indexEtag = () => `"p1-${index.revision.toString(16).padStart(64, '0')}"`;
+// F2: weakEtag is a proxy in front of the Ingress that compresses the small JSON answers (Cloudflare does) and so turns every
+// strong ETag of the global routes into a weak one, W/"...". The mock still compares If-Match strictly, as the add-on does.
+const shown = etag => profileConfig().weakEtag ? `W/${etag}` : etag;
 // The unusable index file's own ETag (the default bootstrap's profile_index_etag): only the quarantine takes it.
 const rawEtag = () => `"p1-f${index.revision.toString(16).padStart(63, '0')}"`;
 const configuration = profile => ({revision: etag(profile).slice(1, -1), saved_revision: 'launch-fixture',
@@ -308,7 +311,7 @@ const labelTaken = (label, except = null) => ['default', '預設帳號'].include
 // the ETag is compared; another request under the same key 409 operation_id_conflict), and each route's own checks.
 const ROUTES = {'': ['GET', 'POST'], 'index/quarantine': ['POST'], 'revoke-all': ['POST'], 'restore-record': ['GET']};
 const conflict = (response, current) => json(response, 409, {detail: {code: 'config_conflict'}}, {ETag: current});
-const answer = (response, status, value) => json(response, status, value, {ETag: indexEtag()});
+const answer = (response, status, value) => json(response, status, value, {ETag: shown(indexEtag())});
 const receiptOf = (operationId, kind) => ({id: operationId, kind, state: 'completed', replayed: false});
 async function profileRoutes(request, response, local) {
   const rest = local === '/api/profiles' ? '' : local.slice('/api/profiles/'.length);
@@ -342,7 +345,7 @@ async function profileRoutes(request, response, local) {
     // noEtag: the header lost on the way (HM-03a measures whether the Ingress keeps it).
     const list = {profiles: [...profiles.values()].map(row), orphans: [...orphans].sort().map(item => ({id: item}))};
     if (quarantined.size) list.quarantined = [...quarantined].sort().map(name => ({name, id: name.slice(0, 24)}));
-    return json(response, 200, list, profileConfig().noEtag ? {} : {ETag: indexEtag()});
+    return json(response, 200, list, profileConfig().noEtag ? {} : {ETag: shown(indexEtag())});
   }
   const quarantine = rest === 'index/quarantine', revokeAll = rest === 'revoke-all';
   if (indexCorrupt() && !quarantine && !revokeAll) return refuse(response, 503, 'profile_index_corrupt');
@@ -497,7 +500,7 @@ async function originRoute(request, response) {
   if (profiles.get(DEFAULT).state.product === 'headscale') return answer404(response);
   if (request.method === 'GET') {
     reads.push({operation: 'origin-policy', ...header(request)});  // reads are not calls: specs count calls
-    return json(response, 200, originView(), {ETag: originEtag()});
+    return json(response, 200, originView(), {ETag: shown(originEtag())});
   }
   if (!ifMatch) return refuse(response, 428, 'config_revision_required');
   if (!/^"o1-[0-9a-f]{64}"$/.test(ifMatch)) return conflict(response, originEtag());
@@ -506,7 +509,7 @@ async function originRoute(request, response) {
   const prior = origin.receipts.get(operationId), sent = JSON.stringify([payload.mode, payload.allowed_origins]);
   if (prior) {
     if (prior.request !== sent) return refuse(response, 409, 'operation_id_conflict');
-    return json(response, 200, {...originView(), operation: {...prior.operation, replayed: true}}, {ETag: originEtag()});
+    return json(response, 200, {...originView(), operation: {...prior.operation, replayed: true}}, {ETag: shown(originEtag())});
   }
   if (ifMatch !== originEtag()) return conflict(response, originEtag());
   const policy = originRequested(payload);
@@ -515,7 +518,7 @@ async function originRoute(request, response) {
   Object.assign(origin, {state: 'saved', mode: policy.mode, allowed: policy.allowed});
   const operation = receiptOf(operationId, 'origin.policy');
   origin.receipts.set(operationId, {request: sent, operation});
-  return json(response, 200, {...originView(), operation}, {ETag: originEtag()});
+  return json(response, 200, {...originView(), operation}, {ETag: shown(originEtag())});
 }
 async function body(request) {
   let raw = '';

@@ -672,6 +672,31 @@ test('a list without its ETag is read-only but still shows a deletion; a product
   expect(await calls(request, call => call.method !== 'POST')).toEqual([]);
 });
 
+// F2: the list read behind a proxy that makes its ETag weak (Cloudflare), W/"p1-...": the revision is the same. The list used
+// to be read-only ("帳號清單缺少版本資訊"), with no create, rename or delete and "revoke all" off; now none of that, and the
+// strong If-Match goes out as before.
+test('F2: a weak ETag on the profile list: not read-only, revoke all on, and a create sends the strong If-Match', async ({page, request}) => {
+  await reset(request, {product: 'odoo', parity: true, profiles: {weakEtag: true, extra: [{id: B, label: '會計', configured: true, status: 'running'}]}});
+  const lists = [];
+  page.on('response', response => { if (new URL(response.url()).pathname === `${prefix}/api/profiles` && response.request().method() === 'GET') lists.push(response.headers().etag); });
+  await open(page, '/overview');
+  await expect(page.locator('#profile-list-readonly')).toHaveCount(0);
+  expect(lists.length).toBeGreaterThan(0);
+  expect(lists.every(value => value.startsWith('W/"p1-'))).toBe(true);
+  await page.getByRole('navigation').getByRole('link', {name: '診斷與維護', exact: true}).click();
+  await idle(page);
+  await expect(page.getByRole('button', {name: '全部撤銷', exact: true})).toBeEnabled();
+  await page.getByRole('navigation').getByRole('link', {name: '總覽', exact: true}).click();
+  await idle(page);
+  await page.getByRole('button', {name: '新增帳號', exact: true}).click();
+  await page.getByLabel('帳號名稱', {exact: true}).fill('出納');
+  await confirm(page, '建立帳號');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已建立帳號');
+  const [post] = await calls(request, call => call.operation === 'profiles' && call.method === 'POST');
+  expect(post.ifMatch).toBe(`"p1-${(1).toString(16).padStart(64, '0')}"`);  // strong: quoted, no W/
+});
+
 test('a lost create answer whose profile was deleted since: the resend confirms it, says it is gone and stays on the default profile', async ({page, request}) => {
   await reset(request, {product: 'n8n', profiles: {}});
   await open(page, '/overview');

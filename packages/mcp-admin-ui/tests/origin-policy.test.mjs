@@ -101,6 +101,54 @@ test('read: an unusable file is shown as such; an answer of any other shape is n
   assert.equal((await api.originPolicy()).revision, null);
 });
 
+// F2: a proxy that compresses a small JSON answer (Cloudflare does) turns the add-on's strong ETag into a weak one,
+// W/"o1-...". It names the same revision, so the panel reads both forms; what it sends back is the strong If-Match, byte for
+// byte as before, because the add-on compares strong validators only (profile_admin._if_match).
+const weak = fetcher => async (path, options) => {
+  const answer = await fetcher(path, options);
+  const etag = answer.headers.get('ETag');
+  if (etag === null || !path.endsWith('/api/origin-policy')) return answer;
+  const headers = new Headers(answer.headers);
+  headers.set('ETag', `W/${etag}`);
+  return new Response(answer.body, { status: answer.status, headers });
+};
+
+test('F2: behind a proxy that makes the ETag weak the revision is the same and the save still sends the strong If-Match', async () => {
+  const double = server();
+  const api = new AdminApi(mount, weak(double.fetcher), memoryStorage());
+  await api.open();
+  const read = await api.originPolicy();
+  assert.equal(read.revision, 'o1-' + '1'.padStart(64, '0'));
+  const saved = await api.saveOriginPolicy('enforce', ['https://claude.ai'], read.revision);
+  assert.equal(saved.state, 'saved');
+  assert.equal(saved.revision, 'o1-' + '2'.padStart(64, '0'));  // the PUT's answer was weak too
+  const put = double.calls.find(call => origin(call) && call.method === 'PUT');
+  assert.equal(put.headers['If-Match'], etagOf(1));  // strong: quoted, no W/, exactly what it was before the fix
+  assert.equal(double.policy.state, 'saved');
+  // And the next save from the revision the weak answer gave is accepted by the same strict comparison.
+  const again = await api.saveOriginPolicy('report-only', [], saved.revision);
+  assert.equal(again.revision, 'o1-' + '3'.padStart(64, '0'));
+});
+
+test('F2: the ETag forms the panel takes as a revision; every odd form stays without one (shown, not saved from)', async () => {
+  const hex = n => n.toString(16).padStart(64, '0');
+  const revision = 'o1-' + hex(7);
+  const read = async etag => {
+    const api = new AdminApi(mount, async () => Response.json({ mode: 'enforce', allowed_origins: [], origin_policy_state: 'saved' },
+      { headers: etag === null ? {} : { ETag: etag } }), memoryStorage());
+    api.profile = 'default'; api.connected = true;
+    return (await api.originPolicy()).revision;
+  };
+  for (const etag of [`"${revision}"`, `W/"${revision}"`]) assert.equal(await read(etag), revision, etag);
+  for (const etag of [null, '', 'W/', 'W/""', revision, `W/${revision}`, `W/'${revision}'`, `w/"${revision}"`, `W /"${revision}"`, `W/ "${revision}"`,
+    `W/W/"${revision}"`, `WW/"${revision}"`, `"${revision}", "${revision}"`, `"${revision}",W/"${revision}"`, `W/"${revision}", W/"${revision}"`,
+    `W/"${revision}"x`, `xW/"${revision}"`, `W/"${revision}`, `W/${revision}"`, `W/"O1-${hex(7)}"`, `W/"o1-${'A'.repeat(64)}"`,
+    `W/"o1-${'f'.repeat(63)}"`, `W/"o1-${'f'.repeat(65)}"`, `W/"o1-${'g'.repeat(64)}"`, `W/"${revision}-gzip"`, `"${revision}-gzip"`,
+    `W/"p1-${hex(7)}"`, `W/"c1-${hex(7)}"`, `W/"x1-${hex(7)}"`, `W/"${hex(7)}"`, 'W/"o1-"']) {
+    assert.equal(await read(etag), null, String(etag));
+  }
+});
+
 test('save: PUT with a fresh CSRF value, If-Match, an Idempotency-Key and the request; no profile header; receipt checked', async () => {
   const { api, calls, storage } = await opened();
   const { revision } = await api.originPolicy();
