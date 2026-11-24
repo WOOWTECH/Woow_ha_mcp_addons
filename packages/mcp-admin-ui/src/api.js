@@ -98,7 +98,7 @@ export class ApiError extends UiError {
     if (code === 'origin_policy_invalid') this.message = '來源檢查設定不符合規則：模式只能是「只記錄」或「阻擋」；每個來源要是精確的 http(s) 來源（例如 https://claude.ai），主機名稱與 port 要有效，不接受 *、null、路徑、尾端斜線或點、帳密、查詢參數或空白，正規化後不能重複，最多 16 個。這次未儲存任何變更。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
-      this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
+      this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本，以及已審查月份、修補編號更大的後續修補版（自動放行）上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
     }
     // HM-11: fixed copy for the profile codes; the only values taken from the answer are whole numbers.
     const numbers = detail ?? {};

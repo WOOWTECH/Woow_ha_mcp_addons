@@ -27,31 +27,31 @@ Git blob SHAs (first 8 characters) of the Core files that produce or can change 
 each tag; `=` means unchanged from the previous tag. The `10.1` column is the 2026.10.1 tag (commit `abe1fdd7`). The `10.0` column is the 2026.10.0 tag (commit `6a811d33`), whose files
 are byte-identical to 2026.10.0b4, where the line-by-line review was done. The `10.2`, `10.3` and `10.4` columns are the
 2026.10.2 (commit `8d7fd8b6`), 2026.10.3 (commit `1f214b84`) and 2026.10.4 (commit `357cae5c`) tags. The `11.2` column is
-the 2026.11.2 tag (commit `ff5d56b8`).
+the 2026.11.2 tag (commit `ff5d56b8`). The `11.3` column is the 2026.11.3 tag (commit `92da9f15`).
 
-| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 | 10.2 | 10.3 | 10.4 | 11.0 | 11.1 | 11.2 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = | = | = | = | 244484bf | = | = |
-| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = | = | = | = | = | = | = |
-| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = | = | = | = | = | = | = |
-| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = | = | = | = | e031b7c4 | = | = |
-| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | da44d879 | = | = |
-| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = | = | = | = | 03297e08 | = | = |
-| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | a00ab2af | = | = |
-| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = | = | = | = | = | = | = |
-| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | 784ba83b | = | = |
-| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = | 0314c4b7 | = | = | 851a64b7 | = | = |
-| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = | = | = | = | = | = | = |
-| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = | = | = | = | = | = | = |
-| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = | = | = | = | a35b70ef | = | = |
-| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = | = | = | = | 6188a2be | = | = |
-| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = | = | = | = | c0b24680 | = | = |
-| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
-| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = | = | = | = | 21eb4a5f | = | = |
+| file (`homeassistant/`) | 7.2 | 7.3 | 7.4 | 8.0 | 8.1 | 8.2 | 8.3 | 9.0 | 9.1 | 9.2 | 9.3 | 9.4 | 10.0 | 10.1 | 10.2 | 10.3 | 10.4 | 11.0 | 11.1 | 11.2 | 11.3 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `components/websocket_api/auth.py` | f4660664 | = | = | = | = | = | = | = | = | = | = | = | a4b73688 | = | = | = | = | 244484bf | = | = | = |
+| `components/websocket_api/messages.py` | 13f856e6 | = | = | a6d3b54f | = | = | = | = | = | = | = | = | f1f543e2 | = | = | = | = | = | = | = | = |
+| `components/websocket_api/decorators.py` | 37ac60ba | = | = | = | = | = | = | = | = | = | = | = | d5df7f88 | = | = | = | = | = | = | = | = |
+| `components/websocket_api/connection.py` | 19d4782a | = | = | = | = | = | = | d4f824d2 | = | = | = | = | cd6e0426 | = | = | = | = | e031b7c4 | = | = | = |
+| `components/websocket_api/http.py` | 9cfca068 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | da44d879 | = | = | = |
+| `components/websocket_api/commands.py` | 5bc65849 | = | = | fe87a4e9 | = | = | = | = | = | = | = | = | d769c753 | = | = | = | = | 03297e08 | = | = | = |
+| `components/websocket_api/__init__.py` | 3a526e32 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | a00ab2af | = | = | = |
+| `components/websocket_api/const.py` | f1eb480d | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/config/auth.py` | 2479fe65 | = | = | = | = | = | = | = | = | = | = | = | 75b0c88b | = | = | = | = | = | = | = | = |
+| `components/config/__init__.py` | ef7a1147 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | 784ba83b | = | = | = |
+| `auth/__init__.py` | 34a8bffa | = | = | 88a8b1d5 | = | = | = | = | = | = | = | = | a5850978 | = | 0314c4b7 | = | = | 851a64b7 | = | = | = |
+| `auth/auth_store.py` | 13ecdfc6 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/const.py` | 05b9e6d7 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `auth/models.py` | 5646d23d | = | = | a41b03d1 | = | = | = | = | = | = | = | = | 7342e9d4 | = | = | = | = | = | = | = | = |
+| `auth/permissions/__init__.py` | b5254236 | = | = | = | = | = | = | = | = | = | = | = | aeab7ff8 | = | = | = | = | = | = | = | = |
+| `components/hassio/__init__.py` | b38caf53 | = | = | 3a3cd368 | = | 373c0b0c | = | 59c14de4 | = | = | = | = | 67abae35 | = | = | = | = | a35b70ef | = | = | = |
+| `components/http/auth.py` | e2c68719 | = | = | = | = | = | = | = | = | = | = | = | 702eb7c8 | = | = | = | = | 6188a2be | = | = | = |
+| `components/http/auth_util.py` | 4eed1443 | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `helpers/json.py` | 1789bda1 | = | = | = | = | = | = | 3ea52348 | = | = | = | = | f6a778dd | = | = | = | = | c0b24680 | = | = | = |
+| `util/json.py` | 1f8e6a0e | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = | = |
+| `components/onboarding/views.py` | a4cd0198 | = | = | = | = | = | = | 2801f426 | = | = | d3144de5 | = | 2835631c | = | = | = | = | 21eb4a5f | = | = | = |
 
 2026.11 review (2026-11-11): the exact GitHub tag commits are Core `74cf5a49c63ed8d4d87717844bf14f79c28c9cea` (11.0) and `d8a0dc698c8946b44e455d904000db563cfbf1ba` (11.1), compared to reviewed 10.4 `357cae5c598dfcd7a0ea7dc5b1facccd4ec6037b`. Every one of the 25 consumed and adjacent files is byte-identical between 11.0 and 11.1. Fourteen changed between 10.4 and 11.0; all their hunks were read. Full blob SHAs and tag commits are in [the comparison record](provenance/headscale-ha-core-2026-11-blobs.json).
 
