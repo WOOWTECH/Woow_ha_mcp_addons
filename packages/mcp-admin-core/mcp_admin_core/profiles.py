@@ -14,7 +14,9 @@ entry at one of its own names that is a directory). HM-13c lists and deletes the
 the management API shows (quarantine_entry_name, quarantine_directory_name, remove_quarantine_directory) and names the
 panel's restore notice (RESTORE_NOTICE_NAME). HM-27 names the add-on's Origin policy of the secret path and its receipts
 (ORIGIN_POLICY_NAME, ORIGIN_POLICY_OPERATIONS_NAME: origin_policy.py writes them, the boot guard archives the receipts
-on a restore). It never writes the default profile's files (invariant I6).
+on a restore). HM-25 says which profile's child runs without a backend (documentation_child: n8n's default profile
+only); an n8n child takes its profile from its directory (Layout.profile) and works in Layout.child. It never writes
+the default profile's files (invariant I6).
 
 Layout (plan §4.1)::
 
@@ -394,6 +396,15 @@ def available_memory_mib() -> int | None:
 
 def supports_profiles(product: str) -> bool:
     return capacity(product).policy_limit > 0
+
+
+def documentation_child(product: str, profile_id: str | None = None) -> bool:
+    """HM-25 (DQ-22; plan 9 n8n row; contract section 9 #28): whether a profile's child runs without a configured backend.
+    Only n8n's default profile's does (profile_id None or 'default'): n8n-mcp serves its seven documentation tools
+    without one (surface.BACKEND_FREE), as before. An additional n8n profile without a backend starts no child, as every
+    other product's profile: its health check and apply state say unconfigured, and the gateway refuses each of its
+    tools, the documentation ones too, as unconfigured (never the "try again shortly" of a child that is not up)."""
+    return product == 'n8n' and profile_id in (None, DEFAULT_PROFILE)
 
 
 def capacity(product: str, memory_limit_mib: int | None = None) -> ProfileCapacity:

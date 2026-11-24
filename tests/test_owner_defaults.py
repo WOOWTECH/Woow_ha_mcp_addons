@@ -698,7 +698,7 @@ async def test_both_runtimes_migrate_before_the_store_and_stop_on_failure(tmp_pa
         seen.append('store')
         raise AssertionError('ProductStore constructed after a failed migration')
     monkeypatch.setattr(owner_defaults, 'apply_legacy_upgrade', migrate)
-    monkeypatch.setattr(module, 'ProductStore', store)
+    monkeypatch.setattr(run_product, 'ProductStore', store)  # HM-25: n8n's runtime is run_product's too
     with pytest.raises(ConfigError):
         await module.run(SimpleNamespace(data=tmp_path / 'state', product='hermes'))
     assert seen == [('migrate', 'hermes' if kind == 'product' else 'n8n')]

@@ -123,8 +123,27 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 要寫：A8、A9（第 1 節）。A1、A3、A4、A5 含 n8n 那一句、A6、A7、B1 已寫進 0.4.14；A2 不適用。
 - 自己的修正：沒有。`apps/n8n` 的兩次改動都沒有可見變化：HM-04（#91，port 參數化，預設 3000 時 `PORT` 照舊）、HM-20（#102，開通後才拒絕
   loopback 與檢查存檔）。
-- 發版時另外驗：第 5 節。另外，n8n 若自己升版號（不跟預設版號一起升），`apps/n8n/run.py` 沒傳 `product_version`，`serverInfo` 與面板會報
-  預設版號，HM-17 的升版模擬會擋：先改 `run.py` 與相關測試（HM-17 筆記第 12 節）。
+- 發版時另外驗：第 5 節。n8n 自己升版號（不跟預設版號一起升）時，HM-25（#129）起 `apps/n8n/run.py` 走 `run_product` 的
+  runtime、照其他產品傳 `version_for_product('n8n')`，`serverInfo` 與面板報的就是 `PRODUCT_VERSIONS` 的版號；HM-17 筆記第 12 節要先改
+  `run.py` 的那一條不用做了。
+- **開通 n8n 的升版 PR 才寫**（HM-25 的額外帳號部分，受開關管；開關關時沒有可見變化，見第 4.2 節。runtime 改走 `run_product` 不受開關管、也看不到，見第 4.1 節）。計畫 §7.2 的共通項目照 Odoo 首發的寫法另寫；n8n 自己
+  看得到的變化，每項一行（英文句子是主對話補寫的草稿，最後由發版片定）：
+  - 額外帳號（每個 add-on 最多 2 個，DQ-29 暫定值）各有自己的 token、後端、政策與 n8n-mcp 子程式：
+    `Additional profiles (up to 2): each has its own MCP token, n8n backend, tool policy and its own n8n-mcp process.`
+  - 沒設定後端的額外帳號不起子程式，每支工具（含 7 支文件工具）回 `-32603`「Backend not configured」；預設帳號照舊（沒後端也起文件子程式）：
+    `An additional profile without an n8n backend runs no n8n-mcp process: every tool, the seven documentation tools included, answers "Backend not configured"; the default profile is unchanged.`
+  - session 名額與逾時每個帳號各自（沒存過是 20 個、10 分鐘）：
+    `MCP sessions are counted per profile: each profile has its own 20 sessions (10 minutes idle) unless its own settings say otherwise.`
+  - 每個額外帳號有自己的 node catalog 與 workflow 版本歷史（`/tmp`，不進備份；換了後端（網址或 key）時重做、刪帳號一起刪；HM-25 安全審查 S-8）：
+    `Each additional profile keeps its own node catalog and workflow version history (in /tmp, not in backups): a new backend (URL or key) starts it afresh, and it is deleted with the profile.`
+  - DOCS 要跟著改（`addons/n8n/DOCS.md`，升版 PR 改）：「所有 client **共用 20 個**同時 session」改成「每個帳號的 client 共用該帳號的 20 個
+    session」；「n8n 沒有後端時子程序照常啟動，7 個文件工具照常回答」補「額外帳號沒有後端時不起子程序，每支工具都回 `Backend not configured`」。
+  - DOCS 的已知限制要加（HM-25 的獨立安全審查 S-2、S-7、S-8；`threat-model.md` 第 3 節）：
+    - 兩個帳號接同一台 n8n 時，n8n 的 webhook 與 form 是整台共用、不看 API key，一個帳號可以觸發另一個帳號的 webhook workflow；要分開就
+      每個帳號接自己的 n8n，或在 webhook 節點加 header 驗證。
+    - workflow 版本歷史在容器的 `/tmp`（HAOS 的資料分割區），沒有大小上限：每次更新 workflow 存一版、每個 workflow 留 10 版。
+    - 預設帳號的版本歷史只在 add-on 重啟時清掉：把預設帳號換到另一個後端、交給別人用之前，重啟 add-on。
+    - webhook 的網址模式（`permissive`）要不要在開通後拒 loopback，等使用者定（契約 #90）；定了要改這一段與 CHANGELOG。
 
 ### 3.3 Hermes
 
@@ -230,6 +249,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 | HM-17 發版基礎 | #92 | `56f22f7` | 只改發版工具（`packaging/`、workflow），不在映像裡；影響發版步驟（第 5 節第 6 點） |
 | HM-13b 開機守門（A8 以外） | #108 | `f5e296f` | 撤銷每個帳號（連預設帳號）、隔離讀不到的帳號、獨立驗證、寫還原紀錄、休眠處理，對沒開通的產品都只在磁碟上有帳號資料時動作；全部撤銷的標記（`.revoke-all-pending`）不看帳號資料、一樣撤銷預設帳號，但只有開通的路由寫得出來。沒有產品開通過，今天沒有安裝有帳號資料或這個標記（2026-11-19 HM-18 補列） |
 | HM-16 驗收工具 | #109 | `c90b214` | 只改 `packaging/`（容器探針的多帳號階段、P9 kit 的帳號參數、升版比對 hook 的草稿）、測試與文件，探針與 P9 kit 不在映像裡；影響發版時的容器驗收（第 5 節第 3 點）（2026-11-19 HM-18 補列） |
+| HM-25 n8n 的 runtime 改走 `run_product` | #129 | 合併後補 | `apps/n8n/run.py` 帶 n8n 的 adapter 跑 `run_product` 的 runtime（契約第 1.2 節：不受開關管，n8n 下一次發版不管開不開通都帶出去）；預設帳號逐位元照舊：HM-01 黃金回歸、兩個契約凍結、子程式 spec 快照照過；`serverInfo` 的版本照舊（n8n 沒有自己的版號）；用戶端看不到的差別只有帳號 ETag 的 HMAC domain 帶 `default`、關閉時先關 client 再停子程式（HM-25 筆記第 3.1 節） |
 
 ### 4.2 受開關管：開關關時沒有可見變化
 
@@ -254,6 +274,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-22 | 合併後補 | 合併後補 | Nextcloud 開通的功能片：換 url、username 換 token（url 照伺服器與存的路徑比）、面板 `identityBound` 加 Nextcloud；面板等核對時被擋的存檔說明寫自己產品的身分欄位（`identityChange`，HM-22 審查 MF-1） | 換身分不換 token，回應沒有新欄位；面板的提示與請求不變（Odoo 的說明文字逐字不變） |
 | HM-24 | 合併後補 | 合併後補 | Hermes 與 PaaS 一致：換後端身分不換 token；仍保留來源變更重填秘密及帳號隔離 | 換身分不換 token，回應、面板與子程式照舊；Odoo 的說明文字逐字不變 |
 | HM-26 | 合併後補 | 合併後補 | Headscale 伺服器拒絕 key 時監看的認證退避（`health.refused_login`）；面板 Headscale「後端設定」說明的每帳號版本；Headscale 開通前的測試（第 3.8 節） | 監看照舊每 15 秒、不退避，記下的原因不變；說明逐字照今天 |
+| HM-25（開通後才走的部分；runtime 收斂在第 4.1 節） | #129 | 合併後補 | 額外帳號的子程式（HOME、`nodes.db` 副本與換後端時重做、命令列的 port、沒後端不起）、沒後端的額外帳號每支工具都 `backend_not_configured`、刪帳號（含孤兒、隔離目錄）清 catalog 副本、容器探針多帳號階段收 n8n | 沒有額外帳號：額外帳號的 spec 在關時直接拒絕，`prepare_child`、產品清理與 `documentation_child` 的額外帳號分支都不會被呼叫 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 
@@ -262,10 +283,10 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 ```
 
 0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 不寫（開通之後這些片都看得到，照第 7 節逐項寫；HM-19a）。其他產品的下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
-不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）；HM-22 合併後也在其中（第 4.2 節；PR 號合併後補，建議句的 PR 清單跟著加）。建議句（HM-18 補寫）：
+不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）、#129（HM-25：n8n 的 runtime 收斂不受開關管，第 4.1 節；其餘受開關管，第 4.2 節）；HM-22 合併後也在其中（第 4.2 節；PR 號合併後補，建議句的 PR 清單跟著加）。建議句（HM-18 補寫；HM-25 合併 `claude-delivery` 時加 #129）：
 
 ```text
-- This image also carries more groundwork for multiple profiles per add-on (PRs #108, #112 and #116). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
+- This image also carries more groundwork for multiple profiles per add-on (PRs #108, #112, #116 and #129). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
 ```
 
 ## 5. 發版時要另外驗的事（每個發映像的產品；計畫 §11.5）
@@ -311,7 +332,8 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
     寫明哪些產品開通了。
   - 被開通的產品的 `addons/<產品>/DOCS.md`：「一個 Add-on 只有一組後端：…」（Odoo 第 26 行；n8n、Hermes、EMQX、LiteLLM、OpenDesign 同一句）、
     Nextcloud 的「一個 Add-on 只有一個 Nextcloud 帳號」、Headscale 開頭「填入一台 Headscale 控制伺服器的網址」那段。
-  - `addons/n8n/DOCS.md` 第 55 行「所有 client 共用 20 個同時 session」：開通後每個帳號有自己的子程式，HM-25 照實際行為改。
+  - `addons/n8n/DOCS.md` 第 55 行「所有 client 共用 20 個同時 session」：開通後每個帳號有自己的子程式。HM-25 照實際行為寫好了改法（第 3.2 節；
+    功能片不改 `addons/`），由開通 n8n 的升版 PR 改。
   - `addons/nextcloud/config.yaml` 的 `description`「one Nextcloud account」（HM-22）。
   - 面板 `packages/mcp-admin-ui/src/contracts.js` 的 Headscale 說明「這個 Add-on 只管理同一個 Headscale 執行個體」（HM-26；面板改了照規則重算帳本）。
 - **`upgrade-notes.yaml`**：照 `AGENTS.md` 第 3 點，升版比對要求時才建；建的話內容照計畫 §7.3：契約第 1.4 節的全部項目、回退的三條路

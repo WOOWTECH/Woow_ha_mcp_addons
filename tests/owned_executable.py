@@ -95,12 +95,14 @@ def install_runner(module, config):
     # replaced by the private endpoint's, as private_spec replaces only the spec's production port.
     production_url = f'http://127.0.0.1:{endpoint.production_port}/mcp'
     # HM-05: run_product makes its profile's Supervisor, HealthMonitor and apps in profile_runtime (child_spec stays
-    # run_product's); apps/n8n/run.py still makes its own.
-    from mcp_admin_core import features, lifecycle, profile_runtime, profiles, run_product
-    profile = profile_runtime if module is run_product else module
+    # run_product's); HM-25: apps/n8n/run.py runs run_product's runtime (child_spec stays its own). An in-process alias
+    # test passes its own names (a SimpleNamespace), which are patched instead.
+    from mcp_admin_core import features, lifecycle, profile_runtime, profiles
+    in_process = isinstance(module, SimpleNamespace)
+    profile = module if in_process else profile_runtime
 
     def switched():
-        return module is run_product and features.enabled(config['product'])  # read when called, as production does
+        return not in_process and features.enabled(config['product'])  # read when called, as production does
     original_spec, original_monitor, original_apps = module.child_spec, profile.HealthMonitor, profile.make_apps
     original_guard = profile_runtime.ListenerGuard
 
@@ -109,7 +111,7 @@ def install_runner(module, config):
             assert port == endpoint.production_port
             super().__init__(manager, endpoint.port, limits=limits)
 
-    if module is run_product:
+    if not in_process:  # every real runtime: run_product's, and n8n's since HM-25 (apps/n8n/run.py runs run_product's)
         profile_runtime.ListenerGuard = PrivateGuard
     def trace(operation, phase, reason=None):
         if 'trace' not in config:

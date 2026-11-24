@@ -551,8 +551,8 @@ def test_n8n_and_six_products_share_factory():
     import inspect
     import run
     from mcp_admin_core import run_product
-    assert run.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
-    assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run.run)
+    # HM-25: n8n's runtime is run_product's (run.run hands it the n8n adapter), so it takes run_product's factory.
+    assert "run_product.run(" in inspect.getsource(run.run) and not hasattr(run, "make_ha_admin_verifier")
     assert run_product.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
     assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run_product.run)
     assert not isinstance(ha_role._NoRedirectConnect.process_redirect(None, RuntimeError()), str)
@@ -574,14 +574,15 @@ def owned_transport(uri, **options):
     assert uri == "ws://supervisor/core/websocket"
     return connector(uri, host="127.0.0.1", port={seen['port']}, **options)
 ha_role._NoRedirectConnect = owned_transport
-apps = run.make_apps
+from mcp_admin_core import profile_runtime  # HM-25: n8n's runtime is run_product's; its profile makes the apps
+apps = profile_runtime.make_apps
 def ingress_simulation(*args, **kwargs):
     assert isinstance(kwargs["verify_admin"], ha_role._Verifier)
     admin, mcp = apps(*args, **kwargs)
     async def ingress(scope, receive, send):
         await admin({{**scope, "client": ("172.30.32.2", 1)}}, receive, send)
     return ingress, mcp
-run.make_apps = ingress_simulation
+profile_runtime.make_apps = ingress_simulation
 run.main()
 '''
         runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])

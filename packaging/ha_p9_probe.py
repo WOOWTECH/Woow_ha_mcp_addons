@@ -45,8 +45,9 @@ print(" ".join(str(pid) for pid, (_, ppid) in sorted(procs.items()) if ppid in l
 KILL_SCRIPT = 'import os, sys\nfor pid in sys.argv[1:]: os.kill(int(pid), 9)'
 # Multi-profile HM-16: each MCP child of the management launcher with the port its command line names ("-": none; the
 # default profile's child of Hermes and OpenDesign runs on its launcher's own default, 3000). A child that exited and
-# is not reaped yet has an empty command line and is left out. n8n's child names its port only in its environment, so
-# its children cannot be told apart here (until HM-25): childkill --child-port then kills nothing and fails.
+# is not reaped yet has an empty command line and is left out. HM-25: n8n's children too: an additional profile's child
+# names its port after its entry (--port N; n8n-mcp itself listens on PORT, in its environment), the default profile's
+# names none (3000), so no environment is ever read here.
 CHILD_PORT_SCRIPT = r'''
 import os, sys
 root = sys.argv[1] if len(sys.argv) > 1 else "/proc"

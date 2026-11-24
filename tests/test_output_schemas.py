@@ -52,15 +52,16 @@ CURRENT_POST_SOURCE_BYTES = {
         'emqx', '4498443ea16462a52621645b3b6625198fe0f20b12166fa7c7c9197557502b67'),
     'apps/emqx/vendor/emqx_mcp_server/deps.py': (
         'emqx', 'fef905c6b76e7b07e6a0c67264ae2981e0c4e2aaeb5ebf4a57927ed2eac95261'),
-    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
-    # No tool, schema or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),
+    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
+    # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend); its review: the
+    # copy made through directory descriptors and again for another backend. No tool, schema or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', '4f3832c0ca38d9a1a2fda80e3d6d74617dac9e9c2882a5dd91e8fc1ab8ba765f'),
     # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
     'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
-    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; no tool, schema or
-    # handler change.
-    'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
+    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
+    # run_product's (the n8n adapter); no tool, schema or handler change.
+    'apps/n8n/run.py': ('n8n', '71d86351c716ed6f40b25ca337205930686531f450fc16bc088f37bff2e13360'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
     # 0.4.14 release: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14); no tool, schema or handler change.
     'apps/n8n/Dockerfile': ('n8n', '0a4959708cc10750f654a17c328e646928df71f16bcfc612ec1bf23c30b75b12'),

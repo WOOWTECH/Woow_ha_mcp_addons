@@ -51,11 +51,14 @@ loopback rule):
 Fixed messages only: no token, child token, label, state or backend value is ever printed; a profile is named by its
 log id (profiles.log_id).
 
-Not for n8n yet (HM-25, review SF-2): its child names its port only in its environment (PORT, beside its tokens), never
-on its command line, so the children cannot be told apart by their command lines; stage() refuses n8n before it
-changes anything. Reading another user's /proc/<pid>/fd links as root takes CAP_SYS_PTRACE, which docker gives no
-container by default (not measured here). n8n's switch-on slice gives its child a port the probe can read without its
-environment, and checks tree_snapshot's names against what n8n-mcp leaves in its directory (its HOME).
+n8n too since HM-25 (review SF-2's handoff). Its child listens on PORT (in its environment, beside its tokens); an
+additional profile's child also names that port on its command line, after its entry (--port N, which n8n-mcp does not
+read), and the default profile's names none (CHILD_PORT, as the Hermes and OpenDesign launchers' default), so
+child_ports tells them apart without reading any environment (reading another user's /proc/<pid>/environ or fd links as
+root takes CAP_SYS_PTRACE, which docker gives no container by default). n8n's default profile works in /data/mcp itself
+(its HOME and cwd, as before): tree_snapshot's names show that n8n-mcp leaves nothing of its own there, and an
+additional profile's child/ (its HOME) must still be empty. Step 2 also checks that each additional profile's child
+reads a catalog copy of its own (check_n8n_catalogs: /tmp/woow-n8n-mcp/profiles/<id>/nodes.db; DQ-04).
 """
 import asyncio
 import hashlib
@@ -357,8 +360,8 @@ def check_revoked_restore(data, restored, before, created):
 def child_port(argv):
     """The port a child's command line names (--port N or --port=N), or None (the default child of Hermes and
     OpenDesign runs on its launcher's own default, CHILD_PORT; an additional child's exec wrapper carries the real
-    command line, so it names the port too). n8n's child names none (its port is in its environment: module
-    docstring)."""
+    command line, so it names the port too). n8n's default child names none either; an additional n8n child names it
+    after its entry (HM-25: module docstring)."""
     for index, value in enumerate(argv):
         if value == '--port' and index + 1 < len(argv) and argv[index + 1].isdigit():
             return int(argv[index + 1])
@@ -429,6 +432,32 @@ async def profiles_up(probe, process, ports, *, timeout=UP_SECONDS, proc=Path('/
         # child that refuses its backend). The runtime's own lines are not shown: the probe never prints them.
         up = [port for port in wanted if found.get(port) and listening.get(port) == ['0100007F']]
         raise AssertionError(f'children up on {up} of {wanted}') from None
+
+
+N8N_CATALOGS = Path('/tmp/woow-n8n-mcp')  # apps/n8n/n8n_adapter.py CATALOG_DIR
+
+
+def check_n8n_catalogs(created, root=N8N_CATALOGS, *, user=RUNTIME):
+    """HM-25 (DQ-04, UC-09): each additional n8n profile's child reads a catalog copy of its own, made before it
+    started: <root>/profiles/<id>/nodes.db, a single-link regular file of the runtime user, 0600, under directories of
+    the runtime user, 0700 (never a link), one per profile and none other than the created profiles'. Read only."""
+    profiles_dir = root / profiles.PROFILES_NAME
+    for directory in (root, profiles_dir):
+        info = os.lstat(directory)
+        assert stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == user and stat.S_IMODE(info.st_mode) == 0o700, \
+            'n8n catalog directory not private'
+    names = sorted(entry.name for entry in os.scandir(profiles_dir))
+    assert names == sorted(profile_id for profile_id, _ in created), "n8n catalog copies not the profiles' own"
+    copies = set()
+    for profile_id, _ in created:
+        info = os.lstat(profiles_dir / profile_id)
+        assert stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == user and stat.S_IMODE(info.st_mode) == 0o700, \
+            'n8n catalog directory not private'
+        info = os.lstat(profiles_dir / profile_id / 'nodes.db')
+        assert (stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and (info.st_uid, info.st_gid) == user
+                and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size > 0), 'n8n catalog copy not private'
+        copies.add((info.st_dev, info.st_ino))
+    assert len(copies) == len(created), 'n8n catalog copies shared'
 
 
 def stat_fields(pid, proc=Path('/proc')):
@@ -630,7 +659,6 @@ async def check_refused(client, found, message, base=MCP):
 
 async def stage(probe, client):
     """The multi-profile stage (the module docstring's steps 1 to 9); prints one line of numbers, no secret."""
-    assert probe.APP != 'n8n', "n8n's children name their port in their environment only (HM-25)"
     data = Path(probe.DATA)
     message = initialize_message()
     check_marker_ended(data)
@@ -644,6 +672,8 @@ async def stage(probe, client):
         began = time.monotonic()
         pids = await profiles_up(probe, process, ports)
         up = time.monotonic() - began
+        if probe.APP == 'n8n':
+            check_n8n_catalogs(created)  # HM-25: each additional profile's own catalog copy
         await check_routing(client, found, message)
         await check_child_bearers(probe, client, [(label, port, child) for label, port, _, child in found], message)
         check_resources(process, pids)

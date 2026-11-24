@@ -119,8 +119,9 @@ sentinel 是執行期自己建的而且沒被動過、子程式跑過後 `/data/
 寫還原紀錄（兩個訊號、每個帳號都撤銷）；每個帳號的 token 是 null、child token 換新、其他欄位與索引不變；每個子程式重新起來；
 還原前的 token 兩種接法都被拒（Bearer 401、密鑰網址 404）、每個子程式拒絕還原前的 child token；停機後 sentinel 已重建、
 守門留下的樹仍符合修復規則；這次啟動的 entrypoint `re-owned N` 一行、每個帳號的 `REVOKED` 一行、`REVOKED_NOTICE` 一行，
-守門沒有別的行（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：
-n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個帳號的。
+守門沒有別的行（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n（HM-25 起）：額外帳號的子程式在命令列
+寫 `--port N`（預設帳號的沒寫，就是 3000），這個階段照樣認得出每個帳號的子程式；另外檢查每個額外帳號讀自己的 catalog 副本
+（`/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`，0600、目錄 0700、每帳號一份）。
 
 下表「怎麼驗」寫每一層實際驗哪幾項；沒寫到的項目只在 LOCAL 驗。「Odoo 首發」照計畫 §10.4：是＝Odoo 首發（HM-19b）前要過。
 
@@ -147,7 +148,7 @@ n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個�
 | T-19 | 背壓與每帳號名額 | LOCAL | 轉送名額、准入、位元組預算、GET 串流照契約第 2.4、5 節；CPU 飢餓下閒置帳號健康不逾時 | 是 |
 | T-20 | 升級、回退、再升級 | STORE：`seed`／`verify`（只驗升級那一段）；HA：升級 → 還原升級前備份 → 再升級 | 升級：預設 token、兩條網址、`state.json` 位元不變。回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有撤銷。再升級：額外帳號不存在、預設不變；照文件按「全部撤銷」並確認。回退與再升級只在 HA 驗 | 是 |
 | T-21 | 備份還原 | LOCAL：全部；CONTAINER：單帳號還原（守門刪標記、還原提示、`KEPT_NOTICE` 與 `re-owned N` 各一行、守門沒有別的行）、多帳號還原樹（每個帳號撤銷、child token 換新、還原紀錄、還原前的 token 兩種接法與 child token 都被拒、sentinel 重建、`REVOKED` 每帳號一行與 `REVOKED_NOTICE` 一行、守門沒有別的行）；HA：full、partial、加密各一次，步驟見下方 [T-21 在 HAOS 的步驟](#t-21-在-haos-的步驟hm-16) | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個訊號至少一個觸發；讀不到的帳號隔離（只能刪）；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410（備份後才做、隨還原消失的操作也是）；C1-M1 攻擊序；版本混搭各一次（計畫 §10.6 第 6 點）。讀不到的帳號隔離與 C1-M1 只在 LOCAL 驗 | 是 |
-| T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` | 否（n8n） |
+| T-22 | n8n 名額與逾時 | LOCAL：全部（`tests/test_n8n_multi_profile.py`）；CONTAINER：n8n 的多帳號階段（每帳號的子程式、自己的 catalog 副本）；HA：n8n 升版 PR 的驗收（兩個 n8n 帳號、使用者批准的後端身分；P9 `--cross`、`childkill --child-port`） | `n8n_session` 每帳號一份（各自 20 個、10 分鐘；存一個帳號的設定只重啟它的子程式）；沒後端的額外帳號不起子程式、每支工具（含 7 支文件工具）回 `backend_not_configured`；`nodes.db` 每帳號一份、刪帳號一起刪；`x-n8n-*` 不轉送 | 否（n8n） |
 | T-23 | 子程式 bearer 隔離 | LOCAL：全部（7 支 Python＋n8n）；CONTAINER：每個帳號的真子程式不帶、隨機、別帳號的 child token | 不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200（n8n 另見矩陣）。兩個標頭與空字串只在 LOCAL 驗 | 是（Odoo） |
 | T-24 | 來源檢查 | LOCAL：全部（`tests/test_origin_policy.py`、面板的 `origin-policy` 測試）；HA：S14 交 HM-19b，用 echo 端點看 Claude.ai 實際送的 Origin（預設清單有 `https://claude.ai`，Claude.ai 送它時不會有 would_deny 行，看 add-on log 量不出來；也可以暫時把清單清空、維持 report-only 再看紀錄）；實機另看 add-on log 裡 would_deny 行的格式與節流 | 照[矩陣](../multi-profile/acceptance-matrix.md) T-24（HM-27 定案）：密鑰網址清單外（預設清單只有 `https://claude.ai`）只記一行 would_deny、不擋，回應和不帶 Origin 的同一個請求逐位元相同；面板切 enforce 後只擋清單外（403 固定本體），清單內與沒帶 Origin 照舊；政策檔不能用時每個帳號的密鑰網址 503；還原後政策是備份當時的；Bearer 帶 Origin 403；Headscale 只放 `https://claude.ai`。S14 的結果交負責人決定 DQ-11 第二問（2026-11-19 HM-18 改寫：原本只寫「記下 Claude.ai 送的 Origin」，是 HM-27 定案前的寫法） | 是 |
 | T-25 | 紀錄稽核 97 種寫法 | LOCAL；HA：add-on log 與診斷 | 不比 pin 版 PaaS 差；0 token | 是 |

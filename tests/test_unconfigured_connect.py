@@ -60,12 +60,9 @@ def tools_of(product):
 
 def released(product):
     """The management options the add-on's launcher gives the gateway (HM-17). run_product passes the add-on's own
-    release version, version_for_product(product); apps/n8n/run.py passes none, so the gateway's default VERSION
-    answers for n8n, its own initialize answer included (no child) as well as the rebuilt child answer. The expected
-    versions are the release data's (release_version), never the runtime's; when apps/n8n/run.py passes a version, this
-    passes it too (test_unconfigured_connect_runtime runs the real launchers)."""
-    if product == 'n8n':
-        return ManagementOptions(kind='ha-addon', authority='ha-admin')
+    release version, version_for_product(product), for n8n too since HM-25 (apps/n8n/run.py runs run_product's
+    runtime): its own initialize answer (no child) as well as the rebuilt child answer. The expected versions are the
+    release data's (release_version), never the runtime's (test_unconfigured_connect_runtime runs the real launchers)."""
     return ManagementOptions(kind='ha-addon', authority='ha-admin', product_version=version_for_product(product))
 
 

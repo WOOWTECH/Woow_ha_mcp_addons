@@ -4,11 +4,11 @@
 
 > HM-00 產出（2026-11-14）；2026-11-15 文件同步重產（說明欄的決策狀態、FM-146 的負責片）；2026-11-17 文件同步重產
 > （FM-154～156、各片補的差異表第 87～117 列、文末「差異表每一列的來處」）；2026-11-19 HM-18 重產（DQ-35、DQ-45 已定，
-> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）；2026-11-20 整合候選新增 #129～#130；2026-11-23 火車 A 整合分支併入 HM-22 Nextcloud，列號重編為第 131～133 列（第 131、132 列經 T-03、T-07 對到，第 133 列寫出處）；2026-11-25 火車 B 整合分支併入 HM-24 Hermes，列號重編為第 134～136 列（經 FM-86、FM-153 對到），再併入 HM-26 Headscale，列號重編為第 137～140 列（第 137～139 列經 FM-88、T-04、T-07、T-23 對到，第 140 列寫出處）。
-> 本候選以 repo 外 wave5/hm21-hm23-generator/gen_trace.py 重產，雜湊見同目錄 SHA256SUMS；Nextcloud 三列與 T-03、T-07 的對到是整合時手補（產生器未含，下次重產要加進 T 與 ORIGIN 表）；Hermes 三列與 FM-86、FM-153 的對到、Headscale 四列與 FM-88、FM-90、FM-109、T-04、T-07、T-23 的對到、檔頭與結論的列數也是整合時手補（同樣要在重產時加進產生器的對照表）。
+> Claude.ai 標頭的更正，差異表第 118～128 列經 T-21、T-24 對到）；2026-11-20 整合候選新增 #129～#130；2026-11-23 火車 A 整合分支併入 HM-22 Nextcloud，列號重編為第 131～133 列（第 131、132 列經 T-03、T-07 對到，第 133 列寫出處）；2026-11-25 火車 B 整合分支併入 HM-24 Hermes，列號重編為第 134～136 列（經 FM-86、FM-153 對到），再併入 HM-26 Headscale，列號重編為第 137～140 列（第 137～139 列經 FM-88、T-04、T-07、T-23 對到，第 140 列寫出處），再併入 HM-25 n8n，列號重編為第 141～143 列（經 T-22 對到，#141、#142 另經 FM-15、FM-140）。
+> 本候選以 repo 外 wave5/hm21-hm23-generator/gen_trace.py 重產，雜湊見同目錄 SHA256SUMS；Nextcloud 三列與 T-03、T-07 的對到是整合時手補（產生器未含，下次重產要加進 T 與 ORIGIN 表）；Hermes 三列與 FM-86、FM-153 的對到、Headscale 四列與 FM-88、FM-90、FM-109、T-04、T-07、T-23 的對到、n8n 三列與 FM-15、FM-84、FM-140、T-22 及反查表 #4、#28、#47 的對到、檔頭與結論的列數也是整合時手補（同樣要在重產時加進產生器的對照表）。
 > 原產生器說明如下：
 > （重產指令與輸入版本見 `docs/provenance/ha-multiprofile-docs-sync-20261117.md`，HM-18 的改動見
-> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，HM-22 的見 `docs/provenance/ha-multiprofile-HM-22-20261119.md`，HM-24 的見 `docs/provenance/ha-multiprofile-HM-24-20261119.md` 第 15 節，HM-26 的見 `contract.md` 第 10 節 HM-26 那兩列，原本的指令見
+> `docs/provenance/ha-multiprofile-HM-18-20261119.md` 第 7 節，HM-22 的見 `docs/provenance/ha-multiprofile-HM-22-20261119.md`，HM-24 的見 `docs/provenance/ha-multiprofile-HM-24-20261119.md` 第 15 節，HM-26 的見 `contract.md` 第 10 節 HM-26 那兩列，HM-25 的見 `docs/provenance/ha-multiprofile-HM-25-20261119.md` 結論的合併那一點，原本的指令見
 > `docs/provenance/ha-multiprofile-HM-00-20261114.md` 第 8 節；腳本與輸入的 SHA-256 以 repo 外的
 > `wave0/hm00-check/SHA256SUMS` 為準），「原文」欄逐字取自計畫產物（repo 外）：
 > `FEATURE-MATRIX-zh-TW.md` 第 2 節的「HA 平台差異」欄、`gaps/G6-delivery.md` 第 5 節的「HA 期望值與差異」欄。
@@ -21,7 +21,7 @@
 - 其餘 44 列寫「—」（沒有平台差異），但「—」不等於行為相同：每列都人工看過、寫了結論（「—」的列那一節）。23 列有差異、對到差異表；19 列照 PaaS（有的另指差異表裡相關的列）；2 列是流程或文件。
 - G6 §5 的 T-01～T-29 共 29 列，每列都對到 §8.8 的列或某個測試。
 - 對不上的已經補成差異表第 44～79 列（HM-00 補列）；看「—」列時找到的差異補成第 80～86 列（審查後補列）。只對到測試的列，說明欄寫了為什麼不是差異。
-- 差異表現在有 140 列：第 87～140 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 130 列；其餘 10 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
+- 差異表現在有 143 列：第 87～143 列是各片實作與審查補的（來由見 `contract.md` 第 9 節開頭）。三張表合起來對到 133 列；其餘 10 列沒有 FEATURE-MATRIX 或 G6 的列以它為差異，出處寫在文末一節。
 - 「對到」欄的測試：「既有」是 bb48449 已有的檔；「HM-xx」是計畫中的新測試（`acceptance-matrix.md` 的測試檔登記表）。
 
 ## FEATURE-MATRIX「HA 平台差異」欄
@@ -40,7 +40,7 @@
 | FM-12 | 管理頁走 Ingress、和 MCP 入口不同源，不能用瀏覽器 origin | §8.8 #27 | DQ-13 已定（2026-11-15 17:4x 採用建議）：endpoint 全域一個，只存在預設帳號 |
 | FM-13 | PaaS 刪帳號 rmtree 失敗留下的孤兒會讓之後的備份過不了 restore_guard（G1 probe-paas；PaaS 端，不在本輪） | §8.8 #23、#112 | PaaS 端的缺陷，列進給 PaaS 的回補建議（HM-29）；面板列出孤兒、逐筆刪除見 #112（HM-11） |
 | FM-14 | HA 手改帳號 state 立即生效、PaaS 要重啟（寫進文件）；目標硬體成本未量（UC-02）；比對方式見 CF-10 | §8.8 #46、#26；`tests/test_profile_routing.py`（HM-08） | N 份 state 的讀取成本（UC-02）記在 HM-08 筆記，HM-19c 在目標硬體量 |
-| FM-15 | config.yaml 沒開 tmpfs，`/tmp` 推定佔磁碟（G5 依官方文件；G1 列未確認 UC-03） | §8.8 #47 | — |
+| FM-15 | config.yaml 沒開 tmpfs，`/tmp` 推定佔磁碟（G5 依官方文件；G1 列未確認 UC-03） | §8.8 #47、#141；`tests/test_n8n_multi_profile.py`（HM-25） | — |
 | FM-16 | HA 沒有 restore_guard，對應的是 entrypoint 還原修復 | §8.8 #20；`tests/test_restore_detection.py`（HM-13a） | root 才造得出的還原樹放 `tests/` |
 | FM-17 | 平台不同 | §8.8 #11 | — |
 | FM-18 | 管理請求不能帶 query 或 `%`（Hc/gateway.py:707） | §8.8 #48 | — |
@@ -92,7 +92,7 @@
 | FM-81 | 新動作名會改 schema、影響降版（FM-09），所以用 rotate；Nextcloud 比照：DQ-05 已定（依 DQ-40 (a)），PaaS #154（2026-11-15）也做了；「先提交再停」之間新 token 會不會打到舊子程式：HM-12 改成先停再提交，已由測試確認（UC-21） | §8.8 #40、#59、#113、#114；`tests/test_odoo_identity_rotation.py`（HM-12） | UC-21 已確認：HM-12 先停舊子程式再提交（這個測試）；DQ-05 已定（依 DQ-40 (a)，照計畫 §9）：Nextcloud 換 url／username、Hermes 換 gateway_url／dashboard_url／dashboard_username 也換 token（各產品開通時做）；PaaS #154（2026-11-15）起 Nextcloud 也換；存檔的回應與途中失敗見 #113、#114（HM-12） |
 | FM-82 | 同庫多帳號時 Odoo 端負載＝帳號數×每帳號並行；主機 CPU 共用 | §8.8 #60；`tests/test_odoo_multi_profile.py`（HM-12） | — |
 | FM-83 | PaaS「沒存 methods 時全帳號共用容器 env」在 HA 不適用（隔離更好） | §8.8 #61 | — |
-| FM-84 | PaaS「兩種 429」只適用 PaaS；HA 監控要用閘道自己的訊號 | §8.8 #62 | — |
+| FM-84 | PaaS「兩種 429」只適用 PaaS；HA 監控要用閘道自己的訊號 | §8.8 #62；`tests/test_n8n_multi_profile.py`（HM-25） | — |
 | FM-86 | K-14（兩 Dashboard 共用簽章金鑰時 cookie 互信）在 HA MCP 路徑不適用 | §8.8 #63、#134、#135、#136 | — |
 | FM-87 | PaaS 一個唯讀開關、HA 逐支授權；兩邊都每帳號一份 | §8.8 #64 | — |
 | FM-88 | 同一台、同一把 key 的兩帳號，子程式讀錯 state 時連線比對擋不下來（政策是唯一分權） | §8.8 #137、#138；`tests/test_headscale_multi_profile.py`（HM-26） | 政策是唯一分權；文件建議每帳號不同 API key |
@@ -127,7 +127,7 @@
 | FM-135 | Store 規則 | §8.8 #72；`tests/test_upgrade_hooks.py`（HM-16） | — |
 | FM-136 | Store 規則 | §8.8 #72 | — |
 | FM-139 | 沒有 operator 監看 | §8.8 #51 | — |
-| FM-140 | 省記憶體 | §8.8 #28 | — |
+| FM-140 | 省記憶體 | §8.8 #28、#142；`tests/test_n8n_multi_profile.py`（HM-25） | — |
 | FM-141 | 禁止 force push | §8.8 #78 | — |
 | FM-142 | Store 必要檢查名稱 | §8.8 #75 | — |
 | FM-143 | 版號 PR 合併＝發佈 | §8.8 #73 | — |
@@ -166,7 +166,7 @@
 | T-19 | HA 現在全域 32 名額、等 1 秒；改每帳號後照 PaaS 情境 | §8.8 #15、#16；`tests/test_profile_quotas.py`（HM-08）；`tests/test_reply_worker.py`（HM-30） | — |
 | T-20 | 回退＝還原升級前備份；預設帳號 token 延續 | §8.8 #71；`tests/test_upgrade_zero_rewrite.py`（HM-07） | 回退演練在 HAOS（HM-19b） |
 | T-21 | Supervisor 還原＝直接回滾；照還原設計驗 | §8.8 #20、#21、#118、#119、#120、#121、#122、#123；`tests/test_restore_lock.py`（HM-13b） | — |
-| T-22 | `n8n_session` 每帳號一份 | §8.8 #62；`tests/test_n8n_multi_profile.py`（HM-25，暫定名） | — |
+| T-22 | `n8n_session` 每帳號一份 | §8.8 #4、#28、#47、#62、#141、#142、#143；`tests/test_n8n_multi_profile.py`（HM-25） | — |
 | T-23 | n8n 每帳號 `child_token` 互異；其他 7 支不驗呼叫者，待安全決策 | §8.8 #37、#138；`tests/test_child_bearer.py`（HM-06）；`tests/test_headscale_multi_profile.py`（HM-26） | DQ-40 ⑥ 採用：7 支 Python 子程式也驗 |
 | T-24 | `/mcp` 帶 Origin 403；密鑰網址放行（Headscale 只放 claude.ai）；逐帳號一致 | §8.8 #9、#10、#42、#124、#125、#126、#127、#128；`tests/test_origin_policy.py`（HM-27） | — |
 | T-25 | 0 外洩；HA 正規式對解碼後形狀會漏（潛在） | `tests/test_redaction_matrix.py`（HM-02） | — |
@@ -226,7 +226,7 @@
 | FM-152 | 改來源要重填秘密 | §8.8 #41、#115、#117；`tests/test_new_origin_secret.py`（HM-12） | DQ-40 ⑨；判定與面板表單的細節見 #115、#117（HM-12） |
 | FM-153 | 換身分換 token | §8.8 #40、#113、#114、#116、#134；`tests/test_odoo_identity_rotation.py`（HM-12）；`tests/test_hermes_multi_profile.py`（HM-24） | DQ-40 ⑩；存檔的回應、途中失敗與面板見 #113、#114、#116（HM-12）；PaaS #154（2026-11-15）起 Nextcloud 也換 |
 
-## 差異表每一列的來處（`contract.md` 第 9 節 #1～#140）
+## 差異表每一列的來處（`contract.md` 第 9 節 #1～#143）
 
 反查表：上面三張表的「對到」欄，哪些 FEATURE-MATRIX、G6 §5 的列對到差異表的這一列。沒有任何列對到的，寫出處。「項目」欄照 `contract.md` 第 9 節。
 
@@ -235,7 +235,7 @@
 | 1 | 錯 token | FM-05、FM-27、FM-33、FM-43、T-05、T-08 | — |
 | 2 | Bearer 接法 | FM-28、FM-63、T-27 | — |
 | 3 | MCP 路徑帶 query、`/mcp/` | FM-36、T-05 | — |
-| 4 | 轉送的用戶端標頭 | FM-29 | — |
+| 4 | 轉送的用戶端標頭 | FM-29、T-22 | — |
 | 5 | 工具呼叫逾時 | FM-36 | — |
 | 6 | legacy SSE | FM-35、FM-50 | — |
 | 7 | readiness | FM-67 | — |
@@ -259,7 +259,7 @@
 | 25 | 索引壞 | FM-05、FM-131 | — |
 | 26 | 手改索引 | FM-14 | — |
 | 27 | endpoint | FM-12 | — |
-| 28 | 沒填連線的子程式 | FM-45、FM-140 | — |
+| 28 | 沒填連線的子程式 | FM-45、FM-140、T-22 | — |
 | 29 | 日誌 | FM-65、FM-138、T-18 | — |
 | 30 | 面板 403（Core 未審） | FM-70、FM-127、FM-128 | — |
 | 31 | 管理 API 沒帶帳號 | FM-53、T-06 | — |
@@ -278,7 +278,7 @@
 | 44 | 帳號索引的位置與建立時點 | FM-01、FM-02、FM-09 | — |
 | 45 | 部署層設定入口 | FM-11 | — |
 | 46 | 手改帳號 state | FM-14、FM-27 | — |
-| 47 | n8n `nodes.db` 位置 | FM-15、FM-110 | — |
+| 47 | n8n `nodes.db` 位置 | FM-15、FM-110、T-22 | — |
 | 48 | 管理請求的網址規則 | FM-18 | — |
 | 49 | 錯誤的顯示 | FM-19 | — |
 | 50 | 帳號範圍的選擇方式 | FM-22、FM-53 | — |
@@ -372,3 +372,6 @@
 | 138 | Headscale 子程式讀的政策 | FM-88、T-04、T-23 | — |
 | 139 | 存政策時的 Headscale 子程式 | T-07 | — |
 | 140 | Headscale 子程式能連的位址 | — | HM-26 補的列：Headscale 子程式能連的位址；理由同 FM-77「對齊作法」欄的「保留允許區網」，不是「HA 平台差異」欄 |
+| 141 | n8n 額外帳號子程式的 HOME 與 cwd | FM-15、T-22 | — |
+| 142 | 沒後端的 n8n 額外帳號的工具清單 | FM-140、T-22 | — |
+| 143 | n8n 子程式的命令列 | T-22 | — |

@@ -73,7 +73,7 @@ async def test_initial_launch_failure_keeps_management_alive_and_retry_observabl
     import run as n8n_run
     from mcp_admin_core.products import ProductStore
     module = n8n_run if product == 'n8n' else run_product
-    profile = n8n_run if product == 'n8n' else profile_runtime  # HM-05: run_product's profile is made there
+    profile = profile_runtime  # HM-05: run_product's profile is made there (HM-25: n8n's too)
     directory = tmp_path/'configured'
     store = ProductStore(directory, product)
     if product == 'n8n':
@@ -123,7 +123,7 @@ async def test_initial_launch_failure_keeps_management_alive_and_retry_observabl
                 return
             while not self.should_exit: await asyncio.sleep(.01)
 
-    for owner,name,value in [(profile,'Supervisor',Manager),(module,'child_spec',spec),(profile,'HealthMonitor',Monitor),(profile,'make_apps',apps),(module,'Listener',Listener)]:
+    for owner,name,value in [(profile,'Supervisor',Manager),(module,'child_spec',spec),(profile,'HealthMonitor',Monitor),(profile,'make_apps',apps),(run_product,'Listener',Listener)]:
         monkeypatch.setattr(owner,name,value)
     args=SimpleNamespace(data=directory,product=product,host='127.0.0.1',admin_port=8099,mcp_port=8081)
     with pytest.raises(RuntimeError, match='runtime component stopped'):

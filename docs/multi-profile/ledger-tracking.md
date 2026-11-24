@@ -20,7 +20,7 @@
 | `packages/mcp-admin-core/mcp_admin_core/identity_fields.py` | HM-07 | HM-12、HM-13b、HM-22（照伺服器比的網址表 `SAME_SERVER_URLS`）→ HM-24；2026-11-20 Nextcloud parity 更新註解與摘要 | 列管（HM-07 起） | — | 八個產品的身分欄位與秘密欄位分類 |
 | `packages/mcp-admin-core/mcp_admin_core/profile_runtime.py` | HM-05 | HM-08 → HM-09 → HM-13b → HM-13c（還原提示、核對關卡、全部撤銷的 503 名單）→ HM-30 → HM-31 → HM-25；2026-11-20 Nextcloud parity 加政策套用 | 列管 | — | 每帳號執行套件（store、Supervisor、監看、收據） |
 | `packages/mcp-admin-core/mcp_admin_core/profile_router.py` | HM-08 | HM-10 → HM-14 → HM-31 → HM-13c（核對、全部撤銷、還原紀錄、刪隔離目錄的全域路由；8081 擋全部撤銷沒撤銷成功的權杖）→ HM-27 | 列管 | — | 8081 token 分派器；8099 分派、方法表、Ingress 備援改寫 |
-| `packages/mcp-admin-core/mcp_admin_core/profile_admin.py` | HM-10 | HM-13c → HM-27 | 列管 | — | 帳號增刪改查、索引隔離、全部撤銷、還原核對 |
+| `packages/mcp-admin-core/mcp_admin_core/profile_admin.py` | HM-10 | HM-13c → HM-27 → HM-25（刪除後的產品清理） | 列管 | — | 帳號增刪改查、索引隔離、全部撤銷、還原核對 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_detect.py` | HM-13a | HM-13b | 列管 | — | sentinel 與 record 的建立、比對、重建 |
 | `packages/mcp-admin-core/mcp_admin_core/restore_lock.py` | HM-13b | HM-13c → HM-27（還原時照索引旁的收據封存 Origin 政策旁的收據；合併 HM-13c 時） | 列管 | — | 開機守門 A～F 步、休眠處理、`.revoke-all-pending`；`restore-record.json` 的格式（`RECORD_KEYS`、`RECORD_VERSION`）之後要改時，舊版寫的紀錄要照樣讀得懂（契約第 3.6 節；HM-13c 審查 S-2） |
 | `packages/mcp-admin-core/mcp_admin_core/request_budget.py` | HM-31 | HM-30（如果回覆額度要共用它）；HM-19c 量測後改常數的功能 PR | 列管（HM-31 起） | — | 閘道的請求內容位元組預算（全 add-on＋每帳號份額，對齊 PaaS #155）、讀取閒置、讀完丟掉的拒絕、每帳號每情況 60 秒一行的 WARNING（`Reports`，從 `profile_router.py` 移來）；不受開關管 |

@@ -7,6 +7,9 @@ HM-10 (multi-profile plan 5.3 point 7; contract 3.5; DQ-15): a profile's revisio
 domain carries it), so one profile's ETag is never another's, even for two states with the same content under one key
 (each ConfigurationState still has its own random key: the id is the second layer). profile_runtime.ProfileRuntime
 passes its profile's id; without one (apps/n8n/run.py until HM-25, tests) the domains are as before.
+
+HM-25 (DQ-22): a profile whose child runs only with a backend (every product's, n8n's default profile's aside:
+profiles.documentation_child) is unconfigured without one; an additional n8n profile without a backend so too.
 """
 from __future__ import annotations
 
@@ -15,7 +18,7 @@ import hmac
 import json
 import secrets
 
-from .profiles import PROFILE_ID
+from .profiles import PROFILE_ID, documentation_child
 
 
 class ConfigurationState:
@@ -98,7 +101,7 @@ class ConfigurationState:
             self._error = None
         applied = self._applied if phase == 'running' and self._applied_generation == generation else None
         error = self._error if attempted_current else None
-        if product != 'n8n' and not configured:
+        if not configured and not documentation_child(product, self.profile_id):
             status, applied, error = 'unconfigured', None, None
         elif applied == saved and generation_current and not error:
             status = 'applied'
