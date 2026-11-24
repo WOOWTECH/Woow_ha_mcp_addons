@@ -31,6 +31,8 @@
   （`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），A8、A9、第 7 節與各產品自己的句子（L2～L6 的更新版、NC1 與 HM-22 句子、EMQX 的 #153 三句與子程式政策）寫進三個 0.5.0 CHANGELOG，
   表與第 1、3.4～3.6、4.2 節跟上；Hermes、Headscale、n8n 開關與版號不動。
   2026-11-25 維修版（分支 `release/maintenance-20261125`，基準 `claude-delivery` `092b1b5`）：第 1 節加 A10（HA Core 2026.11.3 與已審查月份後續修補版自動放行）、A11（面板讀弱 ETag，F2），總表與各產品節的「要寫」跟上；版號與 `addons/` 不在這一片。
+  2026-11-25 維修版（基準 `claude-delivery` `092b1b5`）：EMQX 加 E4（`emqx_list_topics` 的說明對齊 PaaS #160；不受開關管；PR 號與合併 commit
+  合併後補），總表與第 3.4 節跟上；其他產品與版號不動。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
@@ -42,7 +44,7 @@
 | Odoo | 0.5.1（0.5.0 已推 GHCR 但從未上架，負責人 2026-11-23 決定修 F1 後以 0.5.1 上架，使用者從 0.4.14 直接升級；以下的 0.5.0 都讀成 0.5.1）；0.5.0（HM-19a 升版 PR，2026-11-19 準備；合併後補 PR 號與合併 commit；0.4.14 是 #119 `53ffe61`） | HM-19a 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 2（A10、A11；A8、A9 與第 7 節已寫進 0.5.0） | 無 |
 | n8n | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 3（A8、A9、A10） | 無 |
 | Hermes | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 3（A8、A9、A10） | 無 |
-| EMQX | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置；0.4.14 是 #119 `53ffe61`） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 2（A10、A11；A8、A9、第 7 節與 EMQX 自己的項目已寫進 0.5.0） | 無 |
+| EMQX | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置；0.4.14 是 #119 `53ffe61`） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 3（A10、A11、E4；A8、A9、第 7 節與 EMQX 其他自己的項目已寫進 0.5.0） | E4：`emqx_list_topics` 的說明對齊 PaaS #160（PR 號合併後補） |
 | LiteLLM | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 2（A10、A11；A8、A9、第 7 節與 L2～L6 已寫進 0.5.0） | 無 |
 | Nextcloud | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 2（A10、A11；A8、A9、NC1、第 7 節與 HM-22 句子已寫進 0.5.0） | 無 |
 | OpenDesign | 0.4.14（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 3（A8、A9、A10，寫成「applies to its source too」） | 無 |
@@ -166,8 +168,20 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.4 EMQX
 
 - 上次發版：0.5.0（火車 A 升版，2026-11-23 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
-- 要寫：A10、A11（第 1 節）。A8、A9、第 7 節（開通）、E3（#153 三句）與子程式政策（2026-11-20 候選，含火車 A 審查 F-1 的修正）已寫進 0.5.0；A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14。
+- 要寫：A10、A11（第 1 節）、E4（下面；2026-11-25 加）。A8、A9、第 7 節（開通）、E3（#153 三句）與子程式政策（2026-11-20 候選，含火車 A 審查 F-1 的修正）已寫進 0.5.0；A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14。
 - 發版時另外驗：第 5 節，加上展示機的真 broker 驗收（`docs/operations/release-decision-emqx-0.5.0.md`）。
+- **E4　`emqx_list_topics` 的說明不再說「沒列出就是沒人訂閱」（對齊 PaaS #160，woow-mcp-server `fb7571c`；不受開關管；2026-11-25；PR 號與合併 commit 合併後補）**
+  - 看得到的變化：用戶端看到的 `emqx_list_topics` 說明換了：8081 的 tools/list（閘道自答的回答與轉回子程式的回答都帶同一段說明；
+    閘道送出的整個回答多 224 位元組，`Content-Length` 跟著變）與 8099 `/api/capabilities` 工具目錄的同一個欄位（管理面板的工具頁）。舊說明說「沒列出的
+    主題就是沒人訂閱」；新說明說這支列的是 broker 的路由（主題或主題過濾器）：萬用字元訂閱（例如 `a/#`）以過濾器本身出現、不以它涵蓋的具體主題
+    出現，共享訂閱與持久 session 的訂閱也可能不出現，所以具體主題沒列出不代表沒人訂閱；要知道誰會收到某個主題，用 `emqx_list_subscriptions`。
+    工具名稱、輸入與輸出 schema、annotations、寫入權限、tools/call 的請求與回應都逐位元不變。
+  - CHANGELOG 建議句（照 `docs/provenance/emqx-topics-wording-20261125.md` 第 6 節；英文最後由發版片定）：
+
+    ```text
+    - `emqx_list_topics` no longer says that a topic missing from its list has no subscriber (PaaS #160). Its description now says the tool lists the broker's routes (topics or topic filters): a wildcard subscription such as `a/#` appears under the filter itself, not under the concrete topics it covers, and shared or persisted-session subscriptions may not appear either, so a concrete topic missing from the list does not mean nobody is subscribed; to find out who receives messages published to a topic, use `emqx_list_subscriptions`. Text only: no tool name, input or output schema, grant, request or reply changes.
+    ```
+  - 出處：`docs/provenance/emqx-topics-wording-20261125.md`；契約第 1.2 節「EMQX 工具 `emqx_list_topics` 說明的不受開關管變更」。
 
 ### 3.5 LiteLLM
 

@@ -59,6 +59,7 @@
 開機守門的存在檢查與休眠處理（HM-13b）、子程式 initialize 錯誤的遮罩（HM-14，見下）、請求內容位元組預算與 JSON 結構守門（HM-31，見下）、
 健康監看照停止要求停下（HM-09 追補，見下）、LiteLLM 與 EMQX 不保留閒置的後端連線（HM-32，見下；行為不變）、
 Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改文字）、
+EMQX 工具 `emqx_list_topics` 的說明不再說「沒列出就是沒人訂閱」（對齊 PaaS #160，見下；只改文字）、
 單帳號還原後的面板提示（HM-13c，見下）、驗收與發版工具（HM-16、HM-17）。
 
 **HM-14 的不受開關管變更：子程式 initialize 錯誤遮本帳號憑證**（2026-11-15；HM-08 審查 S-4 (a) 交給 HM-14）
@@ -186,6 +187,25 @@ Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改�
 - HM-01：黃金回歸 EMQX 的兩個 tools/list 摘要（`LISTING_SHA256`、`LISTED_SHA256`）照測試檔頭的規則一起更新（刻意的工具表面變更）；新的
   回答就是舊的回答只換掉這段說明（逐位元核對）。兩個契約凍結不用改，照過。
 - 測試：`tests/test_emqx_field_findings.py`（子程式在自己的釘版環境、假 broker；另一案是真的子程式行程在閘道後面，輸出沒有 traceback）。
+
+**EMQX 工具 `emqx_list_topics` 說明的不受開關管變更**（2026-11-25；對齊 PaaS #160，woow-mcp-server `fb7571c`）
+
+- 來由：PaaS 2026-11-23 的 #160（P3，info）把 `emqx_list_topics` 的說明改正。`/topics` 列的是路由，萬用字元訂閱以過濾器本身為鍵（`a/#`），
+  不會以它涵蓋的具體主題單獨出現，共享訂閱與持久 session 的訂閱也可能不出現；舊說明卻寫「這裡沒列出的主題就是沒人訂閱，這通常是發佈的訊息
+  看起來消失的原因」，會讓模型下錯結論。HA 的說明和 PaaS 修正前逐字相同。這是 2026-11-25 維修版的一項，`decisions.md` 沒有另列（只改文字、和 PaaS
+  逐字一致，沒有可選的做法）。
+- 改了什麼：`apps/emqx/vendor/emqx_mcp_server/tools/topics.py` 的 `emqx_list_topics` 說明（docstring）與 `registry.py` 裡同一支工具的一行說明，
+  照 PaaS 逐字改（docstring 的換行也一樣）；兩個檔整檔和 PaaS 的位元組相同。閘道內附的工具清單（`tool_snapshot.py`）跟著改同一段說明。
+  `registry.py` 的一行說明是 PaaS 管理頁看的；HA 的面板從閘道的清單取工具目錄，不讀它。
+- 改了什麼回應：只有 `emqx_list_topics` 的 `description`：8081 的 tools/list（閘道自答的回答與轉回子程式的回答都帶同一段說明；閘道送出的整個
+  回答多 224 位元組，`Content-Length` 跟著變），以及 8099 `/api/capabilities` 工具目錄的同一個欄位。工具名稱、輸入與輸出 schema、annotations、
+  寫入權限、tools/call 的請求與回應都逐位元不變；對 broker 的 `/topics` 請求與回傳也沒動。程式行為不變：去掉 docstring 後，`topics.py` 的語法樹和基準
+  相同（編譯後只有那個 docstring 常數不同）；`registry.py` 只有那一個字串常數不同。
+- 為什麼不受開關管：和多帳號無關；只改 EMQX 自己的說明，跟著 EMQX 的下一版出去（`unreleased-changes.md` 第 3.4 節 E4）。
+- HM-01：黃金回歸 EMQX 的兩個 tools/list 摘要（`LISTING_SHA256`、`LISTED_SHA256`）照測試檔頭的規則一起更新（刻意的工具表面變更）；新的回答就是
+  舊的回答只換掉這段說明（逐位元核對）。兩個契約凍結不用改，照過。
+- 測試：`tests/test_emqx_list_topics_description.py`（子程式自己的 tools/list、vendored registry 與閘道內附的清單三處都逐字是 PaaS 的；PaaS #160
+  新增那案的三個斷言；舊的說法不再出現）。
 
 **HM-13c 的不受開關管變更：還原後保留預設帳號權杖時的面板提示**（2026-11-16；使用者對 HM-13b 審查 Q-1 的定案）
 
@@ -1494,3 +1514,4 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | v1 定稿（火車 A 整合分支） | 2026-11-23 | 整合 | 整合分支 `integ/train-a-0.5.0-20261123` 併入 #133（HM-21 LiteLLM 加 HM-23 EMQX 的 PaaS 對齊整合候選，取代 #125、#127）與 #126（HM-22 Nextcloud）：第 9 節 HM-22 的三列由 #129～#131 依「後合併的重編」改成 #131～#133（#129 LiteLLM、#130 EMQX 不動），`acceptance-matrix.md`、`deviation-trace.md`、`decisions.md` 與 HM-22 筆記的引用跟著改。規則內容、錯誤代碼與其他列沒改；產品開關仍全關，版號不變。 |
 | v1 定稿（0.5.1，F1） | 2026-11-23 | Odoo 0.5.1 | 負責人 2026-11-23 決定「修好再發 0.5.1」：GET 串流不占回覆票券。第 2.4 節 GET 串流列與說明（上限 24／8、乾淨結束的位元組上限、WARNING）；第 5 節表格（GET 串流上限回 24／8，加每串流 2 MiB／128 KiB 一列）與 HM-19c 容量修訂段（撤回 3／1，加全域最壞記憶體算式的 `ODOO_STREAM_RESERVE_MIB`＝128，六帳號需要量 2,839 → 2,967 MiB（審查後由 1 MiB／64 改為 2 MiB／128））；第 6 節 HM-19c 修訂段。票券本身（64 MiB、512 MiB、3／1、不排隊、POST 回 200＋`-32003`＋`Retry-After: 5`）不變 |
 | v1 定稿（維修版，Core 白名單） | 2026-11-25 | 維修版 | 負責人 2026-11-25 決定「同月份修補版自動放行」（DQ-35 補記；審過 2026.11 就放行 2026.11.x，新月份仍要先審）：第 9 節 #30 與第 4.1 節 `core_version_unreviewed` 列、第 3.2 節 ⑥ 與第 3.6 節的一句改成「Core 版本未放行」（已審查月份的後續修補版放行）；規則、風險與不變的防線在 `docs/ha-role-core-contract.md`。其餘的規則內容、錯誤代碼與列號沒改；產品開關與版號不變 |
+| v1 定稿（EMQX 說明對齊 PaaS #160） | 2026-11-25 | 維修版 | 對齊 PaaS #160（`fb7571c`）：第 1.2 節不受開關管多一項：EMQX `emqx_list_topics` 的說明不再說「沒列出就是沒人訂閱」（工具說明與 registry 的一行說明照 PaaS 逐字改）。只改文字：`topics.py` 去掉 docstring 後的語法樹相同，`registry.py` 只有一個字串常數不同；tools/list 的 `emqx_list_topics` 說明換了、整個回答多 224 位元組，HM-01 黃金回歸的 EMQX 兩個 tools/list 摘要照測試檔頭的規則一起更新（刻意的工具表面變更）。第 9 節不加列：說明和 PaaS 一致 |
