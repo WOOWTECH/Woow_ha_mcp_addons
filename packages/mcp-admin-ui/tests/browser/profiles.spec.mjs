@@ -695,3 +695,15 @@ test('a lost create answer whose profile was deleted since: the resend confirms 
   const posts = await calls(request, call => call.operation === 'profiles' && call.method === 'POST');
   expect(posts.map(call => call.operationId)).toEqual([posts[0].operationId, posts[0].operationId]);
 });
+
+test('Headscale connector rotation targets the selected profile only', async ({page, request}) => {
+  await reset(request, {product: 'headscale', parity: true, endpoint: 'https://mcp.example.test/mcp', profiles: {extra: [{id: B, label: 'Headscale B'}]}});
+  await open(page, '/access');
+  await choose(page, B, 'Headscale B');
+  await page.getByRole('button', {name: '產生新的 Claude.ai 連線網址', exact: true}).click();
+  await expect(page.getByRole('dialog')).toContainText('舊權杖');
+  await confirm(page, '確認繼續');
+  await expect(page.locator('#claude-secret')).toBeVisible();
+  const tokenCalls = await calls(request, call => call.operation?.startsWith('token/'));
+  expect(tokenCalls.map(call => [call.operation, call.profileHeader])).toEqual([['token/rotate', B]]);
+});

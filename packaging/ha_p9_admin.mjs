@@ -29,7 +29,12 @@ export const logId = profile => (profile === 'default' ? 'default' : String(prof
 // The profile's MCP token (token/reveal under its own X-MCP-Profile), or null when it has none (revoked).
 export async function revealToken(client) {
   const fresh = await client.bootstrap();
-  const result = await client.mutate('token/reveal', undefined, fresh.configuration?.revision);
+  let result;
+  try { result = await client.mutate('token/reveal', undefined, fresh.configuration?.revision); }
+  catch (error) {
+    if (fresh.product === 'headscale' && error.status === 404) throw new Error('P9 cannot use this Headscale version: token reveal is unavailable; no MCP token was rotated');
+    throw error;
+  }
   return typeof result?.token === 'string' && result.token ? result.token : null;
 }
 

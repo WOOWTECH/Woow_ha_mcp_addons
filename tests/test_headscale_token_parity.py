@@ -19,6 +19,8 @@ async def test_reveal_and_rotate_are_scoped_to_product(tmp_path, product):
             identity = {'X-Remote-User-Id': 'admin'}
             boot = (await client.get('/api/bootstrap', headers=identity)).json()
             headers = reviewed_headers(boot, identity)
+            denied = await client.post('/api/token/reveal', headers={**headers, 'X-Remote-User-Id': 'not-admin'})
+            assert denied.status_code == 403 and old not in denied.text
             reveal = await client.post('/api/token/reveal', headers=headers)
             if product == 'headscale':
                 assert reveal.status_code == 404
@@ -29,6 +31,9 @@ async def test_reveal_and_rotate_are_scoped_to_product(tmp_path, product):
             rotated = await client.post('/api/token/rotate', headers=headers)
             assert rotated.status_code == 200
             assert rotated.json()['token'] == store.load().token != old
+            replay = await client.post('/api/token/rotate', headers=headers)
+            assert replay.status_code == 200 and replay.json()['operation']['replayed'] is True
+            assert 'token' not in replay.json()
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=mcp), base_url='http://mcp') as client:
             refused = await client.get('/mcp', headers={'Authorization': 'Bearer ' + old})
             assert refused.status_code == 401

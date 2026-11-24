@@ -586,6 +586,8 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
 | `{base}/api/origin-policy` | PUT | 存政策 `{"mode":…,"allowed_origins":[…]}`（剛好這兩個鍵，第 ⑤ 步驗形狀） | If-Match（政策）＋Idempotency-Key | 200 存下的政策（正規化後）＋`origin_policy_state:"saved"`＋`operation`（`kind` `origin.policy`）；同一個 key 重送回 200＋目前的政策＋`operation`（`replayed:true`）。Headscale：404 |
 | 頁面與靜態檔 | GET、HEAD | 面板 | — | 同今天（開通後改由預設帳號的動作回，多一次角色檢查；PUT、POST 照今天 404，PATCH、DELETE 照今天 405 的位元組，但在 identity 之後；HM-10） |
 
+**Headscale 權杖例外（2026-11-20，未發佈）**：不論多帳號開關，Headscale 不再提供目前 token 的 reveal；這是對既有單帳號行為的刻意變更，不受下表其他「沒開通照今天」敘述約束。其他產品不變。
+
 **帳號範圍路徑**（其他 `{base}/api/*`；開通後一定要剛好一個 `X-MCP-Profile`）：
 
 | 操作 | 方法 | 開通後的變化 |
@@ -598,7 +600,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
 | `backend/test` | POST | 測選定帳號已存的設定 |
 | `policy`、`odoo/write-switches`、`odoo/allowed-methods`、`n8n/session` | PUT | 若需重啟，只重啟選定帳號的子程式；Nextcloud 政策僅在放寬且子程式在跑時重啟（#130） |
 | `endpoint` | PUT | 額外帳號 409 `endpoint_global`、什麼都不寫；額外帳號的 bootstrap 顯示預設帳號的 `endpoint`（全域設定只存在預設 state；DQ-13 已定，2026-11-15 17:4x 使用者採用建議） |
-| `token/reveal`、`token/revoke` | POST | 只動選定帳號 |
+| `token/reveal`、`token/revoke` | POST | 只動選定帳號；Headscale 的 reveal 經管理權限與 CSRF 檢查後回 404、不回目前 token。要取得 Headscale token 須輪替，舊 token 失效；其他產品照舊可 reveal |
 | `token/rotate` | POST | 還原或休眠後未核對前 409 `restore_review_required`（HM-13c：還原紀錄裡這個帳號的權杖是守門撤銷的（`revoked`、`already_revoked`）而且 `reviewed_at` 還是 `null`；在 If-Match、Idempotency-Key 之後、什麼都不寫；紀錄讀不到時 503）。開關關時沒有關卡（也沒有核對路由）：還原撤銷了預設帳號時，管理員直接重新產生；重新開通後紀錄那一列仍待核對，下一次重新產生前要先核對（這時權杖是有效的：待核對不一定是已撤銷，第 4.1 節；HM-13c 審查 S-3、S-6）。HM-12 的換身分換 token 也照這個關卡（`backend`、`backend/patch` 列） |
 | `child/restart` | POST | 回應帶 `blocked_reason` |
 | `owner-defaults/restore`、`owner-defaults/dismiss` | POST | 只在預設帳號；額外帳號 409 `owner_defaults_unavailable`（形狀 C，在 If-Match 之後），不管它的目錄裡有什麼；額外帳號的 bootstrap 也一律沒有 `owner_defaults` 通知（FM-08；HM-10） |
@@ -707,7 +709,7 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
 - 缺 If-Match 428 `config_revision_required`；不只一個或過期 409 `config_conflict`。
 - 缺 Idempotency-Key 428 `operation_id_required`；不只一個 400 `operation_id_invalid`；同一個 key 還沒完成就重送 409
   `operation_outcome_unknown`；還原前的舊操作 id 410 `operation_restored`。HM-13b 定案：守門把還原帶回的收據檔改名成 `<收據檔>.restored`（每個收據檔只留 1 份，新的蓋舊的），換上一份空的新收據檔，多一個鍵 `restored_before_ms`（還原當下的毫秒，但不早於被封存的收據檔裡最新的 id 或下限：主機時鐘慢 24 小時以內也一樣，同 PaaS `_read_journal_floor`；最多比還原當下晚 24 小時：偽造的遠未來 id 不會讓新操作好幾年都 410。主機時鐘慢超過 24 小時時，備份裡較新的 id 在時鐘校正後可能被當成新操作，見 `threat-model.md` 第 3 節）：id 的時間不晚於它就回 410 `operation_restored`（在 24 小時保留期的 `operation_id_expired` 之前判斷），備份之後才做、隨還原消失的操作也算。只有守門寫的收據檔有這個鍵，其他收據檔逐位元照舊。沒有收據的收據檔不再封存（重做時不會用空檔蓋掉封存），只把時間往後推；收據檔不見但旁邊有封存（中途停掉）就補新檔（時間同樣不早於封存裡最新的 id）；HM-13c 起兩個都沒有也寫一份新收據檔（備份時某帳號還沒有收據檔，備份後才做的操作 id 隨還原消失，之後重送一樣回 410、不會被當成新操作；同 PaaS「每份設定都換新收據檔」），範圍 S 的每個帳號與索引旁都是；HM-27 起 Origin 政策旁的 `.origin-policy.json.operations.json` 也是（開通或有帳號資料時；Headscale 沒有政策，這份收據檔沒有人讀）。預設帳號沒被撤銷時（DQ-03 (b)，沒有帳號資料）它的收據照原樣、沒有就不寫（第 9 節 #121）。全部撤銷不封存收據（不是還原）。
-- 建立的回應與同一個 key 的重送**都不回 token**；token 只經 `token/reveal`＋`X-MCP-Profile: <新 id>`＋回聲比對取得。
+- 建立的回應與同一個 key 的重送**都不回 token**；其他產品的 token 經 `token/reveal`＋`X-MCP-Profile: <新 id>`＋回聲比對取得；Headscale 須對新帳號執行 `token/rotate` 並核對回聲，首次成功的回應才帶新 token，原 token 失效，收據重送不回 token。
 - HM-10 定案：
   - 帳號 ETag 的 HMAC domain 是 `edit:<帳號 id>`（套用狀態的 `launch:<帳號 id>` 同理）：`ProfileRuntime` 建的每個帳號都帶，沒開通時的
     預設帳號也是（ETag 是這個程序的隨機金鑰算的，本來就不跨程序、不能預測，沒開通時用戶端看到的沒有差別）；n8n
