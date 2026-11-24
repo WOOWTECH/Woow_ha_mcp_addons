@@ -369,9 +369,15 @@ def child_port(argv):
 
 def child_ports(probe, process, proc=Path('/proc')):
     """{port: PID} of the management process's children, by their command lines (world-readable, as the P9 kit's).
-    A child that is gone, or exited and not reaped yet (a zombie's command line is empty), is left out. Two children
-    naming the same port fail."""
+    A child that is gone, or exited and not reaped yet (a zombie's command line is empty), is left out, and so is one
+    that has not exec'd yet: between the management process's fork and the child's exec (a watchdog restart, a start)
+    its command line is the management process's own, which names no port and would read as a second child on 3000
+    (train A emqx candidate, 2026-11-24; owner decision 2026-11-24). Two children naming the same port fail."""
     found = {}
+    try:
+        own = (proc / str(process.pid) / 'cmdline').read_bytes()
+    except OSError:
+        own = None
     for pid in probe.children(process):
         try:
             raw = (proc / pid / 'cmdline').read_bytes()
@@ -379,6 +385,8 @@ def child_ports(probe, process, proc=Path('/proc')):
             continue  # gone already (a watchdog restart in between)
         if not raw:
             continue  # exited, not reaped yet
+        if raw == own:
+            continue  # forked, not exec'd yet: still the management process's command line
         port = child_port(raw.decode('utf-8', 'replace').split('\0'))
         port = CHILD_PORT if port is None else port
         assert port not in found, 'two children on one port'

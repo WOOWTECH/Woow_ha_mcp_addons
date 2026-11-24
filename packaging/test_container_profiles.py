@@ -635,6 +635,31 @@ class RunningChildrenTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'two children on one port'):
             stage.child_ports(self.probe, self.process, self.proc.root)
 
+    def test_a_child_that_has_not_exec_d_yet_is_left_out(self):
+        """Between the management process's fork and the child's exec the child's command line is the management
+        process's own (no --port): read as the default child's, it would collide with the real one on 3000."""
+        self.spawn(10, 3000)
+        self.spawn(11, 18000)
+        self.proc.process(12, ['/opt/woow/.venv/bin/python', 'management_launcher.py'])  # forked, not exec'd
+        self.pids.append(12)
+        self.assertEqual(stage.child_ports(self.probe, self.process, self.proc.root), {3000: 10, 18000: 11})
+
+    def test_two_exec_d_children_on_one_port_still_fail(self):
+        self.spawn(10, 18000)
+        self.spawn(11, 18000)
+        self.proc.process(12, ['/opt/woow/.venv/bin/python', 'management_launcher.py'])
+        self.pids.append(12)
+        with self.assertRaisesRegex(AssertionError, 'two children on one port'):
+            stage.child_ports(self.probe, self.process, self.proc.root)
+
+    def test_an_exec_d_child_that_names_no_port_is_still_the_default_child(self):
+        self.spawn(10, None)  # n8n's, Hermes' and OpenDesign's default child
+        self.spawn(11, 18000)
+        self.assertEqual(stage.child_ports(self.probe, self.process, self.proc.root), {3000: 10, 18000: 11})
+        self.proc.process(12, ['/opt/woow/.venv/bin/python', 'management_launcher.py'])  # not exec'd: no second 3000
+        self.pids.append(12)
+        self.assertEqual(stage.child_ports(self.probe, self.process, self.proc.root), {3000: 10, 18000: 11})
+
     def test_listeners_are_every_listening_socket_by_port(self):
         self.proc.listen(3000)
         self.proc.listen(18000, '00000000')
