@@ -352,7 +352,7 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
   - `addons/n8n/DOCS.md` 第 55 行「所有 client 共用 20 個同時 session」：開通後每個帳號有自己的子程式。HM-25 照實際行為寫好了改法（第 3.2 節；
     功能片不改 `addons/`），由開通 n8n 的升版 PR 改。
   - `addons/nextcloud/config.yaml` 的 `description`「one Nextcloud account」（HM-22）。
-  - 面板 `packages/mcp-admin-ui/src/contracts.js` 的 Headscale 說明「這個 Add-on 只管理同一個 Headscale 執行個體」（HM-26；面板改了照規則重算帳本）。
+  - 面板 `packages/mcp-admin-ui/src/contracts.js` 的 Headscale 說明「這個 Add-on 只管理同一個 Headscale 執行個體」（HM-26；面板改了照規則重算帳本）。HM-26 已改：開通後（面板有帳號時）「後端設定」顯示每帳號的說明（`connectionHelpFor`），沒開通照今天逐字；帳本已重算，升版片不用再改（第 3.8 節 HS2）。
 - **`upgrade-notes.yaml`**：照 `AGENTS.md` 第 3 點，升版比對要求時才建；建的話內容照計畫 §7.3：契約第 1.4 節的全部項目、回退的三條路
   （`docs/operations/update-backup-rollback.md`「回退與緊急關閉」）、還原守門的涵蓋範圍（同一份文件「涵蓋範圍」一點）。
 - **兩個位元組變化**（HM-10 審查 S-6；契約第 1.4 節第 4 點、第 3.1 節；HM-18 在本機用 8099 的兩種方法表核對過）的 CHANGELOG 建議句
