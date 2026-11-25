@@ -42,6 +42,8 @@
   所以總表與各產品節的「要寫」不變：n8n 0.4.15 寫完整的一條（n8n 是唯一把 Node binary 放進最終映像的產品）；Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、
   Hermes 0.4.15、Headscale 0.4.20 各寫一句（只有面板建置階段換了基底映像；本機用兩個版本的官方執行檔各建一次面板，443 個檔逐位元相同）；根 CHANGELOG 一條。
   OpenDesign 的來源帶同一個釘版，它的 CHANGELOG 沒有另寫（照前例指向根 CHANGELOG）。
+  2026-11-25 火車 B 升版（分支 `release/train-b-0.5.0-20261125`，基準：整合分支 `integ/train-b-20261125` `0ab5393`，依序以 merge commit 併入維修版分支 `release/maintenance-20261125`（PR #138，`fec2e3ec292d`）與 `feat/duplicate-jsonrpc-id-20261125`；升版 commit 合併後補）：
+  Hermes、n8n、Headscale 開通（`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`、`hermes`、`n8n`、`headscale`），A8、A9、A11、第 7 節、各產品自己的項目（Hermes 的 H3～H5 句子照 2026-11-20 定案、n8n 的五句與 S-1、Headscale 的 HS1～HS9、HS8 與權杖不再顯示）與 A12（重複 JSON-RPC id，原稿叫 A10，和維修版的 A10 撞號改編）寫進三個 0.5.0 CHANGELOG；A11 從第 1 節刪除（七個開通的產品都寫了）；A12 只有 Hermes、n8n、Headscale 寫了，Odoo、EMQX、LiteLLM、Nextcloud（維修版的映像沒有它）與 OpenDesign 的來源還沒寫，留在第 1 節。總表與第 1、3.2、3.3、3.8、4.2、7 節跟上。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
@@ -50,14 +52,14 @@
 
 | 產品 | 目前版號 | 上次升版 commit | 映像來源 | 要寫進 CHANGELOG 的項目 | 已合併、CHANGELOG 沒記的產品自身修正 |
 |---|---|---|---|---|---|
-| Odoo | 0.5.2（2026-11-25 維修版；0.5.1 是 2026-11-24 上架的多帳號首發，0.5.0 已推 GHCR 但從未上架；0.4.14 是 #119 `53ffe61`） | 維修版升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A10、A11 已寫進 0.5.2） | 無 |
-| n8n | 0.4.15（2026-11-25 維修版，共用預設版號線；0.4.14 是 #119 `53ffe61`） | 同上 | 尚未建置（同上） | A11（等開通）與開通的項目（第 3.2 節、第 7 節）；A8、A9、A10 已寫進 0.4.15 | 無 |
-| Hermes | 0.4.15（同上） | 同上 | 尚未建置（同上） | A11（等開通）與開通的項目（第 3.3 節、第 7 節）；A8、A9、A10 已寫進 0.4.15 | 無 |
-| EMQX | 0.5.1（2026-11-25 維修版；0.5.0 是火車 A，2026-11-24 發佈到 GHCR、#136 合併） | 同上 | 尚未建置（同上） | 0（A10、A11、E4 已寫進 0.5.1） | 無 |
-| LiteLLM | 0.5.1（同上） | 同上 | 尚未建置（同上） | 0（A10、A11 已寫進 0.5.1） | 無 |
-| Nextcloud | 0.5.1（同上） | 同上 | 尚未建置（同上） | 0（A10、A11 已寫進 0.5.1） | 無 |
-| OpenDesign | 0.4.15（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 0（A8、A9、A10 寫成「applies to its source too」，已寫進 0.4.15） | 無 |
-| Headscale | 0.4.20（2026-11-25 維修版；0.4.19 是 #119 `53ffe61`） | 同上 | 尚未建置（同上） | A11（等開通）、HS8 與開通的項目（第 3.8 節、第 7 節）；A8、A9、A10 已寫進 0.4.20 | 1（HS8：子程式核對 child token，不受開關管；維修版 0.4.20 在 HS8 之前，沒有帶它；合併後補 PR 號） |
+| Odoo | 0.5.2（2026-11-25 維修版；0.5.1 是 2026-11-24 上架的多帳號首發，0.5.0 已推 GHCR 但從未上架；0.4.14 是 #119 `53ffe61`） | 維修版升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 1（A12；A10、A11 已寫進 0.5.2） | 無 |
+| n8n | 0.5.0（火車 B 升版，2026-11-25 準備；0.4.15 是維修版，0.4.14 是 #119 `53ffe61`） | 火車 B 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、A11、A12、第 7 節與 n8n 自己的項目已寫進 0.5.0） | 無 |
+| Hermes | 0.5.0（火車 B 升版，2026-11-25 準備；0.4.15 是維修版） | 同上 | 尚未建置（同上） | 0（A8、A9、A11、A12、第 7 節與 Hermes 自己的項目已寫進 0.5.0） | 無 |
+| EMQX | 0.5.1（2026-11-25 維修版；0.5.0 是火車 A，2026-11-24 發佈到 GHCR、#136 合併） | 維修版升版 commit | 尚未建置（同上） | 1（A12；A10、A11、E4 已寫進 0.5.1） | 無 |
+| LiteLLM | 0.5.1（同上） | 同上 | 尚未建置（同上） | 1（A12；A10、A11 已寫進 0.5.1） | 無 |
+| Nextcloud | 0.5.1（同上） | 同上 | 尚未建置（同上） | 1（A12；A10、A11 已寫進 0.5.1） | 無 |
+| OpenDesign | 0.4.15（只升來源版本，商店停用；同上） | 維修版升版 commit | 沒有映像 | 1（A12，寫成「applies to its source too」；A8、A9、A10 已寫進 0.4.15） | 無 |
+| Headscale | 0.5.0（火車 B 升版，2026-11-25 準備；0.4.20 是維修版，0.4.19 是 #119 `53ffe61`） | 火車 B 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、A11、A12、HS8、HS1～HS9、權杖不再顯示與第 7 節已寫進 0.5.0） | 無 |
 
 - 0.4.13：PR #76 在 2026-11-09 合併（`e2108f6`）。六個映像從 `4966f40` 建（`docs/operations/release-decision-0.4.13.md`）；`4966f40` 之後
   #76 只多一個紀錄 commit（`0913611`）。
@@ -80,7 +82,7 @@ A1～A7 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 
   看得到的變化與出處見 `4cc7bee`（#120 的合併）的本檔與 `docs/provenance/ha-multiprofile-unreleased-changes-20261117.md`。寫進 CHANGELOG 時
   照 0.4.14 那批的寫法：A3、A6 補 PR 號，A4 寫明狀態碼、其他標頭與其餘文字不變、只有 `Content-Length` 跟著變；以各產品 CHANGELOG 為準。
 
-A8～A10 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 3 點刪除：
+A8～A11 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 3 點刪除：
 
 - 已發：A8（HM-13b 開機守門，#108）、A9（HM-13c 單帳號還原後的面板提示，#112）：Odoo 0.5.0／0.5.1 與 LiteLLM、Nextcloud、EMQX 0.5.0（開通的版本，和第 7 節的還原那一點寫在一起），
   2026-11-25 維修版的 n8n、Hermes 0.4.15、Headscale 0.4.20 與 OpenDesign 的來源版本 0.4.15（寫成「applies to its source too」）。A10（HA Core 2026.11.3 與已審查月份後續修補版自動放行，
@@ -90,24 +92,9 @@ A8～A10 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第
   （維修版分支，DQ-35）。原來的句子、看得到的變化與出處見 `3bcfa1f` 的本檔。n8n、Hermes、Headscale 的 A8、A9 照原來的建議句寫，A8 另外補上「上一版留下標記並一直保留、這一版才讀它並刪掉」與 log 開頭的文字，
   和 0.4.14 的 A3 那句（「之後的版本會讀並刪掉它」）對得起來。
 - 維修版寫 CHANGELOG 時，對 n8n、Hermes、Headscale 核對了 `24de6ec`（0.4.14／0.4.19 映像的來源）到 `092b1b5` 之間動到共用執行期程式的 53 個非合併 commit（`packages/mcp-admin-core`、`packages/mcp-admin-ui/src`、`apps/runtime`、`apps/<產品>`；`packaging/entrypoint.py`、`management_launcher.py` 沒有動；分屬 #108、#112、#116、#137 與 #136）：開關關時看得到的變化只有 A8、A9；其餘都在開關後面、只對 Odoo 或火車 A 的產品起作用，或預設值與以前相同（連線池參數、選用的 `WOOW_CAPACITY_METRICS` 診斷）。唯一的邊界是 `gateway.py` 的 owner-defaults 提示動作（`owner-defaults/restore`、`dismiss`）：回應的 `configuration` 改在子程式重啟之後才重算（`cb94cf0`，火車 A 的 Nextcloud）；n8n、Hermes 這條路不重啟子程式，回應相同，Headscale 沒有舊版狀態（`owner_defaults.apply_legacy_upgrade` 對它直接拒絕），不會有這個提示，所以沒有寫進 CHANGELOG。JSON 結構守門的掃描換了寫法（HM-19c 的效能修正，#137），用 60,630 個輸入、7 組上限對照改寫前後，答案逐一相同。沒有漏掉的項目。
-- 之後不受開關管的共用變更照檔頭第 1 點加在這一節，從 A12 編起（A1～A11 已用在各 PR 與發版紀錄裡）。
+- 之後不受開關管的共用變更照檔頭第 1 點加在這一節，從 A13 編起（A1～A12 已用在各 PR 與發版紀錄裡）。
 
-- **A11　面板在前面有會壓縮的代理（例如 Cloudflare）時也讀得到版本：「瀏覽器來源檢查」卡片不再唯讀，帳號清單用同一個讀法（F2；維修版分支 `release/maintenance-20261125`；改的是共用面板，受開關管：只有開通多帳號的產品看得到）**
-  - 已發：Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1（維修版）。n8n、Hermes、Headscale 開通多帳號的那一版才寫（它們開關關著，面板沒有這兩處）；寫的時候照下面這句。
-  - 看得到的變化（Odoo、EMQX、LiteLLM、Nextcloud；Hermes、Headscale、n8n 開通時一樣；沒開通的產品面板沒有這兩處）：HA 前面多一層會壓縮回應的代理（例如 Cloudflare）時，add-on 回的
-    強 ETag（`"o1-…"`、`"p1-…"`）可能被改成弱 ETag（`W/"o1-…"`），面板原本只認強的。2026-11-25 在真的 HA 加 Cloudflare 上量過（瀏覽器的 `Accept-Encoding: gzip, deflate, br, zstd`）：
-    - `api/origin-policy`（94 位元組）被 Cloudflare 壓成 br、ETag 變弱 → 「瀏覽器來源檢查」卡片的儲存鈕停用（Odoo 0.5.1 驗收時發現，F2）；
-    - `api/profiles`（161 位元組）由 Home Assistant 自己先壓 gzip，ETag 維持強 → **帳號清單在這條路上不受影響**；只有當前面的代理改寫 HA 沒壓縮的回應時才可能變弱
-      （例如用戶端不收壓縮時量到弱）。帳號清單讀 ETag 的地方（檢查所有讀 ETag 標頭的地方時發現）和卡片是同一個函式，一起修。
-    現在面板兩種形式都取出同一個版本；送出時照舊送強的 `If-Match`（內容和以前逐位元相同），add-on 的比對沒有放寬（只認強的）。其他怪值（別的種類、前後多字、小寫 `w/`、多個值）仍當成沒有版本、唯讀。
-  - 要一起改的文件：已寫進 `docs/operations/` 的 F2 已知限制各處加了一行後續說明（維修版升版時照這裡的事實改正過）、`packages/mcp-admin-ui/README.md`；各產品 `addons/<產品>/` 沒有寫這個限制，不用改。
-  - CHANGELOG 建議句（英文；只寫在開通多帳號的產品；維修版寫在 Odoo、EMQX、LiteLLM、Nextcloud）：
-
-    ```text
-    - Behind a proxy that compresses the panel's answers (Cloudflare does), the add-on's strong ETag of the browser origin policy (`"o1-…"`) arrives as a weak ETag (`W/"o1-…"`), which the panel did not take as a revision: the "browser origin check" card could not be saved. The panel now reads the same revision from the weak form; it still sends the strong `If-Match` as before, and the add-on's comparison is unchanged. The profile list's ETag (`"p1-…"`) is read by the same function and was fixed with it; measured on a real Home Assistant behind Cloudflare (2026-11-25, browser `Accept-Encoding: gzip, deflate, br, zstd`) it was not affected there, because Home Assistant itself compresses that answer with gzip first and its ETag stays strong. It could only turn weak when a proxy rewrites an answer that Home Assistant sent uncompressed, for example when the client does not accept compression.
-    ```
-  - 出處：`packages/mcp-admin-ui/src/api.js`（`headerRevision`）、`packages/mcp-admin-ui/tests/origin-policy.test.mjs`、`profiles.test.mjs`、`tests/browser/origin-policy.spec.mjs`、`profiles.spec.mjs`（`weakEtag` 是 `fixtures/server.mjs` 的新選項）；
-    量測：2026-11-25 主對話在真的 HA 加 Cloudflare 上的實測（兩條路的位元組數與壓縮方式如上）。`profiles.test.mjs`、`profiles.spec.mjs`、`fixtures/server.mjs` 裡原本把「清單變弱」歸因於 Cloudflare 的註解已改成「模擬代理」；測試的情境（代理把清單的 ETag 變弱）本身仍成立。
+- A11（面板讀弱 ETag，F2，維修版分支）：適用的七個開通多帳號的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 3 點刪除：Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1（維修版）與 Hermes、n8n、Headscale 0.5.0（火車 B；Headscale 沒有「瀏覽器來源檢查」卡片，只寫帳號清單那一半）。原來的句子、看得到的變化（含 2026-11-25 在真的 HA 加 Cloudflare 上的量測）與出處見 `fec2e3ec292d`（維修版分支）的本檔。
 
 - **A12　同一個 session 內進行中的重複 JSON-RPC id 被拒（PaaS #161 的移植；合併後補 PR 號；不受開關管；原稿叫 A10，和維修版的 A10 撞號，火車 B 升版時改編為 A12）**
   - 看得到的變化：同一個 `Mcp-Session-Id` 內，已有進行中的請求用了這個 id（`7` 與 `"7"` 同一個）時，第二個請求立刻回 HTTP 400、JSON-RPC `-32600`、
@@ -123,8 +110,7 @@ A8～A10 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第
     ```
   - 出處：`docs/provenance/ha-duplicate-jsonrpc-id-20261125.md`；契約第 1.2 節「PaaS #161 的不受開關管變更」、第 2.8 節、第 9 節 #145（原稿 #134，火車 B 升版時依「後合併的重編」改號）。`upgrade-notes.yaml`
     不用列（沒有破壞性變更：只有違規的請求被拒）。
-  - 適用：全部 8 個產品（隨火車 B 發佈）。總表的筆數與各產品節的「要寫」清單這次沒有跟著改（它們和同時準備的各線改的是同幾列）：發版片照檔頭第 3 點寫進
-    CHANGELOG 時把 A12 算進去，PR 號與合併 commit 合併後補。
+  - 適用：全部 8 個產品。**已發：Hermes、n8n、Headscale 0.5.0（火車 B；句子加了「Claude.ai 與 ChatGPT 的用戶端不重複使用 id，不會觸發」，n8n 加一句「閘道的檢查和子程式無關」）。還沒寫：Odoo、EMQX、LiteLLM、Nextcloud（維修版 0.5.2／0.5.1 的映像不含它，下一次發版寫；共用閘道的程式已經在 repo 裡）與 OpenDesign 的來源（「applies to its source too」）。**適用的產品都發過才刪；PR 號與合併 commit 合併後補。
 
 ## 2. 0.4.13 這條線共通（B：Headscale 以外的 7 個產品）
 
@@ -143,56 +129,37 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 版號註記（2026-11-23）：0.5.0 已推 GHCR 但從未上架，負責人決定修好 F1（GET 串流不占回覆票券）再發 0.5.1；0.5.1 是第一個上架的多帳號版，下面「0.5.0」都讀成 0.5.1。
 - 上次發版：0.5.2（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.1（2026-11-24 上架，#137；映像來源 `403e4c8`）與 0.4.14（升版 commit `7252d9e`；映像來源
   `24de6ec`；#119 在 2026-11-18 合併）。
-- 要寫：沒有（A10、A11 已寫進 0.5.2）。A8、A9 與第 7 節（開通）已寫進 0.5.0／0.5.1；A1～A7、B1 已寫進 0.4.14。
+- 要寫：A12（重複 JSON-RPC id；維修版的映像不含它，下一次發版寫）。A10、A11 已寫進 0.5.2；A8、A9 與第 7 節（開通）已寫進 0.5.0／0.5.1；A1～A7、B1 已寫進 0.4.14。
 - 自己的修正：沒有。`apps/odoo` 在 0.4.13 之後沒改；`addons/odoo` 只改了 0.5.0 的版號、CHANGELOG、DOCS、README，並加 `upgrade-check/`（HM-16 的
   hook，從 `packaging/hooks/` 搬來）。Odoo 專屬的 HM-12（#110、#114：換身分換 token、新來源重填秘密）受開關管，0.5.0 開通後看得到，已寫進 CHANGELOG。
 - 發版時另外驗：第 5 節；`docs/operations/release-decision-odoo-0.5.2.md` 的驗收計畫。計畫 §10.6（Odoo 首發標準，HM-19b）已在 0.5.1 做過。
 
 ### 3.2 n8n
 
-- 上次發版：0.4.15（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
-- 要寫：沒有（A8、A9、A10 已寫進 0.4.15；A11 到開通多帳號的那一版才寫）。A1、A3、A4、A5 含 n8n 那一句、A6、A7、B1 已寫進 0.4.14；A2 不適用。
-- 自己的修正：沒有。`apps/n8n` 的兩次改動都沒有可見變化：HM-04（#91，port 參數化，預設 3000 時 `PORT` 照舊）、HM-20（#102，開通後才拒絕
-  loopback 與檢查存檔）。
-- 發版時另外驗：第 5 節。n8n 自己升版號（不跟預設版號一起升）時，HM-25（#129）起 `apps/n8n/run.py` 走 `run_product` 的
-  runtime、照其他產品傳 `version_for_product('n8n')`，`serverInfo` 與面板報的就是 `PRODUCT_VERSIONS` 的版號；HM-17 筆記第 12 節要先改
-  `run.py` 的那一條不用做了。
-- **開通 n8n 的升版 PR 才寫**（HM-25 的額外帳號部分，受開關管；開關關時沒有可見變化，見第 4.2 節。runtime 改走 `run_product` 不受開關管、也看不到，見第 4.1 節）。計畫 §7.2 的共通項目照 Odoo 首發的寫法另寫；n8n 自己
-  看得到的變化，每項一行（英文句子是主對話補寫的草稿，最後由發版片定）：
-  - 額外帳號（每個 add-on 最多 2 個，DQ-29 暫定值）各有自己的 token、後端、政策與 n8n-mcp 子程式：
-    `Additional profiles (up to 2): each has its own MCP token, n8n backend, tool policy and its own n8n-mcp process.`
-  - 沒設定後端的額外帳號不起子程式，每支工具（含 7 支文件工具）回 `-32603`「Backend not configured」；預設帳號照舊（沒後端也起文件子程式）：
-    `An additional profile without an n8n backend runs no n8n-mcp process: every tool, the seven documentation tools included, answers "Backend not configured"; the default profile is unchanged.`
-  - session 名額與逾時每個帳號各自（沒存過是 20 個、10 分鐘）：
-    `MCP sessions are counted per profile: each profile has its own 20 sessions (10 minutes idle) unless its own settings say otherwise.`
-  - 每個額外帳號有自己的 node catalog 與 workflow 版本歷史（`/tmp`，不進備份；換了後端（網址或 key）時重做、刪帳號一起刪；HM-25 安全審查 S-8）：
-    `Each additional profile keeps its own node catalog and workflow version history (in /tmp, not in backups): a new backend (URL or key) starts it afresh, and it is deleted with the profile.`
-  - 開通後 `n8n_test_workflow` 的 webhook、chat、form 連線也拒絕這個 add-on 自己的位址（127.0.0.0/8、::1、0.0.0.0/8、::，IPv4-mapped 含；名稱的任何一個位址是本機就拒）；區網與公開位址照舊（HM-25 安全審查 S-1；負責人 2026-11-25 定，契約 #90；受開關管，**開通那一版才寫**，沒開通的 n8n 照今天）：
-    `Once multiple profiles are switched on, the webhook, chat and form connections of n8n_test_workflow refuse an address that is the add-on itself (127.0.0.0/8, ::1, 0.0.0.0/8, ::; a name with any such answer is refused); LAN and public addresses connect as before.`
-  - DOCS 要跟著改（`addons/n8n/DOCS.md`，升版 PR 改）：「所有 client **共用 20 個**同時 session」改成「每個帳號的 client 共用該帳號的 20 個
-    session」；「n8n 沒有後端時子程序照常啟動，7 個文件工具照常回答」補「額外帳號沒有後端時不起子程序，每支工具都回 `Backend not configured`」。
-  - DOCS 的已知限制要加（HM-25 的獨立安全審查 S-2、S-7、S-8；`threat-model.md` 第 3 節）：
-    - 兩個帳號接同一台 n8n 時，n8n 的 webhook 與 form 是整台共用、不看 API key，一個帳號可以觸發另一個帳號的 webhook workflow；要分開就
-      每個帳號接自己的 n8n，或在 webhook 節點加 header 驗證。
-    - workflow 版本歷史在容器的 `/tmp`（HAOS 的資料分割區），沒有大小上限：每次更新 workflow 存一版、每個 workflow 留 10 版。
-    - 預設帳號的版本歷史只在 add-on 重啟時清掉：把預設帳號換到另一個後端、交給別人用之前，重啟 add-on。
-    - webhook、chat、form 的網址驗證仍是 `permissive`（連得到區網與其他 add-on），但開通後它們的連線拒絕這個 add-on 自己的位址（127.0.0.0/8、::1、0.0.0.0/8、::）：n8n 要放在區網或別的主機，不能用 `localhost` 或 `127.0.0.1`（負責人 2026-11-25 定，契約 #90）。
+- 上次發版：0.5.0（火車 B 升版，2026-11-25 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.15（2026-11-25 維修版，PR #138）與 0.4.14（`7252d9e`；映像來源 `24de6ec`；#119 在 2026-11-18 合併）。
+- 要寫：沒有。A8、A9、A11、A12、第 7 節（開通）與下面 n8n 自己的項目已寫進 0.5.0；A1～A7、B1 已寫進 0.4.14，A10 與 Node 基底已寫進 0.4.15；A2 不適用。
+- 自己的修正：沒有。`apps/n8n` 在 0.4.13 之後的改動除了開通要寫的項目，只有 HM-04（#91，port 參數化）與 HM-20（#102，開通後才拒絕 loopback 與檢查存檔）。
+- **（歷史，已寫進 0.5.0）開通 n8n 的項目**：HM-25（#129）的額外帳號部分，用 `505212c`（11-19 兩份獨立審查過的那一版），加安全審查 S-1（負責人 2026-11-25 定，整合分支 `5552f20`；契約 #90）。
+  0.5.0 CHANGELOG 寫了：額外帳號上限 2、沒後端的額外帳號不起子程序且每支工具回 `Backend not configured`、session 名額每帳號各自（20 個、10 分鐘）、每個額外帳號自己的 node catalog 與 workflow 版本歷史（`/tmp`，
+  不進備份）、webhook／chat／form 連線拒絕這個 add-on 自己的位址（區網照舊）、換網址要重填 API key 與 MCP Access Token、n8n 網址不能填 loopback、兩個帳號接同一台 n8n 時 webhook 與 form 共用；
+  DOCS 改寫了「共用 20 個同時 session」那一句、已知限制，webhook 模式維持 permissive。n8n 沒有認證被拒的健康檢查退避（`health.AUTH_REFUSED` 不認得它的 401 文字；CHANGELOG 已寫）。
+- 發版時另外驗：第 5 節；`docs/operations/release-decision-n8n-0.5.0.md` 的驗收計畫。n8n 自己升版號時（不跟預設版號一起升），`apps/n8n/run.py` 走 `run_product` 的 runtime、照其他產品傳 `version_for_product('n8n')`，
+  `serverInfo` 與面板報的就是 `PRODUCT_VERSIONS` 的版號。
 
 ### 3.3 Hermes
 
-- 上次發版：0.4.15（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
-- 要寫：沒有（A8、A9、A10 已寫進 0.4.15；A11 到開通多帳號的那一版才寫）。A1～A7、B1、H1 #85、H2 HM-33 #115 已寫進 0.4.14；H1、H2 照檔頭第 3 點刪除。
-- 發版時另外驗：第 5 節。HM-33 筆記交發版片定的兩件，0.4.14 這樣處理：`addons/hermes/README.md`、`DOCS.md` 沒補「Hermes Agent v0.17.0
-  or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的
-  CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
-- 開通那一版（Hermes 的升版 PR，把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Hermes 自己的 CHANGELOG 句子在 HM-24 筆記第 9 節
-  （`docs/provenance/ha-multiprofile-HM-24-20261119.md`；HM-24 審查 S-7；第 2 句的「換身分換 token」已被 2026-11-20 的定案取代，見該筆記末，不可照抄）。HM-24 受開關管（檔頭第 2 點），還沒開通的版本不寫、也不刪這一行；
-  開通那一版寫進 CHANGELOG 之後照第 3 點刪。
+- 上次發版：0.5.0（火車 B 升版，2026-11-25 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.15（2026-11-25 維修版，PR #138）與 0.4.14（同 Odoo）。
+- 要寫：沒有。A8、A9、A11、A12、第 7 節（開通）與下面 Hermes 自己的項目已寫進 0.5.0；A1～A7、B1、H1 #85、H2 HM-33 #115 已寫進 0.4.14，A10 已寫進 0.4.15。
+- 發版時另外驗：第 5 節；`docs/operations/release-decision-hermes-0.5.0.md` 的驗收計畫。HM-33 筆記交發版片定的兩件，0.4.14 這樣處理：`addons/hermes/README.md`、`DOCS.md` 沒補「Hermes Agent v0.17.0
+  or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的 CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
+- **（歷史，已寫進 0.5.0）開通 Hermes 的項目**：HM-24 筆記第 9 節的句子，照 2026-11-20 的定案改寫（換 Gateway 網址、Dashboard 網址或使用者，含補上或清空 Dashboard，保留 MCP 權杖，舊網址連到新後端；與 PaaS 一致），
+  加 Dashboard 登入限流在帳號之間共用、長 `hermes_chat` 佔該帳號自己的轉送名額（預設 32、額外 16）、換網址要重填對應的秘密、Gateway 與 Dashboard 網址不能填 loopback。
+  HM-24 筆記第 9 節第 2 句的「換身分換 token」沒有照抄。60 分鐘負載量測（免費模型，只記錄、不擋發版）在發佈紀錄與 `acceptance.md`。
 
 ### 3.4 EMQX
 
 - 上次發版：0.5.1（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.0（火車 A，2026-11-24 發佈到 GHCR，#136；映像來源 `84483b7`）與 0.4.14（同 Odoo）。
-- 要寫：沒有（A10、A11、E4 已寫進 0.5.1）。A8、A9、第 7 節（開通）、E3（#153 三句）與子程式政策（2026-11-20 候選，含火車 A 審查 F-1 的修正）已寫進 0.5.0；A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14。
+- 要寫：A12（同 Odoo）。A10、A11、E4 已寫進 0.5.1。A8、A9、第 7 節（開通）、E3（#153 三句）與子程式政策（2026-11-20 候選，含火車 A 審查 F-1 的修正）已寫進 0.5.0；A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14。
 - 發版時另外驗：第 5 節，加上展示機的真 broker 驗收（`docs/operations/release-decision-emqx-0.5.1.md`；0.5.0 的驗收在 `release-decision-emqx-0.5.0.md`）。
 - E4（`emqx_list_topics` 的說明對齊 PaaS #160，2026-11-25）與 EMQX 5.9 以前的開源版不強制 `viewer` 角色（展示機驗收發現，DOCS 與 CHANGELOG 已補）已寫進 0.5.1，照檔頭第 3 點刪除；
   E4 原來的句子、看得到的變化與出處見 `3bcfa1f` 的本檔與 `docs/provenance/emqx-topics-wording-20261125.md`。
@@ -200,7 +167,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.5 LiteLLM
 
 - 上次發版：0.5.1（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.0（火車 A，2026-11-24 發佈到 GHCR，#136；映像來源 `84483b7`）與 0.4.14（同 Odoo）。
-- 要寫：沒有（A10、A11 已寫進 0.5.1）。A8、A9、第 7 節（開通）與下面 L2～L6（照整合分支的行為更新：L5 的連線池是 50、健康探測獨立；另加 URL 正規化與三個工具改要 `create` 權限）已寫進 0.5.0；A1～A7、B1、B2、L1 HM-32 #113 已寫進 0.4.14。
+- 要寫：A12（同 Odoo）。A10、A11 已寫進 0.5.1。A8、A9、第 7 節（開通）與下面 L2～L6（照整合分支的行為更新：L5 的連線池是 50、健康探測獨立；另加 URL 正規化與三個工具改要 `create` 權限）已寫進 0.5.0；A1～A7、B1、B2、L1 HM-32 #113 已寫進 0.4.14。
 - 發版時另外驗：第 5 節（`docs/operations/release-decision-litellm-0.5.1.md`）；0.5.0 的真 LiteLLM 驗收在 `release-decision-litellm-0.5.0.md`。
 - **（歷史，已寫進 0.5.0）開通時要寫（HM-21 交，PR 號合併後補）**：HM-21 是 LiteLLM 開通的功能 PR，沒有程式（計畫 §9：LiteLLM 不需要產品專屬程式），開關關時
   沒有任何變化（第 4.2 節）。LiteLLM 的升版 PR 把 `litellm` 加進 `features.MULTI_PROFILE_PRODUCTS`、升 0.5.0 時，L2～L6 是 **LiteLLM 自己的**
@@ -218,7 +185,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.6 Nextcloud
 
 - 上次發版：0.5.1（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.0（火車 A，2026-11-24 發佈到 GHCR，#136；映像來源 `84483b7`）與 0.4.14（同 Odoo）。
-- 要寫：沒有（A10、A11 已寫進 0.5.1；UC-12 已確認，0.5.0 CHANGELOG 的「presumed」改寫、DOCS 補上）。A8、A9、NC1、第 7 節（開通）與 HM-22 筆記第 9.5 節的句子（照 11/20 的 PaaS 對齊更新）已寫進 0.5.0；A1～A7、B1、B2 已寫進 0.4.14。
+- 要寫：A12（同 Odoo）。A10、A11 已寫進 0.5.1（UC-12 已確認，0.5.0 CHANGELOG 的「presumed」改寫、DOCS 補上）。A8、A9、NC1、第 7 節（開通）與 HM-22 筆記第 9.5 節的句子（照 11/20 的 PaaS 對齊更新）已寫進 0.5.0；A1～A7、B1、B2 已寫進 0.4.14。
 - **NC1：Nextcloud PaaS 正規化與政策重啟對齊**（候選，PR／合併 commit 待補；不受多帳號開關管）：存檔正規化貼上的頁面網址與帳密空白；政策收緊或不變不重啟，放寬且子程式執行中才重啟，停著不啟動。換身分換 token 仍只在開通後生效。HA 保留目的地與跨來源秘密檢查。建議 CHANGELOG：
 
   `Nextcloud connection saves normalize pasted page URLs and credentials; policy restrictions apply without restarting, while enabling tools restarts only a running child.`
@@ -233,57 +200,21 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 - 上次發版：0.4.15 只升來源版本（2026-11-25 維修版；升版 commit 合併後補），沒有建映像，也沒有 HAOS 驗收；CHANGELOG 照前例寫「source only (disabled)」，
   共通項目寫成一行「applies to its source too」。之前是 0.4.14 只升來源版本（升版 commit `7252d9e`）。
-- 要寫：沒有（A8、A9、A10 已寫成「applies to its source too」，在 0.4.15）。A1～A7、B1、D1 #86 已寫進 0.4.14；D1 照檔頭第 3 點刪除。
+- 要寫：A12（寫成「applies to its source too」；下一次它升來源版本時寫）。A8、A9、A10 已寫成「applies to its source too」，在 0.4.15。A1～A7、B1、D1 #86 已寫進 0.4.14；D1 照檔頭第 3 點刪除。
 - 發版時另外驗：沒有映像，第 5 節的映像項目不適用；商店開放它的那一版才全部適用。
 
 ### 3.8 Headscale
 
-- 上次發版：0.4.20（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.4.19（升版 commit `5a7c191`；映像來源 `24de6ec`；和 0.4.14 同一個 PR #119，2026-11-18 合併）。
-- 要寫：HS8（下面「自己的修正」；不受開關管，維修版 0.4.20 比它早，沒有帶它）。A8、A9、A10 已寫進 0.4.20；A11 到開通多帳號的那一版才寫（第 1 節）。A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內。
-- 自己的修正：**HS8**，子程式核對 state 的 child token（HM-26 安全審查 S-1；負責人 2026-11-25 選「三個一起，照建議做」；PR 號與 commit 合併後補）。
-  **不受開關管**：開關關的安裝也會帶出去，所以 Headscale 的下一版（維修版或開通的 0.5.0，誰先發）都要把 HS8 寫進 CHANGELOG。改的是 vendored
-  `policy.py`（`apps/headscale/vendor/PROVENANCE.md`、`runtime-sources.json`、`tool-surface.json` 的摘要同步），沒有改版號、`addons/` 與面板。
-  - 看得到的變化：子程式每次呼叫（含直連）讀 state 時，state 的 `child_token` 要等於它啟動時拿到的 `WOOW_MCP_CHILD_TOKEN`（`hmac.compare_digest`），
-    否則回 `HEADSCALE_POLICY_UNAVAILABLE`、不送任何請求、訊息不帶任何值；環境變數缺或格式不對也一樣。add-on 自己起的子程式（`products.child_spec`
-    照 state 給）一定相等，所以今天的安裝沒有可見變化；只有「子程式讀到別的帳號的 state」（同一台、同一把 key 的兩個帳號，網址與 key 的比對分不出來）
-    與「child token 換了、子程式沒重起」（開通後的「全部撤銷」重起失敗時只記一行 log；開機守門在任何子程式起來之前換，遇不到）會被擋。
-  - HS8 的 CHANGELOG 建議句：
-
-    ```text
-    - Hardening of the Headscale MCP child (HM-26 security review S-1): at every call the child now also checks that the saved state it reads is its own, by comparing the state's child token with the WOOW_MCP_CHILD_TOKEN the add-on started it with (also for calls made straight to the child inside the container). A state of another profile, or one whose child token was replaced while the child kept running, makes every call fail with HEADSCALE_POLICY_UNAVAILABLE before anything is sent to the Headscale server. Nothing changes for a child the add-on started on its own state.
-    ```
-  - 出處：報告 `artifacts/…/wave5/review-HM-26-security.md` S-1（repo 外）；`docs/provenance/ha-multiprofile-HM-26-20261119.md` 第 15 節第 2 點。
-- 發版時另外驗：第 5 節（`docs/operations/release-decision-headscale-0.4.20.md`）。Headscale 0.4.19 起走 GitHub 發版流程（`amd64-mcp-headscale` 套件的 Actions 權限，
-  `docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
-- HM-26（Headscale 開通前的產品片；PR 號與 commit 合併後補）：受開關管，開關關時沒有可見變化（第 4.2 節）。映像多帶三件只在開通時
-  生效的事：Headscale 伺服器拒絕 key（401）時健康監看照 DQ-25 退避（之前認不出來，照樣每 15 秒查；HS7）、面板 Headscale「後端設定」
-  說明的每帳號版本（HS2）、新建帳號不複製 `headscale_api_keys` 的寫入（`profile_initial_state` 與面板的建立說明，負責人 2026-11-25；HS9）。其餘程式在 HM-08～HM-31 已經做好，本片補測試、文件與交接。Headscale 開通的升版片（0.4.19 → 0.5.0）照下面
-  寫 CHANGELOG、DOCS。
-- 開通版（0.5.0）要寫進 CHANGELOG 的 Headscale 項目（英文；開通後所有產品共通的改變照契約第 1.4 節（HM-18 定稿的計畫 §7.2 完整清單）
-  與本檔第 7 節，句子由 Odoo 首發的升版片 HM-19a 先寫，Headscale 照抄適用的；第 16 點（Odoo 換身分換 token）不適用，第 5、10、19 點裡
-  標「Headscale 除外」的 Origin 政策部分不寫：Headscale 不換 token、Origin 照舊。HM-26 原本照計畫 §7.2 的 11 點寫，合併 HM-18 之後改指第 1.4 節；HS8 不在這份清單：它不受開關管，見上面「自己的修正」）：
-  - HS1：`Multiple profiles: besides the default profile, the add-on can serve up to 3 additional profiles, each with its own Headscale URL and API key, MCP token, tool policy and MCP child. Profiles may use the same Headscale server with different tool policies, or different servers.`
-  - HS2：`A Headscale API key administers the whole Headscale server, and Headscale has no narrower key: profiles on one Headscale server are kept apart only by their tool policies, whatever keys they use. A profile allowed to create API keys (headscale_api_keys create) can obtain a key that administers the whole server and that no tool policy, no "Revoke all" and no restore check reaches, and a profile allowed to expire or delete API keys can stop the other profiles' keys: deny these operations to every profile meant to be restricted (the connection page says so once profiles are on). An API key of its own per profile is still recommended (not enforced): one profile's key can then be revoked in Headscale without stopping the others.`
-  - HS3：`Each profile's MCP child reads only its own profile's saved policy, at every call (also for calls made straight to the child inside the container); a profile directory whose owner or mode cannot be verified makes every call of that profile fail with HEADSCALE_POLICY_UNAVAILABLE.`
-  - HS4：`Changing a profile's Headscale URL to another origin (scheme, host or port) now requires entering its API key again: the admin API answers 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN and the panel asks for the key. The same origin written otherwise (the /api/v1 root, letter case, the default port) needs no key.`
-  - HS5：`A loopback Headscale URL (127.0.0.0/8, ::1, localhost) is now refused when it is saved (HTTP 400); the MCP child refused to connect to it before, and still does.`
-  - HS6：`Saving a profile's tool policy restarts only that profile's MCP child; the other profiles' sessions and tool lists are not affected. The secret URL of every profile keeps the Headscale Origin rule: no Origin or exactly https://claude.ai; any Origin on Bearer requests is refused (403).`
-  - HS7：`When the Headscale server refuses a profile's API key (HTTP 401: revoked, expired or wrong), that profile's health checks back off to 15, 30, 60, 120 and then 300 seconds apart; saving the profile's connection, restarting it from the panel or any other answer of the server ends the backoff. The reason shown is unchanged.`
-  - HS9：`A profile added in the panel starts without the API key writes: it copies the default profile's tool policy as before, except that headscale_api_keys create, expire and delete are not copied (listing API keys is). Turn them on in the new profile's tool permissions if it needs them. The default profile and profiles that already exist are not changed.`
-- DOCS（`addons/headscale/DOCS.md`「連線與權限」一節，繁中；升版片寫）要補的段落：
-
-  ```text
-  **多個帳號（0.5.0 起）**：除了預設帳號，最多可以再加 3 個帳號，每個帳號有自己的 Headscale 網址與 API key、MCP 權杖、工具政策與子程序。
-  可以是同一台 Headscale、各帳號不同的工具政策，也可以是不同台。Headscale 的 API key 是整台伺服器的管理權限，Headscale 沒有 key 層級的權限：
-  同一台 Headscale 上的帳號，不論是否共用 key，彼此只靠工具政策分權。**要讓某個帳號真的受限，請在它的工具權限頁停用 `headscale_api_keys`
-  的建立、作廢與刪除**：建立會把一把新的整台管理 key 交給持有這個帳號權杖的人，在 add-on 外也能用，工具政策、「全部撤銷」與還原都管不到；
-  作廢與刪除能停掉其他帳號的 key。新安裝時這些寫入預設開啟（預設帳號）；新增的帳號會複製預設帳號當下的工具政策，但**不複製 `headscale_api_keys` 的建立、作廢與刪除**：
-  新帳號預設不能用，要用請到它的工具權限頁自行開啟。
-  **仍建議每個帳號在 Headscale 各建一把 API key**，不要共用：某個帳號不再使用時，就只撤銷它那一把；共用一把時，撤銷它會同時停掉共用的帳號。
-  發生外洩時，在每一台 Headscale 列出所有 API key（`headscale apikeys list`），撤銷這個 add-on 用過的與不認得的每一把，再到面板逐帳號存新 key。
-  帳號的網址改到另一台伺服器（scheme、主機或 port 不同）時要重新輸入 API key。
-  每個帳號的密鑰網址都照同一條 Origin 規則（沒有 Origin 或 `https://claude.ai`）；Bearer 請求帶任何 Origin 都回 403。
-  ```
+- 上次發版：0.5.0（火車 B 升版，2026-11-25 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.20（2026-11-25 維修版，PR #138）與 0.4.19（升版 commit `5a7c191`；映像來源 `24de6ec`；和 0.4.14 同一個 PR #119，2026-11-18 合併）。
+- 要寫：沒有。A8、A9、A11、A12、HS8、HS1～HS9、權杖不再顯示與第 7 節（開通）已寫進 0.5.0；A10 已寫進 0.4.20；A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內。
+- 自己的修正（**HS8**，子程式核對 state 的 child token，不受開關管；維修版 0.4.20 比它早，沒有帶它，所以 0.5.0 才第一次寫）和下面開通的項目都已寫進 0.5.0 CHANGELOG（HS8 的英文句子照原句，加「every installation, whatever the profile switch」）。
+- **（歷史，已寫進 0.5.0）開通 Headscale 的項目**：HS1～HS7、HS9 的句子（開通後所有產品共通的改變照契約第 1.4 節與第 7 節寫，第 5、10、19 點的 Origin 政策部分不寫：Headscale 不換 token、Origin 照舊，
+  CHANGELOG 另有一句說明它的固定規則）、DOCS 的「多帳號」一節（同一台 Headscale 的帳號只靠工具政策分權、新帳號預設不能用 `headscale_api_keys` 的建立／作廢／刪除、清理時用 `headscale apikeys list`），
+  以及 **2026-11-20 的 Headscale 權杖揭露對齊 PaaS**（`cbf4fe4`；不受開關管；原本沒有列在本檔）：面板不再顯示現有權杖、`token/reveal` 回 404、「顯示 Claude.ai 連線網址」改成輪替權杖的「產生新的 Claude.ai 連線網址」；
+  CHANGELOG、DOCS、README 與根目錄 `upgrade-notes.yaml` 都寫了。
+- 發版時另外驗：第 5 節；`docs/operations/release-decision-headscale-0.5.0.md` 的驗收計畫（短效測試 key、全程不呼叫 `headscale_api_keys` 的 create、清理用 `headscale apikeys list` 核對）。Headscale 0.4.19 起走 GitHub 發版流程
+  （`amd64-mcp-headscale` 套件的 Actions 權限，`docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
+- HM-26（Headscale 開通前的產品片）：受開關管的部分（伺服器拒絕 key 時監看的認證退避 HS7、面板後端設定說明的每帳號版本 HS2、新建帳號不複製 `headscale_api_keys` 的寫入 HS9）在 0.5.0 變成看得到的改變，已寫進 CHANGELOG。
 
 ## 4. 沒有可見變化的片（不用逐項寫 CHANGELOG）
 
@@ -302,7 +233,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 ### 4.2 受開關管：開關關時沒有可見變化
 
-這些片的程式都在映像裡。`MULTI_PROFILE_PRODUCTS` 是 `odoo`（0.5.0 起，HM-19a）與 `emqx`、`litellm`、`nextcloud`（火車 A 的 0.5.0 起），其他產品（n8n、Hermes、Headscale）都沒開通，**開關關時沒有可見變化**：`state.json` 位元組不變、不產生新檔、
+這些片的程式都在映像裡。`MULTI_PROFILE_PRODUCTS` 是 `odoo`（0.5.0 起，HM-19a）與 `emqx`、`litellm`、`nextcloud`（火車 A 的 0.5.0 起）、`hermes`、`n8n`、`headscale`（火車 B 的 0.5.0 起），只有 OpenDesign 沒開通（商店停用），**開關關時沒有可見變化**（下表「開關關時」那一欄寫的是關著的行為，也是緊急關閉版會回到的樣子；七個開通的產品都已經把下表每一片的改變寫進各自的 CHANGELOG）：`state.json` 位元組不變、不產生新檔、
 bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額／看門狗／健康檢查／管理管線照舊（計畫 §3.3、§7.1）。各片產品開通後的改變，
 由該產品的升版片照契約第 1.4 節（計畫 §7.2 的完整清單，HM-18 定稿）寫進 CHANGELOG（第 7 節）。
 
@@ -332,7 +263,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
 ```
 
-0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 不寫（開通之後這些片都看得到，照第 7 節逐項寫；HM-19a）。n8n、Hermes（0.4.15）與 Headscale（0.4.20）寫了下面第二句（2026-11-25 維修版），PR 清單改成 #108、#112、#116 加上「Odoo、EMQX、LiteLLM 與 Nextcloud 在 #136、#137 合併的多帳號工作」。其他產品的下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
+0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 不寫（開通之後這些片都看得到，照第 7 節逐項寫；HM-19a）。n8n、Hermes（0.4.15）與 Headscale（0.4.20）寫了下面第二句（2026-11-25 維修版），PR 清單改成 #108、#112、#116 加上「Odoo、EMQX、LiteLLM 與 Nextcloud 在 #136、#137 合併的多帳號工作」；火車 B 之後三個產品都開通，這兩句只剩 OpenDesign 的來源版本用得到，下一次它升來源版本時不寫。其他產品的下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
 不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）、#129（HM-25：n8n 的 runtime 收斂不受開關管，第 4.1 節；其餘受開關管，第 4.2 節）；HM-22 合併後也在其中（第 4.2 節；PR 號合併後補，建議句的 PR 清單跟著加）。建議句（HM-18 補寫；HM-25 合併 `claude-delivery` 時加 #129）：
 
 ```text
@@ -350,6 +281,10 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
      第 1a、1b 項）。之後 HM-13b、HM-13c、HM-16 改了還原階段的檢查：守門刪掉標記、留下還原提示（A8、A9），log 裡 `re-owned N` 與守門的
      `KEPT_NOTICE` 各剛好一行、守門沒有別的行（`docs/operations/acceptance.md`）。下一版的 candidate 是第一次在真容器跑這些新檢查；失敗時先查
      探針、entrypoint 與守門（HM-06 筆記第 12.3 節、HM-13a 筆記第 11 節、HM-16 筆記），不要放寬。（2026-11-19 HM-18 改寫：原本寫「還沒在真容器跑過」）
+   - 火車 B（Hermes、n8n、Headscale 0.5.0）的 candidate 是這三個產品第一次在真容器跑**多帳號階段**（建兩個額外帳號、三個子程式在 3000、18000、18001、每個帳號的 bearer 與路由、SIGKILL、30 秒內停止、還原階段的守門），
+     本機沒有 Docker：只有 `packaging/test_container_probe.py`（`TrainBProductsTests`）與 `packaging/test_container_profiles.py`（`TrainBCommandLineTests`、`TrainBProfileFixtureTests`）的單元測試和真子程序的測試。
+     最可能出問題的地方：`MULTI_PROFILE_PROBE_SECONDS`（360 秒）的餘裕（Headscale 的子程式啟動最慢，約 6 秒）、n8n 三個節點子程序的記憶體與 `/tmp` 目錄（tmpfs）、探針的 mock 要用私有橋接位址（`container_profiles.private_mock_host`；
+     開通後 loopback 後端會被拒）、七路版本運算式第一次由 GitHub 算。失敗時先查探針與 entrypoint，不要放寬。
 4. HA Core 版本：管理員驗證逐版審過到 2026.11.3（#81、#120、A10），並自動放行已審查月份的後續修補版（2026.11.4 起；A10）。目標 HAOS 的 Core 是新月份的版本（例如 2026.12.x）
    或預覽版時，要先補審（計畫 §11.3 的升版 PR 清單：`Hc/ha_role.py` 與 `docs/ha-role-core-contract.md`），不然面板拒絕每個請求。
 5. HM-31 的預算常數是暫定（契約第 5 節）。那裡的「HM-19c 放行條件」（在目標硬體量閘道＋子程式的放大倍數與 MemAvailable，不過就不能發版）
@@ -370,7 +305,8 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
 ## 7. 開通某個產品的那一版（升版片把它加進 `MULTI_PROFILE_PRODUCTS`；2026-11-19 HM-18 加）
 
 - **誰讀**：開通某個產品的升版 PR（Odoo 是 HM-19a，之後 HM-21～HM-26）。第 1～6 節照舊（不受開關管的共通項）；這一節是「開通」才出現的改變，
-  只寫進被開通的那個產品。
+  只寫進被開通的那個產品。**2026-11-25 火車 B 之後，七個商店產品都已開通（OpenDesign 商店停用、Odoo Manage 已下架，DQ-28 不開通）**：
+  這一節的項目都已逐項寫進各產品的 CHANGELOG 與 DOCS，留著當緊急關閉版再開通、或日後有新產品要開通時的清單。
 - **CHANGELOG**：契約第 1.4 節（計畫 §7.2 的完整清單，HM-18 定稿）逐項寫進該產品的 `addons/<產品>/CHANGELOG.md`，只有預設帳號的安裝也看得到。
   標「Headscale 除外」的點（Origin 政策：第 5、10、19 點）開通 Headscale 時不寫（HM-26）。第 4.2 節各片的「映像多帶了什麼」在開通那一版變成看得到的
   改變，以第 1.4 節的寫法為準。
@@ -400,7 +336,7 @@ A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13
   （§7.2 要補的六點）、HM-13b 筆記第 13 節（還原會變的事）、HM-22 筆記第 9.5 節（Nextcloud 開通那一版自己的句子與同一個 PR 另外要改的檔，
   第 3.6 節；HM-22 合併 `claude-delivery` 時補）。
 - **發版時另外驗**：第 5 節，加上計畫 §10.6（Odoo 首發標準）與 `docs/operations/acceptance.md` 的多帳號驗收；容器驗收的多帳號階段第一次真跑是
-  HM-19a 前的乾跑。
+  HM-19a 前的乾跑；Hermes、n8n、Headscale 第一次在真容器跑是火車 B 的 candidate（第 5 節第 3 點）。
 
 
 ### 2026-11-20 EMQX 子程式政策候選
