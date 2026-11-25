@@ -1,5 +1,5 @@
 # Build from repository ROOT: docker build -f apps/n8n/Dockerfile .
-FROM node:26.12.1-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS ui
+FROM node:26.13.1-bookworm-slim@sha256:0042e17d232a87a2cd485be1da7900fca4d10a4ad11b29e9285da1d2e54798c9 AS ui
 WORKDIR /ui
 COPY packages/mcp-admin-ui/package.json packages/mcp-admin-ui/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -8,7 +8,7 @@ COPY packages/mcp-admin-ui/scripts/build.mjs ./scripts/build.mjs
 COPY packages/mcp-admin-ui/NOTICE.txt ./NOTICE.txt
 RUN npm run build
 FROM astral/uv:0.12.10@sha256:34c0f9a55abeb840c34391bb7b63a1a06f8cb9281e028f27757a01a1a8a2d461 AS uv
-FROM node:26.12.1-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS npm
+FROM node:26.13.1-bookworm-slim@sha256:0042e17d232a87a2cd485be1da7900fca4d10a4ad11b29e9285da1d2e54798c9 AS npm
 WORKDIR /npm
 COPY apps/n8n/package.json apps/n8n/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
@@ -44,7 +44,7 @@ RUN mkdir /tmp/woow-apt-parts \
  && test "$(dpkg-query -W -f='${Version}' libapt-pkg6.0)" = "2.6.2" \
  && test "$(dpkg-query -W -f='${Version}' libssl3)" = "3.0.22-1~deb12u2" \
  && test "$(dpkg-query -W -f='${Version}' openssl)" = "3.0.22-1~deb12u2"
-ARG BUILD_VERSION=0.4.14
+ARG BUILD_VERSION=0.4.15
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow n8n MCP Server" io.hass.description="HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \
@@ -66,7 +66,7 @@ COPY --from=npm /lib/x86_64-linux-gnu/libgcc_s.so.1 /usr/local/lib/libgcc_s.so.1
 # Debian bookworm's libatomic1 (12.2.0-14+deb12u1, source gcc-12 like the base's libgcc-s1); this image installs no
 # packages (packaging/test_supply_chain.py), so the library is copied like the two above and node must start right here.
 COPY --from=npm /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/local/lib/libatomic.so.1
-RUN /usr/sbin/ldconfig && test "$(node --version)" = v26.12.1
+RUN /usr/sbin/ldconfig && test "$(node --version)" = v26.13.1
 COPY --from=npm /npm/node_modules ./apps/n8n/node_modules
 # Unreleased (0.4.12 line): the pinned native addon must also load with this stage's own libraries (libstdc++ and libgcc_s
 # are copied above); a base or library change that breaks it stops the build here, not at the first search_nodes.

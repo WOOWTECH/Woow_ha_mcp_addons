@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import sys
+from types import MappingProxyType
 
 import anyio
 from websockets.asyncio.client import connect
@@ -36,19 +37,43 @@ _URL = "ws://supervisor/core/websocket"
 # Core 2026.11.2 (tag commit ff5d56b8), reviewed 2026-11-17: all 25 contract/adjacent files are byte-identical to
 # 2026.11.1, and the 11.1...11.2 comparison changes no auth, websocket_api, http, hassio, config or onboarding file.
 # Supervisor 2026.11.0 api/proxy.py is byte-identical to 2026.10.5 (blob cab849dc).
-# Any other advertised version, including pre-releases, denies until reviewed and added.
+# Core 2026.11.3 (tag commit 92da9f15), reviewed 2026-11-25: all 25 contract/adjacent files are byte-identical to
+# 2026.11.2; the 11.2...11.3 comparison changes one file under a contract path, components/auth/indieauth.py (the login
+# flow's client_id page fetch gets header-size limits), which is not on the config/auth/list path; core_config.py only
+# reorders the time zone check. Supervisor 2026.11.0, the stable channel's, ships the same api/proxy.py (blob cab849dc).
+# Any other advertised version, including pre-releases, denies until reviewed and added, except a later patch release of
+# a month listed here (_later_patch): the owner's decision of 2026-11-25, docs/ha-role-core-contract.md.
 _HA_VERSIONS = frozenset({"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                           "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
                           "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4", "2026.11.0", "2026.11.1",
-                          "2026.11.2"})
+                          "2026.11.2", "2026.11.3"})
 _QUERY_SECONDS = 2.25  # plus <= .2s cleanup, below the gateway's 3s guard
 _MAX_RESPONSE = 1024 * 1024
 _MAX_CONCURRENT = 8
 # An unreviewed version is shown to the administrator and written to the add-on log only in the form of a Core release
-# or pre-release (2026.10.5, 2026.11.0b1, 2026.11.0.dev0); any other advertised string is reported as unrecognized and
+# or pre-release (2026.12.0, 2026.11.0b1, 2026.11.0.dev0); any other advertised string is reported as unrecognized and
 # never echoed. At most this many distinct versions are logged per process (each once).
 _SHOWN_VERSION = re.compile(r"[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(?:(?:a|b|rc)[0-9]{1,3}|\.dev[0-9]{1,14})?")
 _MAX_REPORTED = 32
+# A later patch release of a reviewed month: the string is exactly year.month.patch, in ASCII digits ([0-9], never \d,
+# which takes other scripts' digits too) and matched with fullmatch (no trailing newline): a month of 1-12 and a patch
+# of up to three digits, neither padded with zeros; no whitespace, v prefix, pre-release suffix or fourth number.
+_PATCH_RELEASE = re.compile(r"([0-9]{4})\.([1-9]|1[0-2])\.(0|[1-9][0-9]{0,2})")
+
+
+def _reviewed_months():
+    """{(year, month): (first, last)}: the lowest and the highest reviewed patch of every month in _HA_VERSIONS."""
+    months = {}
+    for version in _HA_VERSIONS:
+        year, month, patch = (int(part) for part in version.split("."))
+        first, last = months.get((year, month), (patch, patch))
+        months[(year, month)] = (min(first, patch), max(last, patch))
+    return MappingProxyType(months)  # read-only: the rule cannot drift from the list
+
+
+# Both computed when the module loads, never per request.
+_REVIEWED_MONTHS = _reviewed_months()
+_REVIEWED_ORDER = tuple(sorted(_HA_VERSIONS, key=lambda v: tuple(int(part) for part in v.split("."))))
 
 # A private disabled logger, not a configurable named logger. WS debug logging
 # otherwise prints authentication frames and the complete user directory.
@@ -77,7 +102,8 @@ def _message(raw):
 
 
 class Unreviewed:
-    """A denial because Supervisor advertised a Core version this release has not reviewed. Falsy like every denial.
+    """A denial because Supervisor advertised a Core version this release has not reviewed and that is not a later patch
+    release of a reviewed month (_later_patch). Falsy like every denial.
 
     ha_version is the advertised string when it has the form of a Core version (shown_version), else None: safe to
     show to the administrator. The panel shows it instead of a bare 403 (admin_auth.denial_detail)."""
@@ -104,8 +130,23 @@ def shown_version(value):
     return value if isinstance(value, str) and _SHOWN_VERSION.fullmatch(value) else None
 
 
+def _later_patch(version):
+    """True for a release of a month this list reviewed whose patch is above every reviewed patch of that month
+    (2026.11.4 once 2026.11.3 is listed): the owner's rule of 2026-11-25, accepted without a review of its own. False
+    for a month that is not listed (the first release of the next month included), a patch that is not above the
+    month's last reviewed one (2026.7.0 and 2026.7.1 before the first reviewed 2026.7.2) and every string that is not
+    exactly year.month.patch. version is a str (_auth_message checks it first)."""
+    found = _PATCH_RELEASE.fullmatch(version)
+    if found is None:
+        return False
+    year, month, patch = (int(part) for part in found.groups())
+    reviewed = _REVIEWED_MONTHS.get((year, month))
+    return reviewed is not None and patch > reviewed[1]
+
+
 def _auth_message(raw, expected, version=None):
-    """The advertised Core version: a reviewed one, and the same in auth_required and auth_ok.
+    """The advertised Core version: a reviewed one or a later patch release of a reviewed month, and the same in
+    auth_required and auth_ok.
 
     A well-formed auth_required frame that advertises any other version raises _UnreviewedVersion, still a ValueError:
     the verifier denies before it sends the machine token, with a reason the panel shows."""
@@ -114,7 +155,7 @@ def _auth_message(raw, expected, version=None):
             or not isinstance(value["ha_version"], str)
             or (version is not None and value["ha_version"] != version)):
         raise ValueError()
-    if value["ha_version"] not in _HA_VERSIONS:
+    if value["ha_version"] not in _HA_VERSIONS and not _later_patch(value["ha_version"]):
         if version is None:
             raise _UnreviewedVersion(shown_version(value["ha_version"]))
         raise ValueError()
@@ -178,6 +219,7 @@ class _Verifier:
         self._connector = connector
         self._active = 0
         self._reported = set()
+        self._patched = set()
 
     def _report_unreviewed(self, version):
         """One add-on log line per distinct unreviewed version: the advertised version (or that it was unrecognized),
@@ -185,11 +227,25 @@ class _Verifier:
         if version in self._reported or len(self._reported) >= _MAX_REPORTED:
             return
         self._reported.add(version)
-        reviewed = sorted(_HA_VERSIONS, key=lambda v: tuple(int(part) for part in v.split(".")))
         shown = version if version is not None else "(an unrecognized version string)"
         print(f"management: Home Assistant Core {shown} has not been reviewed for this add-on release (reviewed:"
-              f" {reviewed[0]} to {reviewed[-1]}); the management panel refuses every request until an add-on"
-              " release reviews it. MCP endpoints do not use this check.", file=sys.stderr, flush=True)
+              f" {_REVIEWED_ORDER[0]} to {_REVIEWED_ORDER[-1]}); only a later patch release of a reviewed month is"
+              " accepted without a review, so the management panel refuses every request until an add-on release"
+              " reviews it. MCP endpoints do not use this check.", file=sys.stderr, flush=True)
+
+    def _report_later_patch(self, version):
+        """One add-on log line per later patch release accepted by the rule (_later_patch), so an administrator can tell
+        why the panel works on a Core this release did not review. The same bound as _report_unreviewed, counted apart.
+        version has the strict year.month.patch form; no frame, token or user is logged."""
+        if version in self._patched or len(self._patched) >= _MAX_REPORTED:
+            return
+        self._patched.add(version)
+        year, month, _ = version.split(".")
+        first, last = _REVIEWED_MONTHS[(int(year), int(month))]
+        print(f"management: Home Assistant Core {version} is accepted as a later patch release of {year}.{month}, which"
+              f" this add-on release reviewed ({year}.{month}.{first} to {year}.{month}.{last}); the version itself was"
+              " not reviewed. The management panel checks the administrator role as for a reviewed release.",
+              file=sys.stderr, flush=True)
 
     async def __call__(self, subject):
         if not valid_user_id(subject) or self._active >= _MAX_CONCURRENT:
@@ -209,6 +265,8 @@ class _Verifier:
                     ping_interval=None, logger=_LOGGER, user_agent_header=None,
                 )
                 version = _auth_message(await socket.recv(), "auth_required")
+                if version not in _HA_VERSIONS:
+                    self._report_later_patch(version)  # accepted by the rule, not by a review
                 await socket.send(json.dumps({"type": "auth", "access_token": token}))
                 _auth_message(await socket.recv(), "auth_ok", version)
                 await socket.send('{"id":1,"type":"config/auth/list"}')

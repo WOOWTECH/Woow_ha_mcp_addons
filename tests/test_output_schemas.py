@@ -42,8 +42,13 @@ CURRENT_POST_SOURCE_BYTES = {
     # HM-23 (PaaS #153): emqx_list_subscriptions' match_topic text (topics.py); emqx_prometheus_stats asks for
     # text/plain and refuses empty text (cluster.py, errors.py); a value a URL cannot carry gets the fixed
     # EMQX_DESTINATION_DENIED (_common.py, deps.py). No input or output schema or handler result shape changes.
+    # PaaS #160 (topics.py again, and registry.py): emqx_list_topics' description no longer says that a topic missing
+    # from the list has no subscriber (the docstring, and the registry's one-line text); text only, the tool's inputs,
+    # output schema and handler are the ones before.
     'apps/emqx/vendor/emqx_mcp_server/tools/topics.py': (
-        'emqx', 'd85843f135595d61abde92f7d8b0792df43d78e802149770fca93ed3853ba8cc'),
+        'emqx', '7e9e3704f60717a5b1cca317c0ae3d2d78ff0d0e1eac22e71d0a3fc3feec412b'),
+    'apps/emqx/vendor/emqx_mcp_server/registry.py': (
+        'emqx', '30d439ba0363a3caa9aa692260b88605d9970843d87ef80d3b8b765265d9f625'),
     'apps/emqx/vendor/emqx_mcp_server/tools/cluster.py': (
         'emqx', '4504eeddaf71a69d87acdfb671202f706a20b0199472284bbaee529a83df5dea'),
     'apps/emqx/vendor/emqx_mcp_server/errors.py': (
@@ -66,8 +71,10 @@ CURRENT_POST_SOURCE_BYTES = {
     # run_product's (the n8n adapter); no tool, schema or handler change.
     'apps/n8n/run.py': ('n8n', '71d86351c716ed6f40b25ca337205930686531f450fc16bc088f37bff2e13360'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
-    # 0.4.14 release: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14); no tool, schema or handler change.
-    'apps/n8n/Dockerfile': ('n8n', '0a4959708cc10750f654a17c328e646928df71f16bcfc612ec1bf23c30b75b12'),
+    # 0.4.14 and 0.4.15 releases: the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14 -> 0.4.15); 0.4.15 also moves the Node
+    # base image 26.12.1 -> 26.13.1 (both FROM lines and the node version check; Node CVEs fixed in 26.13.1). No tool, schema
+    # or handler change.
+    'apps/n8n/Dockerfile': ('n8n', 'b4d793cce1e3797bcfd0aba2ce82e031827810aa34c1956704ee417ab2009eea'),
     # 0.4.14 and Headscale 0.4.19 releases: only dnspython 2.9.0 -> 2.9.2 in the child's lock (GHSA-vvf4-9x63-8xvv, a fixable
     # High the release scanner blocks; email-validator's dependency). No tool, schema or handler change.
     'apps/emqx/uv.lock': ('emqx', '297392a4f80abe5723b9518b1f7379ad64a1b638931e328577caf1e9f4fce16a'),

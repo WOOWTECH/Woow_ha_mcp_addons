@@ -1,5 +1,5 @@
 # Build from repository ROOT: docker build -f apps/odoo/Dockerfile .
-FROM node:26.12.1-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS ui
+FROM node:26.13.1-bookworm-slim@sha256:0042e17d232a87a2cd485be1da7900fca4d10a4ad11b29e9285da1d2e54798c9 AS ui
 WORKDIR /ui
 COPY packages/mcp-admin-ui/package.json packages/mcp-admin-ui/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -37,7 +37,7 @@ RUN mkdir /tmp/woow-apt-parts \
  && test "$(dpkg-query -W -f='${Version}' libapt-pkg6.0)" = "2.6.2" \
  && test "$(dpkg-query -W -f='${Version}' libssl3)" = "3.0.22-1~deb12u2" \
  && test "$(dpkg-query -W -f='${Version}' openssl)" = "3.0.22-1~deb12u2"
-ARG BUILD_VERSION=0.5.1
+ARG BUILD_VERSION=0.5.2
 LABEL io.hass.type="app" io.hass.arch="amd64" io.hass.version="${BUILD_VERSION}" \
       io.hass.name="Woow Odoo MCP Server" io.hass.description="HA admin-role management; full tool surface; every tool and write on by default (each can be turned off in the panel)." \
       io.hass.url="https://github.com/WOOWTECH/Woow_ha_mcp_addons" \

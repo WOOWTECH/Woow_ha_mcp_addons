@@ -3980,10 +3980,14 @@ LISTED = {'odoo': [{'name': 'data_quality_report',
            'outputSchema': {'additionalProperties': True, 'type': 'object'}},
           {'name': 'emqx_list_topics',
            'title': 'List EMQX Topics',
-           'description': 'Topics that currently have a route (i.e. at least one subscriber).\n'
+           'description': 'Routes currently present in the cluster (topics or topic filters).\n'
                           '\n'
-                          'A topic missing here means nobody is subscribed — which is the usual\n'
-                          'reason a published message appears to vanish.',
+                          "A wildcard subscription such as 'a/#' appears under the filter\n"
+                          'itself, not under the concrete topics it covers, and shared or\n'
+                          'persisted-session subscriptions may not appear either. So a\n'
+                          'concrete topic missing here does not mean that nobody is\n'
+                          'subscribed. To work out who receives messages published to a\n'
+                          'topic, use emqx_list_subscriptions.',
            'inputSchema': {'properties': {'topic': {'anyOf': [{'type': 'string'}, {'type': 'null'}],
                                                     'default': None,
                                                     'description': 'Exact topic to look up. Omit to list all.'},

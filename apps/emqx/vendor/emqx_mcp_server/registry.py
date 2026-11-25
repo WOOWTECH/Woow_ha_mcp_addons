@@ -80,7 +80,7 @@ TOOL_REGISTRY: list[ToolSpec] = [
 
     # ----------------------------------------------------------------- topics
     _t("emqx_list_topics", C.TOPICS,
-       "Routed topics currently present in the cluster."),
+       "Routes currently present in the cluster. A wildcard subscription shows as its filter, so a missing concrete topic does not mean nobody is subscribed."),
     _t("emqx_list_subscriptions", C.TOPICS,
        "All subscriptions cluster-wide, filterable by topic or client."),
 

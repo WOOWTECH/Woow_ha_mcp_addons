@@ -127,7 +127,7 @@ async def test_failclosed_result_schema(monkeypatch, response):
     ("first", {"type": "auth_required", "ha_version": 2026}),
     ("first", {"type": "auth_required", "ha_version": "unreviewed-version"}),
     ("first", {"type": "auth_required", "ha_version": "2026.7.1"}),
-    ("first", {"type": "auth_required", "ha_version": "2026.10.5"}),
+    ("first", {"type": "auth_required", "ha_version": "2026.12.0"}),
     ("first", {"type": "auth_required", "ha_version": "2026.9.4 "}),
     ("first", {"type": "auth_required", "ha_version": ["2026.7.2"]}),
     ("first", {"type": "auth_required", "ha_version": {"v": "2026.7.2"}}),
@@ -154,20 +154,41 @@ async def test_every_reviewed_core_version_is_accepted(monkeypatch, version):
         assert await verify("human") is True
 
 
-@pytest.mark.parametrize("version", [["2026.7.2"], {"v": "2026.7.2"}, 2026, None])
+@pytest.mark.parametrize("version", [["2026.7.2"], {"v": "2026.7.2"}, 2026, None, True, 2026.11, ["2026.11.4"], {"v": "2026.11.4"}])
 def test_a_non_string_version_is_refused_explicitly(version):
     # The refusal is the check's own ValueError, not an accidental TypeError from hashing a list or dict.
     with pytest.raises(ValueError):
         ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
 
 
-NEAR_MISSES = ["2026.9.5", "2026.8.4", "2026.7.5", "2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
+# Refused before the machine token is sent. Since 2026-11-25 a later patch release of a reviewed month is accepted by rule
+# (LATER_PATCHES below), so what stays here is a month this release has not reviewed, a patch release before the first
+# reviewed one of its month, and every form other than year.month.patch in ASCII digits without padding (pre-releases too).
+NEAR_MISSES = ["2026.7.0", "2026.09.4", "2026.9.04", "02026.9.4", "2026.9.0b9",
                "2026.10.0b2", "2026.9.4.dev0", "v2026.9.4", "", "2026.9", "2026.9.4.0",
                "2026.10.1b1", "2026.10.0b4", "2026.10.0b7", "2026.10", "2026.10.0.0", "2026.10.00", "2026.10.01",
-               "2026.10.1.0", "2026.10.10", "2026.10.1 ", " 2026.10.1", "2026.11.3",
-               # next after the 2026-10-27 review (2026.10.2-2026.10.4 added): later patches, betas, other formats
-               "2026.10.5", "2026.10.4b0", "2026.10.4.0", "2026.10.40", "2026.10.04", "2026.10.4 ", " 2026.10.4",
-               "2026.11.0b0", "2026.11.0.dev0", "2026.11.1rc1", "2026.11.2rc1", "2026.12.0"]
+               "2026.10.1.0", "2026.10.1 ", " 2026.10.1",
+               # next after the 2026-10-27 review (2026.10.2-2026.10.4 added): betas, other formats
+               "2026.10.4b0", "2026.10.4.0", "2026.10.04", "2026.10.4 ", " 2026.10.4",
+               "2026.11.0b0", "2026.11.0.dev0", "2026.11.1rc1", "2026.11.2rc1", "2026.12.0",
+               # 2026-11-25: 2026.11.3 reviewed, later patch releases of a reviewed month accepted by rule. Still refused:
+               # a month that is not reviewed (the first release of the next month included), a patch before the first
+               # reviewed one of its month, and any other form of the string
+               "2026.12.1", "2026.6.9", "2026.6.0", "2027.1.0", "2025.11.4", "2026.1.0", "2026.13.0", "2026.0.1", "2026.7.1",
+               "2026.11.3b0", "2026.11.4b0", "2026.11.4b1", "2026.11.4rc1", "2026.11.4.dev0", "2026.11.4.0", "2026.11.4-1",
+               "2026.11.4+1", "2026.11.4_1", "2026.12.0b0", "2026.12.0rc1", "2026.12.0.dev20261125",
+               "2026.09.5", "2026.9.05", "2026.11.04", "2026.11.00", "2026.011.4", "02026.11.4", "20260.11.4", "2026.11",
+               "2026.11.", "2026..4", ".11.4", "2026.11.-1", "2026.11.4.", "2026.11.1000", "2026.11.99999999999999999999",
+               "2026.11.4 ", " 2026.11.4", "2026.11.4\n", "\n2026.11.4", "2026.11.4\x00", "\t2026.11.4", "2026.11.4\u00a0",
+               "2026.11.4\u200b", "v2026.11.4", "V2026.11.4", "2026.11.4,2026.11.5", "2026.11.4;", "2026.11.4/", "2026.11.4%20",
+               "２０２６.１１.４", "2026.11.٤", "٢٠٢٦.11.4", "2026.١١.4", "2026.11.4 (patch)", "HomeAssistant 2026.11.4",
+               "2026\uff0e11\uff0e4", "2026\u202411\u20244", "2026.11.4\u2028", "2026.11.4\r\n", "2026.11.4" + " " * 2000,
+               "2026.11." + "9" * 5000, "2026." + "1" * 4000 + ".4"]
+
+# A later patch release of a reviewed month (every month in _HA_VERSIONS, above the newest reviewed patch of that month):
+# accepted by rule without a review of its own.
+LATER_PATCHES = ["2026.7.5", "2026.7.99", "2026.8.4", "2026.9.5", "2026.10.5", "2026.10.10", "2026.10.40", "2026.11.4",
+                 "2026.11.9", "2026.11.10", "2026.11.999"]
 
 
 @pytest.mark.parametrize("version", NEAR_MISSES)
@@ -194,8 +215,9 @@ async def test_an_extra_key_in_an_auth_frame_denies(monkeypatch, phase):
         assert await verify("human") is False
 
 
-def test_the_review_table_lists_exactly_the_accepted_versions():
-    # docs/ha-role-core-contract.md has one column per reviewed release (short form, e.g. `10.1` for 2026.10.1)
+def test_the_review_table_lists_exactly_the_reviewed_versions():
+    # docs/ha-role-core-contract.md has one column per reviewed release (short form, e.g. `10.1` for 2026.10.1). Later patch
+    # releases of those months are accepted by rule and have no column until a release reviews them.
     from pathlib import Path
     doc = (Path(__file__).resolve().parents[1] / 'docs/ha-role-core-contract.md').read_text()
     header = next(line for line in doc.splitlines() if line.startswith('| file (`homeassistant/`) |'))
@@ -208,7 +230,7 @@ def test_the_reviewed_versions_are_exactly_these():
     assert ha_role._HA_VERSIONS == {"2026.7.2", "2026.7.3", "2026.7.4", "2026.8.0", "2026.8.1", "2026.8.2", "2026.8.3",
                                     "2026.9.0", "2026.9.1", "2026.9.2", "2026.9.3", "2026.9.4", "2026.10.0",
                                     "2026.10.1", "2026.10.2", "2026.10.3", "2026.10.4",
-                                    "2026.11.0", "2026.11.1", "2026.11.2"}
+                                    "2026.11.0", "2026.11.1", "2026.11.2", "2026.11.3"}
 
 
 @pytest.mark.parametrize("version", ["2026.10.2", "2026.10.3", "2026.10.4"])
@@ -223,7 +245,7 @@ async def test_core_2026_10_2_to_10_4_are_reviewed_and_still_check_the_role(monk
         assert await verify("human") is False
 
 
-@pytest.mark.parametrize("version", ["2026.11.0", "2026.11.1", "2026.11.2"])
+@pytest.mark.parametrize("version", ["2026.11.0", "2026.11.1", "2026.11.2", "2026.11.3"])
 async def test_core_2026_11_releases_keep_fresh_admin_check(monkeypatch, version):
     hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
     async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
@@ -233,7 +255,9 @@ async def test_core_2026_11_releases_keep_fresh_admin_check(monkeypatch, version
         assert await verify("human") is False
 
 
-UNREVIEWED = ["2026.10.5", "2026.11.3", "2026.11.0b0", "2026.11.0rc1", "2026.11.0.dev20261027", "2027.1.0"]
+# Shown to the administrator by their own form (shown_version): a new month, a patch before the first reviewed one of its
+# month, and pre-releases. (2026.10.5 and 2026.11.3 left this list on 2026-11-25: a later patch, and a reviewed release.)
+UNREVIEWED = ["2026.12.0", "2026.6.9", "2026.7.1", "2026.11.0b0", "2026.11.0rc1", "2026.11.0.dev20261027", "2027.1.0"]
 
 
 @pytest.mark.parametrize("version", UNREVIEWED)
@@ -249,7 +273,9 @@ async def test_an_unreviewed_core_version_denies_with_its_reason_and_one_log_lin
     lines = [line for line in err.splitlines() if line]
     assert len(lines) == 1, err  # one add-on log line per version and process
     assert lines[0].startswith(f"management: Home Assistant Core {version} has not been reviewed")
-    assert "(reviewed: 2026.7.2 to 2026.11.2)" in lines[0] and "MCP endpoints do not use this check." in lines[0]
+    assert "(reviewed: 2026.7.2 to 2026.11.3)" in lines[0] and "MCP endpoints do not use this check." in lines[0]
+    # What would have been accepted without a review is said too, so the administrator can tell why this one was not.
+    assert "only a later patch release of a reviewed month is accepted without a review" in lines[0]
     assert DUMMY not in err
 
 
@@ -270,6 +296,157 @@ def test_the_log_is_bounded_per_process(capsys):
         verify._report_unreviewed(f"2027.{minor}.0")
         verify._report_unreviewed(f"2027.{minor}.0")
     assert len(capsys.readouterr().err.splitlines()) == ha_role._MAX_REPORTED
+
+
+# ---- 2026-11-25 (owner decision, DQ-35): a later patch release of a reviewed month is accepted by rule ----
+
+
+@pytest.mark.parametrize("version", LATER_PATCHES)
+async def test_a_later_patch_release_sends_the_token_and_still_checks_the_role(monkeypatch, version):
+    # docs/ha-role-core-contract.md "Later patch releases": nothing else relaxes. The token goes out only after the version
+    # check, the role is queried on a fresh connection for every decision, and a user who is not an active, human
+    # owner or administrator is refused exactly as on a reviewed release.
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        assert await verify("human") is True
+        assert seen["frames"] == [{"type": "auth", "access_token": DUMMY}, {"id": 1, "type": "config/auth/list"}]
+        for refused in (user(group_ids=[]), user(is_active=False), user(system_generated=True), user(id="other-admin"),
+                        user(is_owner="true"), user(group_ids="system-admin"), user(local_only="false")):
+            seen["response"] = result([refused])
+            assert await verify("human") is False
+        seen["response"] = result([])  # deleted
+        assert await verify("human") is False
+        seen["response"] = result([user(is_owner=True, group_ids=[])])  # the owner is an administrator
+        assert await verify("human") is True
+        assert seen["connections"] == 10  # a fresh connection for every decision, no cache
+
+
+@pytest.mark.parametrize("first,second", [
+    ("2026.11.4", "2026.11.5"), ("2026.11.4", "2026.11.3"), ("2026.11.3", "2026.11.4"), ("2026.11.4", "2026.12.0"),
+    ("2026.11.4", "2026.11.4 "), ("2026.11.4", "2026.11.04"), ("2026.7.5", "2026.7.6"), ("2026.11.4", "2026.7.2"),
+    ("2026.11.4", "2026.11.4b0"),
+])
+async def test_a_later_patch_release_must_be_the_same_in_both_frames(monkeypatch, first, second):
+    # As for a reviewed release: auth_required and auth_ok agree (a difference only happens in an update race), else deny.
+    hello, ok = {"type": "auth_required", "ha_version": first}, {"type": "auth_ok", "ha_version": second}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        assert await verify("human") is False  # a plain denial, not the explained one
+        assert seen["frames"] == [{"type": "auth", "access_token": DUMMY}]  # and no role query follows
+
+
+def _accepted(version):
+    try:
+        ha_role._auth_message(json.dumps({"type": "auth_required", "ha_version": version}), "auth_required")
+    except ValueError:
+        return False
+    return True
+
+
+def test_exactly_the_reviewed_versions_and_the_later_patches_of_reviewed_months_are_accepted():
+    # An oracle written apart from the rule, over every year.month.patch of 2025-2027 with months 0-13 and patches 0-129
+    # (padding, other shapes and pre-releases are the near-miss list above).
+    newest = {}
+    for version in ha_role._HA_VERSIONS:
+        year, month, patch = map(int, version.split("."))
+        newest[(year, month)] = max(patch, newest.get((year, month), -1))
+    assert newest == {(2026, 7): 4, (2026, 8): 3, (2026, 9): 4, (2026, 10): 4, (2026, 11): 3}
+    expected = set(ha_role._HA_VERSIONS)
+    for (year, month), top in newest.items():
+        expected |= {f"{year}.{month}.{patch}" for patch in range(top + 1, 130)}
+    universe = [f"{year}.{month}.{patch}" for year in (2025, 2026, 2027) for month in range(14) for patch in range(130)]
+    assert {version for version in universe if _accepted(version)} == expected
+    assert all(_accepted(version) for version in LATER_PATCHES)
+    assert not any(_accepted(version) for version in NEAR_MISSES)
+
+
+def test_the_rule_table_is_computed_from_the_reviewed_list_and_cannot_be_changed_at_run_time():
+    assert dict(ha_role._REVIEWED_MONTHS) == {(2026, 7): (2, 4), (2026, 8): (0, 3), (2026, 9): (0, 4), (2026, 10): (0, 4),
+                                              (2026, 11): (0, 3)}
+    with pytest.raises(TypeError):
+        ha_role._REVIEWED_MONTHS[(2026, 12)] = (0, 0)
+    with pytest.raises(AttributeError):
+        ha_role._HA_VERSIONS.add("2026.12.0")
+
+
+def test_the_rule_needs_a_patch_above_the_newest_reviewed_one_of_its_month():
+    # _auth_message accepts a listed version before it asks the rule, so `>` against `>=` cannot be seen through the verifier
+    # (an equivalent mutation there): pin it on the function itself (independent review 2026-11-25, S3). The newest reviewed
+    # patch of a month is listed, not a "later" patch; the next one is.
+    assert ha_role._later_patch("2026.11.3") is False and ha_role._later_patch("2026.7.4") is False
+    assert ha_role._REVIEWED_MONTHS
+    for (year, month), (first, last) in ha_role._REVIEWED_MONTHS.items():
+        assert ha_role._later_patch(f"{year}.{month}.{last}") is False
+        assert ha_role._later_patch(f"{year}.{month}.{last + 1}") is True
+
+
+def test_every_reviewed_version_has_the_year_month_patch_form():
+    # ha_role._reviewed_months() int()s every element of _HA_VERSIONS when the module loads, so a pre-release string in the
+    # list would break the import with a ValueError. The list holds only year.month.patch releases
+    # (docs/ha-role-core-contract.md "Adding a release", step 3): the form the rule accepts for a later patch.
+    assert ha_role._HA_VERSIONS
+    for version in ha_role._HA_VERSIONS:
+        assert ha_role._PATCH_RELEASE.fullmatch(version), version
+
+
+@pytest.mark.parametrize("version,month,span", [
+    ("2026.11.4", "2026.11", "2026.11.0 to 2026.11.3"), ("2026.7.5", "2026.7", "2026.7.2 to 2026.7.4"),
+    ("2026.10.40", "2026.10", "2026.10.0 to 2026.10.4"),
+])
+async def test_a_later_patch_release_is_logged_once_per_version_and_process(monkeypatch, capsys, version, month, span):
+    hello, ok = {"type": "auth_required", "ha_version": version}, {"type": "auth_ok", "ha_version": version}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        for _ in range(3):
+            assert await verify("human") is True
+        assert seen["connections"] == 3
+    err = capsys.readouterr().err
+    lines = [line for line in err.splitlines() if line]
+    assert len(lines) == 1, err  # one add-on log line per version and process
+    assert lines[0].startswith(f"management: Home Assistant Core {version} is accepted as a later patch release of {month}")
+    assert f"({span})" in lines[0] and "the version itself was not reviewed" in lines[0]
+    assert "has not been reviewed" not in lines[0]  # the refusal's line is another one
+    assert DUMMY not in err and "human" not in err and "config/auth/list" not in err
+
+
+async def test_each_later_patch_release_has_its_own_log_line_and_a_reviewed_release_has_none(monkeypatch, capsys):
+    hello, ok = {"type": "auth_required", "ha_version": "2026.11.3"}, {"type": "auth_ok", "ha_version": "2026.11.3"}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        for version in ("2026.11.3", "2026.7.2", "2026.11.4", "2026.11.5", "2026.11.4", "2026.11.3"):
+            hello["ha_version"] = ok["ha_version"] = version
+            assert await verify("human") is True
+    lines = [line for line in capsys.readouterr().err.splitlines() if line]
+    assert [line.split()[4] for line in lines] == ["2026.11.4", "2026.11.5"]
+
+
+def test_the_later_patch_log_is_bounded_per_process_and_apart_from_the_refusal_log(capsys):
+    verify = ha_role._Verifier(None)
+    for patch in range(5, 5 + ha_role._MAX_REPORTED + 8):
+        verify._report_later_patch(f"2026.7.{patch}")
+        verify._report_later_patch(f"2026.7.{patch}")
+    assert len(capsys.readouterr().err.splitlines()) == ha_role._MAX_REPORTED
+    # Its budget is spent, but a refusal is still explained once (the two kinds of line are counted apart).
+    verify._report_unreviewed("2026.12.0")
+    verify._report_unreviewed("2026.12.0")
+    assert capsys.readouterr().err.count("Home Assistant Core 2026.12.0 has not been reviewed") == 1
+
+
+async def test_the_panel_follows_core_to_a_later_patch_release_and_stops_at_a_new_month(tmp_path, monkeypatch, capsys):
+    hello, ok = {"type": "auth_required", "ha_version": "2026.11.3"}, {"type": "auth_ok", "ha_version": "2026.11.3"}
+    async with owned_provider(monkeypatch, first=hello, auth=ok) as (verify, seen, _):
+        async with product_gateway(tmp_path, verify) as (store, panel, client):
+            assert (await panel.get("/api/bootstrap", headers=IDENTITY)).status_code == 200
+            hello["ha_version"] = ok["ha_version"] = "2026.11.4"  # Core updated to a later patch release
+            assert (await panel.get("/api/bootstrap", headers=IDENTITY)).status_code == 200
+            hello["ha_version"] = ok["ha_version"] = "2026.12.0"  # Core updated to the first release of the next month
+            denied = await panel.get("/api/bootstrap", headers=IDENTITY)
+            assert denied.status_code == 403
+            assert denied.json() == {"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": "2026.12.0"}}
+            hello["ha_version"] = ok["ha_version"] = "2026.11.4"
+            seen["response"] = result([user(group_ids=[])])  # a later patch release does not make a non-administrator one
+            plain = await panel.get("/api/bootstrap", headers=IDENTITY)
+            assert plain.status_code == 403 and plain.json() == {"error": "request denied"}
+            assert seen["frames"].count({"type": "auth", "access_token": DUMMY}) == 3  # 11.3, 11.4 and 11.4 again; never 12.0
+    err = capsys.readouterr().err
+    assert err.count("is accepted as a later patch release") == 1 and err.count("has not been reviewed") == 1
 
 
 NO_CHILD = {"child": "unconfigured", "ready": False, "backend": "unknown", "reason": None}
@@ -314,9 +491,9 @@ async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_
             assert bootstrap.status_code == 200  # a reviewed Core: the panel works
             headers = {**IDENTITY, "X-CSRF-Token": bootstrap.json()["csrf"]}
             # Core is updated to a release this add-on has not reviewed (the frames are read per connection).
-            hello["ha_version"] = ok["ha_version"] = "2026.11.3"
+            hello["ha_version"] = ok["ha_version"] = "2026.12.0"
             token, before = store.load().token, store.path.read_bytes()
-            reason = {"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": "2026.11.3"}}
+            reason = {"error": "request denied", "detail": {"code": "core_version_unreviewed", "ha_version": "2026.12.0"}}
             policy = {"writes_enabled": False, "disabled": ["hermes_inspect"], "enabled_write_tools": []}
             for method, path, payload in [("GET", "/api/bootstrap", None), ("PUT", "/api/policy", policy),
                                           ("POST", "/api/token/reveal", None), ("POST", "/api/token/rotate", None),
@@ -327,7 +504,7 @@ async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_
             assert store.path.read_bytes() == before  # no setting changed
             page = await panel.get("/", headers=IDENTITY)
             assert page.status_code == 403 and page.headers["content-type"].startswith("text/html")
-            assert "<h1>這個 HA Core 版本尚未審核：2026.11.3</h1>" in page.text and "照常服務" in page.text
+            assert "<h1>這個 HA Core 版本尚未審核：2026.12.0</h1>" in page.text and "照常服務" in page.text
             assert not any(tag in page.text for tag in ("<script", "<style", "<link", "<form", " style="))
             assert "default-src 'self'" in page.headers["content-security-policy"]
             asset = await panel.get("/assets/app.js", headers=IDENTITY)
@@ -340,7 +517,7 @@ async def test_on_an_unreviewed_core_mcp_serves_and_only_the_panel_refuses_with_
             hello["ha_version"] = ok["ha_version"] = "2026.10.4"  # back on a reviewed Core: the panel works again
             assert (await panel.get("/api/bootstrap", headers=IDENTITY)).status_code == 200
     err = capsys.readouterr().err
-    assert err.count("has not been reviewed") == 1 and "Core 2026.11.3 " in err
+    assert err.count("has not been reviewed") == 1 and "Core 2026.12.0 " in err
     assert DUMMY not in err and token not in err
 
 
@@ -353,7 +530,7 @@ async def test_a_plain_denial_keeps_its_fixed_answer_and_page(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("version,heading", [
-    ("2026.11.3", "<h1>這個 HA Core 版本尚未審核：2026.11.3</h1>"),
+    ("2026.12.0", "<h1>這個 HA Core 版本尚未審核：2026.12.0</h1>"),
     (None, "<h1>這個 HA Core 版本尚未審核（Supervisor 回報的版本字串無法辨識）</h1>"),
     ('<img src=x onerror="1">', "<h1>這個 HA Core 版本尚未審核：&lt;img src=x onerror=&quot;1&quot;&gt;</h1>"),
 ])
@@ -361,6 +538,11 @@ def test_the_unreviewed_core_page_is_static_text(version, heading):
     response = ui.unreviewed_core_page(version)
     body = response.body.decode()
     assert response.status_code == 403 and response.media_type == "text/html" and heading in body
+    # What is accepted without a review is on the page too, so a later patch release is not expected to be refused.
+    assert "自動放行" in body and "修補版" in body
+    # The sentence is about the visitor's own version: it is NOT in the two accepted groups. It once said the reverse
+    # ("這個 Core 版本不是（新的月份、…）"), the very list this page is shown for (independent review 2026-11-25, M2).
+    assert "不在這兩類之內" in body and "版本不是（" not in body
     assert "<img" not in body and not any(tag in body for tag in ("<script", "<style", "<link", "<form", " style="))
 
 

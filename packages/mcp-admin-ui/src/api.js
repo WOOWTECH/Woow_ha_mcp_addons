@@ -22,6 +22,19 @@ export const ORIGIN_MODES = Object.freeze(['report-only', 'enforce']);
 export const MAX_ORIGINS = 16;
 export const DEFAULT_ORIGINS = Object.freeze(['https://claude.ai']);
 const ORIGIN_ETAG = /^"o1-[0-9a-f]{64}"$/;
+// The revision an ETag header names (the add-on's "p1-..." index or "o1-..." policy, the quotes taken off), or null when it
+// names none: shown, but not saved from. A proxy in front of the Ingress that compresses the answer (Cloudflare does: the
+// Odoo 0.5.1 acceptance saw it on the small Origin policy answer, F2) turns the add-on's strong ETag into a weak one,
+// W/"o1-...", the same revision. The panel reads both forms and keeps only the revision: what it sends back is the strong
+// If-Match of it, as before, because the add-on compares strong validators only (profile_admin._if_match) and that rule
+// is not loosened. "W/" is exactly that prefix (RFC 9110: case-sensitive); anything else around the quoted revision, or
+// another revision form, is not one.
+function headerRevision(response, strong) {
+  const etag = response.headers.get('ETag');
+  if (typeof etag !== 'string') return null;
+  const value = etag.startsWith('W/') ? etag.slice(2) : etag;
+  return strong.test(value) ? value.slice(1, -1) : null;
+}
 // An origin as the panel sends it: http(s)://host[:port], nothing after it, no whitespace, userinfo or backslash. The
 // add-on's own rule is stricter (valid host labels or IPv6, port 1-65535, ASCII only; its 422 origin_policy_invalid).
 const ORIGIN_SHAPE = /^https?:\/\/[^\s/?#@\\]+$/i;
@@ -98,7 +111,7 @@ export class ApiError extends UiError {
     if (code === 'origin_policy_invalid') this.message = '來源檢查設定不符合規則：模式只能是「只記錄」或「阻擋」；每個來源要是精確的 http(s) 來源（例如 https://claude.ai），主機名稱與 port 要有效，不接受 *、null、路徑、尾端斜線或點、帳密、查詢參數或空白，正規化後不能重複，最多 16 個。這次未儲存任何變更。';
     if (code === 'core_version_unreviewed') {
       this.haVersion = haVersion;
-      this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
+      this.message = `這個 HA Core 版本尚未審核：${haVersion ?? '（版本字串無法辨識）'}。這版 add-on 的管理面板只在審查過的 Core 版本，以及已審查月份、修補編號更大的後續修補版（自動放行）上運作，暫時不能使用或變更設定；MCP 端點不經過這項檢查，照常服務。請更新 add-on。`;
     }
     // HM-11: fixed copy for the profile codes; the only values taken from the answer are whole numbers.
     const numbers = detail ?? {};
@@ -345,8 +358,7 @@ export class AdminApi {
     const rows = profileRows(value);
     const orphans = orphanIds(value, rows);
     const quarantined = quarantinedEntries(value);  // HM-13c: the quarantine directories, delete only
-    const etag = response.headers.get('ETag');
-    return { rows, orphans, quarantined, revision: typeof etag === 'string' && INDEX_ETAG.test(etag) ? etag.slice(1, -1) : null };
+    return { rows, orphans, quarantined, revision: headerRevision(response, INDEX_ETAG) };
   }
   // HM-13c (contract 3.1, 3.6): the guard's restore record, checked (restore.js recordView: anything else refused).
   async restoreRecord() {
@@ -458,8 +470,7 @@ export class AdminApi {
   async originPolicy() {
     if (this.profile === null) throw new UiError('這個管理服務沒有開通多帳號。');
     const { response, value } = await this.exchange(`${this.mount}/api/origin-policy`, {}, { profile: null, global: true });
-    const etag = response.headers.get('ETag');
-    return { ...originView(value), revision: typeof etag === 'string' && ORIGIN_ETAG.test(etag) ? etag.slice(1, -1) : null };
+    return { ...originView(value), revision: headerRevision(response, ORIGIN_ETAG) };
   }
   // Save the policy: PUT {mode, allowed_origins} with If-Match of the policy the administrator saw (an unusable file's
   // own revision replaces it), an Idempotency-Key kept for this tab under the policy's scope (its record holds the
@@ -489,8 +500,7 @@ export class AdminApi {
     const policy = originView(result);
     if (policy.state !== 'saved') throw new UiError('伺服器未回傳預期的來源設定確認；請重新整理狀態。');
     this.operations.clear(ORIGIN_SCOPE);
-    const etag = response.headers.get('ETag');
-    return { ...policy, revision: typeof etag === 'string' && ORIGIN_ETAG.test(etag) ? etag.slice(1, -1) : null, replayed: receipt.replayed };
+    return { ...policy, revision: headerRevision(response, ORIGIN_ETAG), replayed: receipt.replayed };
   }
   pendingOriginOperation() { return this.profile === null ? null : this.operations.get(ORIGIN_SCOPE); }
   async retryOriginOperation() {
