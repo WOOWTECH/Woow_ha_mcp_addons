@@ -201,12 +201,38 @@ changed meaning that keeps the shape. The window lasts until the next add-on rel
 owner accepted it so that a Core patch update does not lock the panel. The first release of a new month, and its
 pre-releases, are not covered: they need the full review above before any add-on accepts them.
 
-**Defences that stay.** (1) Core creates an Ingress session for an add-on whose panel is admin-only (`panel_admin: true`,
-set by all eight add-ons here) only for an admin user (`components/hassio/websocket_api.py`,
-`_async_check_ingress_access`, read at 2026.11.3). The add-on does not rely on it (the README: `panel_admin` is not an
-authorization); it is a second gate. (2) Every request to the panel is checked against the live role on a fresh
-connection, so a demotion applies to the next request. (3) A string that is not exactly `year.month.patch` of a reviewed
-month is refused before the token is sent. (4) MCP endpoints never used this check and are not affected either way.
+**What it would cost, how it would show, how to undo it.**
+
+- Worst case. A user who is not an administrator but is reported as one gets the panel's full administration of that
+  add-on: `token/reveal` shows the MCP token, `token/rotate` replaces it, and the backend connection with its credentials
+  and the tool policy can be changed. That is the add-on's reach into its backend (Odoo, LiteLLM, Nextcloud, EMQX, n8n,
+  Hermes or Headscale), for the length of the window.
+- Detection. One add-on log line per version and process (`accepted as a later patch release`, above). The panel shows
+  nothing.
+- Recovery. The rule has no run-time switch. Refusing a Core version again takes a new add-on release (an estimated
+  working day or more, [threat model](multi-profile/threat-model.md)), or stopping the add-on.
+
+**Where the exposure is today.** Home Assistant no longer ships patch releases of the older months (the last ones are
+2026.7.4, 2026.8.3, 2026.9.4 and 2026.10.4), so in practice the rule newly accepts 2026.11.4 and later, nothing before it.
+
+**What stands behind the rule, and what does not.** (1) Core's Ingress check is not an independent gate. From Core
+2026.11.0 the dedicated commands `hassio/ingress/info` and `hassio/ingress/session` call `_async_check_ingress_access`
+(`components/hassio/websocket_api.py`, lines 175-183, called at lines 199 and 231 in 2026.11.3), which refuses a user who
+is not an administrator for an add-on whose panel is admin-only (`panel_admin: true`, set by all eight add-ons here).
+2026.7.2, 2026.9.4, 2026.10.0 and 2026.10.4 do not have it. It can also be walked around: `WS_NO_ADMIN_ENDPOINTS` (lines
+60-65) lets a non-administrator call `/ingress/session` through the generic `supervisor/api` command (lines 135-138), and
+Supervisor's `create_session` (`supervisor/api/ingress.py`, 2026.11.0, lines 145-162) checks that the user exists and is
+active, not that the user is an administrator. (2) What stops a non-administrator is Supervisor's check on every Ingress
+request: `handler` in `supervisor/api/ingress.py` refuses the request when the add-on's `panel_admin` is set and the user
+is not an administrator (line 191 in 2026.11.0). It exists from Supervisor 2026.10.2 (not in 2026.9.3, 2026.10.0 or
+2026.10.1), so on Core 2026.11.x with the current stable Supervisor (2026.11.0) it is there. It is not independent of
+this verifier: Supervisor gets its users by sending `config/auth/list` (`supervisor/homeassistant/module.py`,
+`list_users`) and its `HomeAssistantUser.is_admin` mirrors Core's `User.is_admin` (`supervisor/const.py`), so a Core patch
+release that changed what `config/auth/list` reports would mislead both. It does catch an implementation error on either
+side. The add-on does not rely on it either way (the README: `panel_admin` is not an authorization). (3) Every request to
+the panel is checked against the live role on a fresh connection, so a demotion applies to the next request. (4) A string
+that is not exactly `year.month.patch` of a reviewed month is refused before the token is sent. (5) MCP endpoints never
+used this check and are not affected either way.
 
 ## A version that is not accepted
 

@@ -259,7 +259,7 @@
     "2026.11.3": "17b6b99235ccd94110ea5511db1f66aaf427e658"
    },
    "changed": false,
-   "why": "_async_check_ingress_access: Core creates an ingress session for an add-on whose panel is admin-only (panel_admin: true, set by every add-on here) only for an admin user; named in docs/ha-role-core-contract.md as a second gate, which the verifier does not rely on"
+   "why": "_async_check_ingress_access (lines 175-183, called at 199 and 231) guards only the dedicated hassio/ingress/info and hassio/ingress/session commands and exists from Core 2026.11.0 (not in 2026.7.2, 2026.9.4, 2026.10.0, 2026.10.4); the generic supervisor/api command still lets a non-admin call /ingress/session (WS_NO_ADMIN_ENDPOINTS, lines 60-65 and 135-138), so it is not an independent gate; docs/ha-role-core-contract.md says what stands behind the rule instead"
   }
  ],
  "tag_comparison": {

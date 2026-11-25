@@ -205,6 +205,18 @@
   權杖回到快照當時的值，要按「全部撤銷」（HM-18 寫進 `docs/operations/guide.md` 與 `update-backup-rollback.md`）。
 - 面板 403（Core 版本未放行：新月份、預覽版或其他格式；已審查月份的後續修補版自動放行，負責人 2026-11-25 決定）時，任何帳號都撤銷不了，只能停止整個 add-on。
 - 緊急關閉要發一版，推估一個工作天以上；期間只能停 add-on 或在面板撤銷。
+- 已審查月份的後續修補版自動放行（維修版 2026-11-25；負責人決定，DQ-35；規則與防線在 `docs/ha-role-core-contract.md` 的
+  「Later patch releases of a reviewed month」）是新接受的風險：add-on 對一個沒逐版審查的 Core 修補版，仍照 `config/auth/list` 回報的
+  `is_owner`、`system-admin` 判斷管理員。某個修補版若改了這些欄位的意義卻保留形狀，嚴格解析抓不到，非管理員會被當成管理員。
+  - 窗口：從那個修補版發佈，到下一個審過它的 add-on 版本為止。今天實際新增曝險的只有 2026.11.4 起（HA 已不再出 2026.7 到 2026.10 的
+    修補版，最後是 7.4、8.3、9.4、10.4）。
+  - 最壞：被誤放行的人能 `token/reveal`、`token/rotate`、改後端連線與憑證、改工具政策，等於取得這個 add-on 連到後端（Odoo、LiteLLM、
+    Nextcloud、EMQX、n8n、Hermes、Headscale）的能力。
+  - 防線：版本字串嚴格是 `年.月.修補`、月份必須是審過的（新月份、預覽版、其他格式一律不放行）；先驗版本才送權杖；每個請求用新連線即時查角色、
+    沒有快取。Supervisor 2026.10.2 起每個 Ingress 請求還有 `panel_admin` 檢查，但它與 add-on 讀同一份 `config/auth/list`，不獨立；Core 2026.11.0
+    起專用指令的 Ingress 檢查可經通用的 `supervisor/api` 繞過，也不是獨立防線。
+  - 偵測：只有 add-on log 的一行（`accepted as a later patch release`），面板沒有提示。
+  - 回復：沒有執行時開關，只能發新版（見上一條，推估一個工作天以上）或停 add-on。
 - HA Core 與 Supervisor 會自動更新；平台假設（UC-08、UC-10、sentinel）每次發版重驗並記版本。
 - 開通、綁身分的產品（Odoo；HM-22 起 Nextcloud）換身分時，新連線、新 token 的那一次寫入在取代 state 檔途中失敗（`os.replace` 或之後的目錄 fsync，磁碟錯誤）：不知道寫成了
   沒有，store 照既有規則毒化（fail closed）。該帳號到 add-on 重啟前不服務任何請求、舊子程式不重起：新 state 檔還沒換上時（`os.replace`
