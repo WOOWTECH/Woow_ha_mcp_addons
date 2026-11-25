@@ -5,6 +5,7 @@ import inspect
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'packages/mcp-admin-core'), str(ROOT / 'apps/n8n')]
@@ -12,6 +13,7 @@ import httpx
 from mcp_admin_core import policy
 from mcp_admin_core.products import TOOLS, ProductState
 from n8n_adapter import TOOLS as N8N
+import denial_probe
 from denial_probe import assert_denials, WRITE_CASES
 
 
@@ -77,3 +79,35 @@ class DenialTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     await assert_denials(client, 'http://owned.invalid/mcp', {}, 'n8n', lambda: len(calls))
         asyncio.run(run())
+
+    def test_a_failure_names_the_requests_that_reached_the_backend(self):
+        """A probe run that can list the mock's requests (REACHED) says which ones: method and path, never the query."""
+        async def run():
+            calls = []
+            async def refused_but_contacted(request):
+                calls.append(('GET', '/api/v1/health?token=never-shown'))
+                return httpx.Response(200, json={'jsonrpc': '2.0', 'id': 5, 'error': {
+                    'code': -32602, 'message': 'Unknown tool', 'data': {'tool': 'unknown'}}})
+            async def failure(**patched):
+                calls.clear()
+                with patch.multiple(denial_probe, **patched):
+                    with self.assertRaises(AssertionError) as raised:
+                        await assert_denials(client, 'http://owned.invalid/mcp', {}, 'n8n', lambda: len(calls))
+                return str(raised.exception)
+            async with httpx.AsyncClient(transport=httpx.MockTransport(refused_but_contacted)) as client:
+                self.assertEqual(await failure(REACHED=None, SYNCED=None), 'unknown tool: backend contacted')  # as before
+                self.assertEqual(await failure(REACHED=lambda: list(calls), SYNCED=None),
+                                 'unknown tool: backend contacted (GET /api/v1/health)')
+                self.assertEqual(await failure(REACHED=lambda: list(calls), SYNCED=True),
+                                 'unknown tool: backend contacted (GET /api/v1/health)')
+                self.assertEqual(await failure(REACHED=lambda: list(calls), SYNCED=False),
+                                 'unknown tool: backend contacted (GET /api/v1/health); '
+                                 'no backend check of the gateway was seen before the denial checks')
+        asyncio.run(run())
+
+    def test_the_text_lists_at_most_six_requests(self):
+        calls = [('GET', f'/p{number}') for number in range(10)]
+        with patch.multiple(denial_probe, REACHED=lambda: calls, SYNCED=None):
+            self.assertEqual(denial_probe.reached(2), ' (GET /p2, GET /p3, GET /p4, GET /p5, GET /p6, GET /p7)')
+        with patch.multiple(denial_probe, REACHED=None, SYNCED=None):
+            self.assertEqual(denial_probe.reached(2), '')

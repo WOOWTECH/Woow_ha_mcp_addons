@@ -144,7 +144,10 @@ BASE = 'd922d3c'
 # Both new branches delegate to container_profiles; the legacy path is unchanged.
 # Owner decision 2026-11-24: a third, the longer wait for a switched-on product's two-check outage verdict
 # (container_profiles.wait_unready); the statements of the product that is not switched on stay BASE's.
-ADDED_BEYOND_BASE = ('branch', 'branch', 'branch')
+# Release train B, 2026-11-25: a fourth, the denial checks' wait for the gateway's own backend check
+# (container_profiles.after_backend_check): Headscale's candidate failed "unknown tool: backend contacted" when that
+# check, which a switched-on product's monitor also makes as its child first answers, fell in a denial window.
+ADDED_BEYOND_BASE = ('branch', 'branch', 'branch', 'branch')
 
 
 def is_switched_on_branch(node):
@@ -229,11 +232,26 @@ class SingleProfilePathTests(unittest.TestCase):
         self.assertEqual(sorted(hands_over_to_container_profiles(node) for kind, node in stripping.removed
                                 if kind == 'branch'), [False, True, True, True])
 
+    def test_the_backend_check_wait_stands_right_before_the_denial_checks(self):
+        """Release train B (2026-11-25): the branch is the statement just before the denial checks, hands over to
+        container_profiles and does nothing else."""
+        run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
+                   if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
+        client = next(node for node in ast.walk(run) if isinstance(node, ast.AsyncWith)
+                      and ast.unparse(node.items[0].context_expr).startswith('httpx.AsyncClient'))
+        index = next(i for i, statement in enumerate(client.body) if ast.unparse(statement).startswith('await assert_denials('))
+        wait = client.body[index - 1]
+        self.assertTrue(is_switched_on_branch(wait))
+        self.assertEqual(ast.unparse(wait.test), 'features.enabled(APP)')
+        self.assertEqual([ast.unparse(statement) for statement in wait.body],
+                         ['await container_profiles.after_backend_check(sys.modules[__name__])'])
+        self.assertEqual(wait.orelse, [])
+
     def test_the_stage_runs_last_and_only_switched_on(self):
         run = next(node for node in ast.parse(Path(probe.__file__).read_text()).body
                    if isinstance(node, ast.AsyncFunctionDef) and node.name == 'run')
         branches = [node for node in ast.walk(run) if is_switched_on_branch(node)]
-        self.assertEqual(len(branches), 3)  # Odoo outage, the switched-on outage wait, the stage
+        self.assertEqual(len(branches), 4)  # the backend check wait, Odoo outage, the switched-on outage wait, the stage
         branch = branches[-1]
         self.assertEqual(ast.unparse(branch.test), 'features.enabled(APP)')
         self.assertEqual([ast.unparse(statement) for statement in branch.body],

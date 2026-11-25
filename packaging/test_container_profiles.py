@@ -29,6 +29,7 @@ with patch.object(sys, 'argv', ['container_probe.py', 'headscale']):
 import container_profiles as stage  # noqa: E402
 import entrypoint  # noqa: E402
 from mcp_admin_core import profiles, restore_detect, restore_lock  # noqa: E402
+from mcp_admin_core.health import HEALTH_INTERVAL  # noqa: E402
 from mcp_admin_core.products import ProductStore  # noqa: E402
 from test_container_probe import Owners  # noqa: E402  (chown without root: lstat reports the owner it recorded)
 from test_container_probe import guard_lines  # noqa: E402  (the boot guard's lines, as the add-on's stderr shows them)
@@ -1451,6 +1452,66 @@ class TrainBProfileFixtureTests(unittest.TestCase):
         state = products.profile_initial_state(default, taken={default.token, default.child_token})
         self.assertEqual((state.disabled, state.writes_enabled, list(state.enabled_write_tools)),
                          (default.disabled, default.writes_enabled, list(default.enabled_write_tools)))
+
+
+class AfterBackendCheckTests(unittest.TestCase):
+    """The denial checks wait for the gateway's own check of the backend first (release 0.5.0 of Headscale)."""
+
+    def run_wait(self, script, **options):
+        """Run after_backend_check while *script* (a coroutine function of the probe stand-in) adds requests to its CALLS.
+        Returns (what it returned, the count when it returned, the stand-in, the REACHED and SYNCED it left)."""
+        probe = SimpleNamespace(CALLS=[])
+        async def run():
+            task = asyncio.create_task(script(probe))
+            try:
+                result = await stage.after_backend_check(probe, step=.005, **options)
+                return result, len(probe.CALLS)
+            finally:
+                await task
+        with patch.multiple(stage.denial_probe, REACHED=None, SYNCED=None):
+            result, at_return = asyncio.run(run())
+            return result, at_return, probe, stage.denial_probe.REACHED, stage.denial_probe.SYNCED
+
+    def test_it_returns_once_a_check_has_been_seen_and_is_over(self):
+        async def check(probe):
+            await asyncio.sleep(.05)
+            for _ in range(3):  # a check of a few requests close together
+                probe.CALLS.append(('GET', '/api/v1/health'))
+                await asyncio.sleep(.02)
+        result, at_return, probe, reached, synced = self.run_wait(check, patience=2, quiet=.2)
+        self.assertIs(result, True)
+        self.assertEqual(at_return, 3)  # it waited for the last request of the check
+        self.assertEqual(reached(), [('GET', '/api/v1/health')] * 3)  # and told denial_probe where to read them
+        self.assertIs(synced, True)
+
+    def test_a_check_that_never_shows_leaves_the_wait_after_the_patience(self):
+        async def nothing(probe):
+            await asyncio.sleep(0)
+        result, at_return, probe, reached, synced = self.run_wait(nothing, patience=.1, quiet=.05)
+        self.assertIs(result, False)
+        self.assertEqual(at_return, 0)
+        self.assertIs(synced, False)  # the failure text says so
+        self.assertEqual(reached(), [])
+
+    def test_requests_the_probe_made_before_the_wait_do_not_count_as_a_check(self):
+        probe = SimpleNamespace(CALLS=[('GET', '/earlier')] * 4)
+        with patch.multiple(stage.denial_probe, REACHED=None, SYNCED=None):
+            self.assertIs(asyncio.run(stage.after_backend_check(probe, patience=.1, quiet=.05, step=.005)), False)
+
+    def test_requests_that_never_stop_leave_the_wait_after_the_patience(self):
+        async def endless(probe):
+            for _ in range(60):
+                probe.CALLS.append(('GET', '/api/v1/health'))
+                await asyncio.sleep(.01)
+        result, at_return, probe, reached, synced = self.run_wait(endless, patience=.2, quiet=.05)
+        self.assertIs(result, False)  # bounded: it does not wait for a quiet that never comes
+        self.assertIs(synced, False)
+
+    def test_the_defaults_cover_the_monitor_s_interval(self):
+        """A check of the periodic kind must always show within the patience, and the quiet must outlast the close requests
+        of one check (Odoo's two)."""
+        self.assertGreater(stage.BACKEND_CHECK_SECONDS, HEALTH_INTERVAL)
+        self.assertGreaterEqual(stage.BACKEND_CHECK_QUIET, .25)
 
 
 if __name__ == '__main__':

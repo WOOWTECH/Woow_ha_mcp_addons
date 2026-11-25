@@ -78,10 +78,11 @@ import time
 
 import httpx
 
+import denial_probe  # the denial checks' failure text: what reached the mock backend (after_backend_check)
 import entrypoint  # the restore repair's limits: packaging/entrypoint.py, the file every image copies
 from mcp_admin_core import operations, profiles, restore_detect, restore_lock
 from mcp_admin_core.config import ConfigError
-from mcp_admin_core.health import protocol_reply
+from mcp_admin_core.health import HEALTH_INTERVAL, protocol_reply
 from mcp_admin_core.lifecycle import CHILD_PORT, EXTRA_CHILD_RESOURCES
 from mcp_admin_core.migration import OWNER_RECOVERY
 from mcp_admin_core.products import ProductStore, allowed_address, profile_initial_state
@@ -744,6 +745,41 @@ async def wait_unready(probe, client, ready_url=MCP + '/health/ready'):
     except TimeoutError:
         raise AssertionError(f'{probe.APP}: expected {OUTAGE_SWITCHED_STABLE} HTTP 503 in a row within '
                              f'{OUTAGE_SWITCHED_SECONDS} s of the backend going offline') from None
+
+
+BACKEND_CHECK_SECONDS = HEALTH_INTERVAL + 3  # a little over the monitor's interval, so that a periodic check always shows
+BACKEND_CHECK_QUIET = .5  # a check is one request, or a few close together (Odoo's are two): this long without another ends it
+
+
+async def after_backend_check(probe, *, patience=BACKEND_CHECK_SECONDS, quiet=BACKEND_CHECK_QUIET, step=.05):
+    """Wait, before the denial checks, until the gateway's own check of the backend has just been seen and is over
+    (release 0.5.0 of Headscale, 2026-11-25).
+
+    denial_probe.assert_denials judges "a refused call did not reach the backend" by how many requests the mock backend
+    saw in the call's window of a few milliseconds, and the gateway's health check is such a request. A switched-on
+    product's monitor asks the backend as its child has been listening for about a second (start_all) and then every
+    15 s, and the probe's own start-up chain reaches the denial checks within tens of milliseconds of that first
+    check: Headscale's candidate failed twice at one head, in two different windows. Waits until the mock's count has
+    grown while the probe asked nothing and has stayed still for *quiet* s; the next check is then about ten seconds
+    or more away (docs/provenance/ha-container-probe-backend-check-20261125.md). Best effort and bounded: a check that
+    does not show within *patience* s, or requests that never stop for *patience* s, leave the wait, as before it.
+    Also tells denial_probe where to read the requests and whether a check was seen, so that a failure names them.
+    Returns whether a check was seen and is over."""
+    denial_probe.REACHED = lambda: list(probe.CALLS)
+    denial_probe.SYNCED = False
+    loop = asyncio.get_running_loop()
+    seen, deadline = len(probe.CALLS), loop.time() + patience
+    while len(probe.CALLS) == seen and loop.time() < deadline:
+        await asyncio.sleep(step)
+    if len(probe.CALLS) != seen:
+        deadline = loop.time() + patience
+        while loop.time() < deadline:
+            seen = len(probe.CALLS)
+            await asyncio.sleep(quiet)
+            if len(probe.CALLS) == seen:
+                denial_probe.SYNCED = True
+                break
+    return denial_probe.SYNCED
 
 
 async def odoo_outage(probe, client, ready_url=MCP + '/health/ready'):
