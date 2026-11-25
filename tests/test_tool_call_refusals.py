@@ -183,24 +183,27 @@ async def test_other_refusals_stay_403(store, route, message):
 
 
 async def test_refusal_takes_no_slot(store):
-    """Answered before the 32 request slots: it still answers while every slot is held by a stuck child request."""
+    """Answered before the 32 request slots: it still answers while every slot is held by a stuck child request. Each
+    stuck ping has an id of its own: an id may be in flight once in a session (PaaS #161; tests/test_inflight_ids.py)."""
     gate = asyncio.Event()
 
     async def stuck(request):
         body = json.loads(request.content)
         assert body["method"] == "ping", body  # no refused call reaches the child
         await gate.wait()
-        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {}})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(stuck)) as to_child:
         _, app = make_apps(store, TOOLS, to_child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
             headers = {**ACCEPT, **SESSION, "Authorization": "Bearer " + store.load().token}
-            ping = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
-            held = [asyncio.create_task(client.post("/mcp", headers=headers, json=ping)) for _ in range(32)]
+            held = [asyncio.create_task(client.post("/mcp", headers=headers,
+                                                    json={"jsonrpc": "2.0", "id": number, "method": "ping"}))
+                    for number in range(32)]
             await asyncio.sleep(.2)
             try:
-                assert (await client.post("/mcp", headers=headers, json=ping)).status_code == 503  # slots are full
+                assert (await client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 32, "method": "ping"})
+                        ).status_code == 503  # slots are full
                 for message in (tool_call("no_such_tool", {}), tool_call(READ_TOOL, {"topic": 5}),
                                 tool_call(BACKEND_TOOL, {})):
                     response = await asyncio.wait_for(client.post("/mcp", headers=headers, json=message), 5)
