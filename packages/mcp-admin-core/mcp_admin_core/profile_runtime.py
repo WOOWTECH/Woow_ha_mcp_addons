@@ -55,6 +55,11 @@ HM-31 (plan 12.3 HM-31; contract 2.4, 5; PaaS #155): the manager holds the add-o
 counted); each profile's app charges its share (ProfileGate.budget_share, make_apps body_budget). A switched-off
 add-on's only profile has a budget of its own (make_apps makes it).
 
+PaaS #161 (contract 1.2, 2.8; not gated): the manager also holds the add-on's one table of in-flight JSON-RPC ids
+(inflight_ids.InflightIds) and gives every profile's apps the same one (make_apps inflight); the key has the profile's id,
+so the profiles do not see each other's ids. A ProfileRuntime takes inflight as a keyword-only option; left out (a
+switched-off product's lone runtime), make_apps makes a table of its own.
+
 HM-12 (plan 9 Odoo row, 12.3 HM-12; contract 3.1; DQ-05): every ProfileRuntime gives its apps stop_child (make_apps
 stop_child), which stops the child and drops its spec. Only a switched-on product's backend identity change uses it
 (gateway.make_apps: stop, one write of the connection and a new token, publish, start); switched off, nothing calls it.
@@ -109,6 +114,7 @@ import stat
 import httpx
 
 from . import health as health_module, origin_policy, profiles, request_budget
+from . import inflight_ids  # PaaS #161: the add-on's table of in-flight JSON-RPC ids (contract 2.8)
 from .child_identity import ListenerGuard
 from .access import TokenAccess
 from .admin_auth import AdminAuthority
@@ -133,6 +139,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
                              'body_budget', 'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice',
+                             'inflight',
                              'review_required', 'origin_policy'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
@@ -195,6 +202,9 @@ class ProfileRuntime:
     HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
     reply_worker).
 
+    PaaS #161 (likewise; contract 2.8): inflight: the add-on's table of in-flight JSON-RPC ids that the profile registers
+    in (inflight_ids.InflightIds; make_apps inflight); left out, make_apps makes a table of the app's own.
+
     HM-13b (run_product, for a product not switched on that has profile data): dormant_profiles, make_apps' option of
     the same name, passed only when given.
 
@@ -214,6 +224,7 @@ class ProfileRuntime:
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
+                 inflight=None,
                  reply_worker=None, dormant_profiles=None, restore_notice=None, review_required=None,
                  origin_policy=None, listener_identity=False, prepare_child=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
@@ -236,6 +247,7 @@ class ProfileRuntime:
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
             ('body_budget', body_budget), ('reply_worker', reply_worker),
+            ('inflight', inflight),
             ('dormant_profiles', dormant_profiles), ('restore_notice', restore_notice),
             ('review_required', review_required), ('origin_policy', origin_policy)) if value is not None}
         if hold is not None and not callable(hold):
@@ -556,6 +568,11 @@ class ProfileManager:
     gets its own turn on it (reply_worker.lane(profile_id)), the default profile's included. Left out (tests that
     build a manager alone), every profile's replies are processed on the event loop.
 
+    PaaS #161 (contract 2.8; not gated): inflight is the add-on's one table of in-flight JSON-RPC ids
+    (inflight_ids.InflightIds), made with the manager: every profile's runtime registers its identified requests in it,
+    under its own id, so the same session id and request id of two profiles are two entries and a profile cannot fill the
+    table for the others.
+
     HM-27 (plan 8.7, 12.3 HM-27; DQ-11 (a)): origin is the add-on's one Origin policy of the secret path
     (origin_policy.OriginPolicy on the default profile's store directory), made at open() unless the product keeps its
     own rule (app_options secret_path_allowed_origins: Headscale; then None). Every profile's runtime gets its check
@@ -587,6 +604,7 @@ class ProfileManager:
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
+        self.inflight = inflight_ids.InflightIds()  # PaaS #161: every profile's in-flight JSON-RPC ids (contract 2.8)
         # HM-31: the add-on's request body budget, every profile's share of it (derived now: at startup)
         self.odoo_memory_enabled = True
         initial_limits = None
@@ -956,7 +974,7 @@ class ProfileManager:
                                  report_blocked=True, listener_identity=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
-                                 body_budget=gate.budget_share,
+                                 body_budget=gate.budget_share, inflight=self.inflight,
                                  reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id),
                                  restore_notice=self.restore_notice if default else None,
                                  review_required=partial(self.admin.review_required, profile_id),

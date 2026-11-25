@@ -109,6 +109,23 @@ A8～A10 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第
   - 出處：`packages/mcp-admin-ui/src/api.js`（`headerRevision`）、`packages/mcp-admin-ui/tests/origin-policy.test.mjs`、`profiles.test.mjs`、`tests/browser/origin-policy.spec.mjs`、`profiles.spec.mjs`（`weakEtag` 是 `fixtures/server.mjs` 的新選項）；
     量測：2026-11-25 主對話在真的 HA 加 Cloudflare 上的實測（兩條路的位元組數與壓縮方式如上）。`profiles.test.mjs`、`profiles.spec.mjs`、`fixtures/server.mjs` 裡原本把「清單變弱」歸因於 Cloudflare 的註解已改成「模擬代理」；測試的情境（代理把清單的 ETag 變弱）本身仍成立。
 
+- **A12　同一個 session 內進行中的重複 JSON-RPC id 被拒（PaaS #161 的移植；合併後補 PR 號；不受開關管；原稿叫 A10，和維修版的 A10 撞號，火車 B 升版時改編為 A12）**
+  - 看得到的變化：同一個 `Mcp-Session-Id` 內，已有進行中的請求用了這個 id（`7` 與 `"7"` 同一個）時，第二個請求立刻回 HTTP 400、JSON-RPC `-32600`、
+    `"id": null`、訊息寫明重複的 id（最多 64 字、跳脫），閘道不轉送；以前轉送，兩個請求搶 MCP SDK 裡同一條回應串流（回應被覆蓋、有的卡到 330 秒的期限）。
+    id 不重複的用戶端（規格要求的用法，官方 SDK 的用戶端每個請求都遞增 id）每個回應逐位元照舊。請求結束（回應送完、用戶端斷線、子程式錯誤、逾時、token 換掉）
+    就釋放，之後同一個 id 可以再用。通知、`initialize`、GET 串流、DELETE 與閘道自己回答的請求不檢查。登記表全 add-on 512 筆、每帳號最多等於它的轉送名額
+    （32；額外帳號 16），滿了或 id 超過 256 個字就照舊轉送、不檢查，並記一行節流 WARNING（每帳號每情況 60 秒一行）。拒絕本身也是一行節流 WARNING。
+    八個產品都帶（n8n 的子程式是 Node，閘道的檢查照樣生效；OpenDesign 只有來源，照前例寫一行「applies to its source too」）。
+  - CHANGELOG 建議句（英文最後由發版片定）：
+
+    ```text
+    - A request whose JSON-RPC id is already in flight in the same MCP session (same `Mcp-Session-Id`; `7` and `"7"` are one id) is now refused at once with HTTP 400, JSON-RPC error `-32600` and `"id": null`, naming the id (PaaS #161), and is not sent to the MCP server. Before, the MCP SDK keyed both requests' answers by that id, so they overwrote each other: with eight such requests none got its own answer and seven hung until the gateway's own limit. The id can be used again once its request ended (answered, client gone, error, timeout or token change); notifications, `initialize`, GET streams, DELETE and the answers the gateway gives itself are not checked. Clients that use a new id for every request, as MCP requires, see no change. At most 512 ids are tracked for the add-on and 32 per profile (16 per additional profile); beyond that, or for an id longer than 256 characters, the request is forwarded unchecked and one warning a minute is logged.
+    ```
+  - 出處：`docs/provenance/ha-duplicate-jsonrpc-id-20261125.md`；契約第 1.2 節「PaaS #161 的不受開關管變更」、第 2.8 節、第 9 節 #145（原稿 #134，火車 B 升版時依「後合併的重編」改號）。`upgrade-notes.yaml`
+    不用列（沒有破壞性變更：只有違規的請求被拒）。
+  - 適用：全部 8 個產品（隨火車 B 發佈）。總表的筆數與各產品節的「要寫」清單這次沒有跟著改（它們和同時準備的各線改的是同幾列）：發版片照檔頭第 3 點寫進
+    CHANGELOG 時把 A12 算進去，PR 號與合併 commit 合併後補。
+
 ## 2. 0.4.13 這條線共通（B：Headscale 以外的 7 個產品）
 
 Headscale 那條線改了共用程式，Headscale 自己已經發版、CHANGELOG 也記了；其他 7 個產品在 0.4.14 帶出去（OpenDesign 只升來源版本）。

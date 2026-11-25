@@ -66,6 +66,7 @@
 不受開關管（任何產品下一次發版都會帶出去；保證方式見計畫 §3.3）：紀錄遮罩（HM-02）、port 參數化（HM-04）、
 執行套件抽出（HM-05）、子程式 bearer（HM-06）、資料層函式庫（HM-07）、收據格式（HM-11）、entrypoint 還原標記（HM-13a）、
 開機守門的存在檢查與休眠處理（HM-13b）、子程式 initialize 錯誤的遮罩（HM-14，見下）、請求內容位元組預算與 JSON 結構守門（HM-31，見下）、
+同一個 session 內進行中的重複 JSON-RPC id 被拒（PaaS #161，見下）、
 健康監看照停止要求停下（HM-09 追補，見下）、LiteLLM 與 EMQX 不保留閒置的後端連線（HM-32，見下；行為不變）、
 Hermes 排程工具 `hermes_cron` 的說明補兩句（HM-33，見下；只改文字）、
 EMQX 工具 `emqx_list_topics` 的說明不再說「沒列出就是沒人訂閱」（對齊 PaaS #160，見下；只改文字）、
@@ -248,6 +249,28 @@ EMQX 工具 `emqx_list_topics` 的說明不再說「沒列出就是沒人訂閱�
   改成「只多提示檔」，理由寫在測試裡）。
 - 測試：`tests/test_restore_review.py`（存、讀、存不下、中途停、被目錄占用、輪替與撤銷後消失、沒還原時不建）、
   `tests/browser/restore-review.spec.mjs`（面板）。
+
+**PaaS #161 的不受開關管變更：同一個 session 內進行中的 JSON-RPC id 不可重複**（2026-11-25；對齊 PaaS #161，woow-mcp-server
+`81fd50a`、`ad03275`、`39891b6`；規則見第 2.8 節）
+
+- 決定：2026-11-25 主對話交辦移植，隨火車 B 發佈；PaaS 對所有產品生效，HA 同（不受開關管）。
+- 缺口：MCP Python SDK 2.3.0（七個 Python 產品的子程式都釘這一版）的 Streamable HTTP 以 `str(message.id)` 當回應串流的鍵（`server/
+  streamable_http.py`：`request_id = str(message.id)`、`self._request_streams[request_id]`，SSE 與 JSON 模式都是）。同一個 `Mcp-Session-Id`
+  內兩個**進行中**的請求用同一個 id，回應會互相覆蓋（PaaS 2026-11-17 實測：8 個請求都用 id=7，0 個拿到自己的結果、1 個拿到別人的、
+  7 個卡住到閘道的期限）。規格要求 id 在同一個 session 內不得重複使用，所以這是用戶端違規，沒開通的單帳號一樣有。n8n 的子程式是 Node
+  （n8n-mcp，TypeScript SDK）：它對重複 id 怎麼回沒有實測，閘道的檢查和子程式無關，照樣生效。
+- 為什麼開關關時也改：今天就有、和多帳號無關的缺口；放在開關後面，每個產品在開通之前的每一版都會繼續帶著它。改了只有違規的請求被拒：
+  每個 id 都不重複的用戶端，每個回應逐位元不變。
+- 改了什麼回應（單帳號，逐項）：
+  1. 同一個 `Mcp-Session-Id` 內，進行中的請求已用了這個 id（`7` 與 `"7"` 同一個）的 POST（有 id、不是 `initialize`、閘道要轉送給子程式的）：
+     400＋JSON-RPC `-32600`＋`"id": null`＋`Cache-Control: no-store`，訊息寫明重複的 id（最多 64 字、跳脫），不轉送；以前轉送，兩個請求搶子程式裡
+     同一條回應串流（回應被覆蓋、有的卡到 330 秒的期限）。
+  2. 每帳號每 60 秒一行節流 WARNING（拒絕一種、登記表放不下三種，第 2.8 節）；文字固定，沒有 id、session id、token。
+  3. 其他每個回應、標頭、log 逐位元不變：沒有重複 id 時，閘道多做的只有登記與釋放（幾次集合與計數的操作），沒有多讀 body、沒有多一個請求或標頭。
+- HM-01 的契約凍結逐案核對（黃金回歸、`tests/contract/profiles_v1_cases.json` 的案例、管理契約凍結）：**沒有一案的回應改變，凍結檔不用改**。
+  理由：這三組測試每個請求都等回應送完才送下一個，沒有兩個進行中的請求用同一個 id（`asyncio.gather` 只用在整個 runtime 的起停）。
+- 測試：`tests/test_inflight_ids.py`（開關關與開兩種模式；真的閘道、模擬的子程式，同 id 的請求同時進行；每一種結束都放掉；登記表的上限與
+  WARNING；自答、通知、GET、DELETE 不登記；兩個帳號同 session 字串同 id 互不影響）。
 
 ### 1.3 開機守門（HM-13b 定案；不受開關管；計畫 §8.4）
 
@@ -587,6 +610,42 @@ Headscale 只放 `https://claude.ai`（第 1.2 節）。
   （§8.8 #38，DQ-40 ⑧）。
 - 8081 永遠不讀 `X-MCP-Profile`、cookie、query 來選帳號；密鑰網址上絕不改看 `Authorization`（I1）。
 
+### 2.8 同一個 session 內進行中的 JSON-RPC id 不可重複（不受開關管；PaaS #161，§8.8 #145）
+
+MCP SDK 的 Streamable HTTP 以 `str(id)` 當回應串流的鍵（mcp 2.3.0 `server/streamable_http.py`：`request_id = str(message.id)`）：同一個
+`Mcp-Session-Id` 內兩個**進行中**的請求用同一個 id，回應會互相覆蓋，有的請求永遠等不到（第 1.2 節的缺口）。規格要求 id 在同一個 session
+內不得重複使用，所以這是用戶端違規（官方 SDK 的用戶端每個請求都遞增 id）。閘道（`Hc/inflight_ids.py`，掛在 `gateway.serve`）在轉送前登記
+進行中的 id，重複就**立刻**拒絕、不轉送：
+
+- **回應**：HTTP 400、JSON-RPC 錯誤 `-32600`、`"id": null`、`Cache-Control: no-store`、沒有 `Retry-After`；訊息（英文加繁體中文，PaaS 原文）寫明
+  重複的 id。不回「那個 id 的錯誤」：守規矩的用戶端會把它配給第一個還在等的同 id 請求，反而害原本正常的請求失敗。訊息只有 id：最多 64 個字，
+  用 `ascii()` 跳脫（引號、反斜線、控制字元、雙向控制字元與所有非 ASCII 都變跳脫序列），超過就加 `... (N characters)`；沒有 token、session id、
+  帳號 id 或名稱。PaaS 用 `repr` 寫整個 id。
+- **鍵**：`(帳號 id, Mcp-Session-Id, str(id))`。`7` 與 `"7"` 同一個（與 SDK 相同）；不同 session、不同帳號互不影響（兩個子程式發出同一個
+  session 字串、兩個帳號用同一個 id 也是）。
+- **登記哪些**：POST、有 id、不是 `initialize`、閘道決定轉送給子程式的請求：在 `serve` 裡，拿到轉送名額、政策與待送回覆額度重驗都過了之後、
+  轉送之前。閘道自己回答的不登記也不檢查：被政策拒絕的 tools/call、未知方法、閘道自己的 session（子程式沒起來時 initialize、ping、tools/list、
+  tools/call 的回答）、轉送名額的忙碌回答。通知（沒有 id）、GET 串流、DELETE 也不登記。batch、對伺服器請求的回應與沒有 id 的工具呼叫在更前面就
+  被政策擋掉（403，第 2.4 節），所以 PaaS 的「batch 內重複」與「單一 POST 的 id 數門檻」在 HA 沒有對應。
+- **釋放**：子程式回答完（SSE 串流：最後一個事件到手就放，不等交給用戶端或串流收尾；一次送完的 JSON 回覆在送出前就放），或最晚和這個請求的
+  轉送名額一起放（`UpstreamOwner.close`）：用戶端斷線、子程式錯誤（502、`-32004`）、閘道逾時（`CALL_SECONDS`）、token 輪替或撤銷（`-32005`；
+  沒開通時 `ClientDisconnect`）、閘道丟出的例外、被閘道自己的忙碌回答擋下。所有結束都經過 `close`，沒有漏放的路徑；釋放可重複呼叫、只放一次。
+  之後同一個 id 可以再用：只擋進行中的（拿到回覆就用同一個 id 再送的用戶端，遇到的是已經放掉的 id）。
+- **上限，滿了放行**：登記表全 add-on 一份（開通時 `ProfileManager` 建立、各帳號共用；沒開通時只有預設帳號，自己一份），兩層上限：全表 512 筆
+  （`inflight_ids.MAX_ENTRIES`），與每帳號自己的轉送名額（預設帳號 32、額外帳號 16，第 5 節）。理由：一個請求登記一個 id、持有一個轉送名額
+  到它結束，所以一個帳號登記的 id 不會比它的轉送名額多；全表 512 大於全 add-on 最多同時持有的量（Odoo：32＋5×16＝112，是各產品最大的）。
+  兩層都要在漏放（程式錯誤）時才會碰到，作用是讓一個帳號填不滿全表而使別的帳號的檢查失效，記憶體也有界。PaaS 是全表 20000、每帳號 1/4：
+  它在轉送名額之前就登記，等名額的請求也算。放不下（全表或帳號）、或 id 超過 256 個字（`MAX_ID_LENGTH`，同 `request_limits.head_tail_id` 讀 id 的
+  上限；整數超過 1,024 位元也算）就不登記、不拒絕，照常轉送（等於沒有這個檢查，和今天一樣）並記一行節流 WARNING。寧可少擋一個違規用戶端，
+  也不誤擋合法請求。
+- **log**：只有節流 WARNING（每帳號每情況 60 秒一行，其餘計入 `suppressed=N`，進 add-on log；帶帳號 id 前 8 碼，沒開通寫 `profile=default`；
+  `budget_share.warn`，同位元組預算與轉送名額的拒收）：拒絕一種（`duplicate-id`）、放不下三種（`inflight-table-full`、`inflight-profile-full`、
+  `inflight-id-too-long`），共四種情況。文字固定，沒有 id、session id、token（每個拒絕一行會讓拿著有效 token 的違規用戶端洗掉 add-on log；
+  PaaS 的 `39891b6` 同理改成節流）。
+- **事件迴圈上做的事是 O(1)**：只用已解析的訊息裡的 id，不再讀 body；登記、檢查、釋放各是幾次集合與計數的操作；id 先比長度才雜湊。
+- **不讀環境變數**：PaaS 的 `MCP_GATEWAY_MAX_INFLIGHT_IDS`（預設 20000、16～1,000,000）HA 不讀，上限是程式常數（§8.8 #45）。
+- 和 PaaS 的差異與理由：§8.8 #145。測試：`tests/test_inflight_ids.py`（檔頭有 PaaS 測試逐案的對照）。
+
 ## 3. 管理（8099）
 
 ### 3.1 路徑與方法
@@ -911,6 +970,7 @@ PaaS 另帶 `message` 文字，HA 不帶（面板只認代碼，§8.8 #49）。
 | `{"error":"state unavailable"}` | 503 | HM-27：開通的產品的 Origin 政策檔不能用時，密鑰網址每個驗過 token 的請求（帶不帶 Origin） | 固定本體 | 不出現 | MCP 路徑 503 `ORIGIN_POLICY_UNAVAILABLE`（執行中讀到壞值） | §8.8 #126 | 既有（擴大） | HM-27；`tests/test_origin_policy.py` |
 | JSON-RPC `-32003` | 200／503／429／408 | 准入、位元組預算、讀取閒置、轉送名額逾時、排隊上限、GET 串流上限、待送回覆上限 | 第 2.4 節 | 位元組預算與讀取閒置同開通（HM-31，不受開關管）；其他沒有（uvicorn 503、名額逾時 503） | 200／503／429／408（先讀 body） | §8.8 #15、#16、#96、#101～#105 | 新 | HM-08、HM-14、HM-30、HM-31；`tests/test_profile_quotas.py`、`tests/test_gateway_busy_shapes.py`、`tests/test_request_budget_gateway.py` |
 | JSON-RPC `-32602`（結構守門） | 200／413 | POST 的 JSON 巢狀超過 64 層、元素超過 20 萬個、不是 UTF-8 | 第 2.4 節；頭尾認得出 id 才 200 | 同（HM-31，不受開關管） | 同（#155） | §8.8 #106、#107 | 新 | HM-31；`tests/test_request_structure.py` |
+| JSON-RPC `-32600` | 400 | 同一個 `Mcp-Session-Id` 內，進行中的請求已用了這個 id（第 2.8 節） | `"id": null`、`Cache-Control: no-store`；訊息寫明重複的 id（最多 64 字、跳脫），不轉送 | 同（不受開關管） | 同（#161，pin 之後的 `81fd50a`；上限、環境變數與 batch 不同） | §8.8 #145 | 新 | PaaS #161 的對齊；`tests/test_inflight_ids.py` |
 | JSON-RPC `-32004` | 502／SSE 事件 | 子程式在處理途中斷線 | 依原因三種文字（第 2.5 節） | 502 `{"error":"request denied"}`、SSE 安靜結束 | 同（#148）；停止了一律說會自動重新啟動 | §8.8 #93（WARNING 節流）、#100（停止了的文字） | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
 | JSON-RPC `-32005` | SSE 事件 | 標頭送出後 token 被換掉 | 每個未回應 id 一則（第 2.5 節） | 直接斷線（`ClientDisconnect` 丟給 uvicorn） | 同（JSON 回覆也補：它不帶 `Content-Length`） | §8.8 #92、#97 | 新 | HM-14；`tests/test_gateway_stream_endings.py` |
 | `backend_not_configured`（`-32603`） | 200 | 帳號沒填後端、工具需要後端；n8n 額外帳號沒後端時所有工具（含文件工具） | `ToolCallRefused` 形狀 | 照今天 | n8n 額外帳號起文件模式 | §8.8 #28（DQ-22 已定，2026-11-19） | 既有（擴大） | HM-25；`tests/test_n8n_multi_profile.py` |
@@ -1330,6 +1390,9 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 備份含整個 `/data`，n8n 的 `nodes.db` 持久化每帳號多約 67 MiB（FM-110），和 #28 的省記憶體一樣是平台的考量），#62 改成既有（維持 HA 現值）。
 還待決的剩 #10、#65。
 2026-11-25 負責人定 DQ-26（照計畫建議；`decisions.md`）：#137（原稿 #129）的類型定為部署，還待決的剩 #10、#65。同一次決定加第 144 列（原稿第 133 列；DQ-02 的 Headscale 例外：新建的額外帳號不複製 `headscale_api_keys` 的 create、expire、delete；不是 FEATURE-MATRIX 的列，安全審查 M-1 說到同一件事）。**列號暫定**：接在整合分支的最後一列（#143）之後（原稿接在 HM-26 分支的最後一列 #132 之後）；其他產品片或火車上別的分支也加列時，後合併的一方接在當時最後一列之後重編，引用自己列號的地方跟著改。`deviation-trace.md` 由 repo 外的產生器重產（只讀第 9 節的項目欄，要多讀這一列）。
+第 145 列出自 PaaS #161（`81fd50a`、`ad03275`、`39891b6`）的移植（同一個 session 內進行中的重複 JSON-RPC id；2026-11-25；不受開關管，隨火車 B 發佈；
+不是 FEATURE-MATRIX 的列，`deviation-trace.md` 與 `paas-test-mapping.md` 由 repo 外的產生器重產）。列號由原稿的 #134 依「後合併的重編」改成 #145：火車 B 的開通片
+（Hermes、Headscale、n8n）先佔了 #134～#144，這一列接在整合分支的最後一列（#144）之後；其他分支再加列時，後合併的一方接在當時的最後一列後面重編（同 HM-27、HM-22 的做法，第 10 節）。
 
 | # | 項目 | PaaS（@69ac425） | HA | 理由 | 類型 |
 |---|---|---|---|---|---|
@@ -1477,6 +1540,7 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | 142 | 沒後端的 n8n 額外帳號的工具清單 | 起文件模式子程式，tools/list 只有 7 支文件工具 | 不起子程式；閘道自答 initialize 與 tools/list（完整清單照政策過濾，同其他產品沒填後端時），每支工具都回 `-32603`「Backend not configured」（HM-25） | 跟著 #28：省一個子程式（約 300 MiB）；清單和其他產品一致，Claude.ai 連接器在設定後端前也加得上去 | 部署 |
 | 143 | n8n 子程式的命令列 | `node index.js`，port 只在環境變數 `PORT` | 預設帳號照舊（命令列沒有 port，就是 3000）；額外帳號在入口後面多 `--port N`（n8n-mcp 不讀它，照舊聽 `PORT`；HM-25） | P9 kit 的 `childkill --child-port` 與容器探針只讀命令列（任何人可讀）認子程式，不讀別人的環境變數（要 CAP_SYS_PTRACE；HM-16 審查 SF-2） | 部署 |
 | 144 | 新帳號的初始政策：Headscale 的 `headscale_api_keys` 寫入（DQ-02 的例外，2026-11-25；列號暫定） | 新帳號複製預設帳號當下的政策，沒有例外（DQ-02 (a) 採用的 PaaS 做法）；Headscale 也一樣 | 新建的額外帳號複製預設帳號當下的政策，**唯獨 Headscale 的 `headscale_api_keys` 的 create、expire、delete 不複製**（`products.NEW_PROFILE_WITHHELD`、`profile_initial_state`；讀取 `list` 照複製，其他工具與其他產品照複製）。新帳號預設拿不到整台管理 key、也停不掉別的帳號的 key；管理員之後在該帳號的工具權限頁自行開啟（把三個寫入的 grant 加回去，什麼都不必先清）。只影響建立當下：預設帳號、已存在的帳號、其他工具、其他產品都不變；沒開通的產品沒有建立，所以沒有影響。面板「新增帳號」的說明在 Headscale 時多一句（`profiles.js` 的 `createDescription`）。測試：`tests/test_profile_store.py`（預設帳號全開、部分開、已拒絕、寫入已關、工具停用五種起點；其他產品不受影響）、`tests/test_headscale_multi_profile.py`（面板建立的帳號、閘道與真的子程式：被擋、管理員開啟後做得到） | API key 是整台管理權限；create（`reveal_once`）把一把不在任何帳號 state 裡的新 key 明文交給持有 token 的人，任何工具政策、「全部撤銷」、還原守門都撤不到，expire、delete 停得掉別的帳號的 key（HM-26 安全審查 M-1）；照複製時，管理員沒特別收緊的每個新帳號都有這三個寫入。負責人 2026-11-25 決定（`decisions.md` 第 1.1 節） | 加嚴（建議回補） |
+| 145 | 同一個 session 內進行中的重複 JSON-RPC id | #161（`81fd50a`、`ad03275`、`39891b6`，晚於 pin `69ac425`；所有產品都生效）：轉送前登記 `(帳號, Mcp-Session-Id, str(id))`，重複立刻回 400＋`-32600`＋`id: null`、不轉送；batch 整包登記或整包拒絕、單一 POST 超過 256 個 id 就不登記；全表 20000（`MCP_GATEWAY_MAX_INFLIGHT_IDS`，16～1,000,000）、每帳號 1/4；登記在轉送名額之前、請求結束時放；訊息用 `repr` 寫整個 id；拒絕走節流 WARNING | 同規則、同回應（第 2.8 節；不受開關管）。不同：不收 batch（政策 403），所以沒有 batch 的登記與 256 的門檻；登記在拿到轉送名額之後（等名額的請求不登記），和名額一起放（`UpstreamOwner.close`）；全表 512、每帳號＝該帳號的轉送名額（32／16），都是程式常數、不讀環境變數；id 超過 256 個字不登記（放行）、訊息裡的 id 最多 64 字並跳脫；放不下與超長的 id 放行並各記一種節流 WARNING | HA 的閘道已有轉送名額與佇列，登記跟著名額就有界；環境變數不放（#45）；id 是用戶端給的，訊息與 log 不能被塞任意長的字串；事件迴圈上只做 O(1) 的事，不為它多讀 body | 對齊 |
 
 ## 10. 變更紀錄
 
@@ -1562,3 +1626,5 @@ T-21、T-24 對到（同 `acceptance-matrix.md` 的 T-21、T-24）。
 | v1 定稿（EMQX 說明對齊 PaaS #160） | 2026-11-25 | 維修版 | 對齊 PaaS #160（`fb7571c`）：第 1.2 節不受開關管多一項：EMQX `emqx_list_topics` 的說明不再說「沒列出就是沒人訂閱」（工具說明與 registry 的一行說明照 PaaS 逐字改）。只改文字：`topics.py` 去掉 docstring 後的語法樹相同，`registry.py` 只有一個字串常數不同；tools/list 的 `emqx_list_topics` 說明換了、整個回答多 224 位元組，HM-01 黃金回歸的 EMQX 兩個 tools/list 摘要照測試檔頭的規則一起更新（刻意的工具表面變更）。第 9 節不加列：說明和 PaaS 一致 |
 | v1 定稿（維修版，F2 弱 ETag） | 2026-11-25 | 維修版 | 面板把代理（例如 Cloudflare）改成的弱 ETag（`W/"o1-…"`、`W/"p1-…"`）當成同一個版本（`packages/mcp-admin-ui/src/api.js` 的 `headerRevision`；「瀏覽器來源檢查」卡片原本因此不能儲存，Odoo 0.5.1 驗收發現 F2）：第 9 節 #111 補一句。送出的 `If-Match` 仍是強形式，伺服器的三處比對（索引 `p1-`、Origin 政策 `o1-`、帳號 `c1-`）沒放寬，所以規則內容、錯誤代碼與列號沒改；產品開關與版號不變。實測：Cloudflare 上只有 `api/origin-policy` 變弱，`api/profiles` 仍是強的 |
 | v1 定稿（火車 B 升版：併入維修版） | 2026-11-25 | 火車 B 升版 | 把維修版分支 `origin/release/maintenance-20261125`（PR #138，head `fec2e3ec292d`）用 merge commit 併進火車 B 升版分支（基準：整合分支 `integ/train-b-20261125` `0ab5393`；不 rebase、不 force push）。衝突只在文件與帳本：本檔第 1.2 節不受開關管的清單（EMQX 的 `emqx_list_topics` 說明與 n8n 的 `run_product` 兩項都留）與本節（兩邊的列都留）、`decisions.md` 的變更紀錄、`unreleased-changes.md` 的總表、第 3.8 節與第 4.2 節那句，以及 `docs/provenance/runtime-patches.json` 的 `packages/mcp-admin-ui/src/api.js` 一列（兩邊都改了檔與 `change`：兩段說明都留，摘要照合併後的檔重算）。維修版沒有加第 9 節的列，所以列號沒動；規則內容與錯誤代碼沒改；`features.MULTI_PROFILE_PRODUCTS` 與版號資料仍是維修版合併後的值 |
+| v1 定稿（PaaS #161 對齊） | 2026-11-25 | 整合 | 隨火車 B 發佈的 PaaS #161 移植（同一個 session 內進行中的重複 JSON-RPC id；不受開關管）：第 1.2 節加一項（缺口、改了什麼回應、HM-01 凍結逐案核對）、新增第 2.8 節（規則、鍵、登記與釋放、上限、log、O(1)）、第 4.2 節加 `-32600` 一列、第 9 節加第 145 列（原稿 #134；列號暫定，後合併的一方重編，火車 B 升版時接在整合分支的最後一列 #144 之後）；第 0 節第 1 點與第 1.2 節的清單各加一句。規則內容、其他錯誤代碼與其他列都沒改；`features.MULTI_PROFILE_PRODUCTS` 與版號都不動 |
+| v1 定稿（火車 B 升版：併入 PaaS #161） | 2026-11-25 | 火車 B 升版 | 把本機分支 `feat/duplicate-jsonrpc-id-20261125`（PaaS #161 的重複 JSON-RPC id 防護，4 個 commit，基準 `092b1b5`）用 merge commit 併進火車 B 升版分支（併入維修版之後）。第 9 節的 #134 和整合分支的 Hermes 列撞號：本片的列依「後合併的重編」由 #134 改成 #145（接在整合分支的最後一列 #144 之後）；第 2.8 節的標題與結尾、第 4.2 節 `-32600` 列、第 9 節開頭那段、`tests/test_inflight_ids.py` 的契約核對（改成認 #145 那一列的標題，不會被別片的 #134 蒙過去）、`docs/provenance/ha-duplicate-jsonrpc-id-20261125.md` 與 `unreleased-changes.md` 的引用跟著改（那個項目叫 A10，和維修版的 A10 撞號，改編為 A12）。`deviation-trace.md`（第 145 列、檔頭與結論的列數）是手補的，`acceptance-matrix.md` 加 `tests/test_inflight_ids.py` 一列，`paas-test-mapping.md` 沒動（repo 外的產生器重產）。`gateway.py`、`profile_runtime.py` 的帳本 `change` 兩邊都留、摘要照合併後的檔重算；`gateway.py`、`profile_runtime.py` 本身自動合併成功，沒有程式衝突。規則內容與錯誤代碼沒改；`features.MULTI_PROFILE_PRODUCTS` 與版號資料不動 |

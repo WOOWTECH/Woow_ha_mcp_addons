@@ -241,22 +241,25 @@ async def test_unknown_method_needs_the_token_first(store):
 
 
 async def test_unknown_method_takes_no_slot(store):
-    """Answered before the 32 request slots: it still answers while every slot is held by a stuck child request."""
+    """Answered before the 32 request slots: it still answers while every slot is held by a stuck child request. Each
+    stuck ping has an id of its own: an id may be in flight once in a session (PaaS #161; tests/test_inflight_ids.py)."""
     gate = asyncio.Event()
 
     async def stuck(request):
         await gate.wait()
-        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": json.loads(request.content)["id"], "result": {}})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(stuck)) as to_child:
         _, app = make_apps(store, TOOLS, to_child)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mcp") as client:
             headers = {**ACCEPT, **SESSION, "Authorization": "Bearer " + store.load().token}
-            ping = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
-            held = [asyncio.create_task(client.post("/mcp", headers=headers, json=ping)) for _ in range(32)]
+            held = [asyncio.create_task(client.post("/mcp", headers=headers,
+                                                    json={"jsonrpc": "2.0", "id": number, "method": "ping"}))
+                    for number in range(32)]
             await asyncio.sleep(.2)
             try:
-                assert (await client.post("/mcp", headers=headers, json=ping)).status_code == 503  # slots are full
+                assert (await client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 32, "method": "ping"})
+                        ).status_code == 503  # slots are full
                 response = await asyncio.wait_for(client.post("/mcp", headers=headers, json=DISCOVER), 5)
                 assert response.status_code == 200 and response.json()["error"]["code"] == -32601
             finally:
