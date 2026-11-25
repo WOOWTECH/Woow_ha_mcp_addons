@@ -84,6 +84,7 @@ n8n 一節（負責人 2026-11-25 照建議）：**映像用 `505212c` 的功能
 4. **七路版本運算式**：GitHub 還沒算過（見上）；候選建置的 tag 檢查是第一次驗證。
 5. **容器驗收的多帳號階段第一次在真容器跑這個產品**：本機沒有 Docker，只有單元測試與真子程序的測試；候選建置失敗時先查探針、entrypoint 與守門，不要放寬（`docs/multi-profile/unreleased-changes.md` 第 5 節第 3 點）。
 6. **HA Core**：`ha_role.py` 審過到 Core 2026.11.3 並放行已審查月份的後續修補版；展示機 Core 2026.7.2 沒問題，更新的月份（2026.12.0 起）要先補審。
+7. **head 因探針補強改變（2026-11-25）**：Headscale 的候選建置在容器探針失敗兩次，補強動了發版分支的 head（見 Headscale 紀錄第 7 點，`docs/provenance/ha-container-probe-backend-check-20261125.md`）；這個產品在舊 head `20292de2b385` 的候選建置與商店乾跑作廢，在新 head 重新建置；最後的 run、head 與結果以這份紀錄「驗收與批准」那張表為準。
 
 ## 本機檢查（一般使用者；以 GitHub CI 為準）
 
