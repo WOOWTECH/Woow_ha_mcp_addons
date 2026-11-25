@@ -220,13 +220,13 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   - 出處：報告 `artifacts/…/wave5/review-HM-26-security.md` S-1（repo 外）；`docs/provenance/ha-multiprofile-HM-26-20261119.md` 第 15 節第 2 點。
 - 發版時另外驗：第 5 節。Headscale 第一次走 GitHub 發版流程（之前每一版都是 builder VM 推的）：觸發前負責人要先給 `amd64-mcp-headscale`
   套件設 Actions 權限（`docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
-- HM-26（Headscale 開通前的產品片；PR 號與 commit 合併後補）：受開關管，開關關時沒有可見變化（第 4.2 節）。映像多帶兩件只在開通時
+- HM-26（Headscale 開通前的產品片；PR 號與 commit 合併後補）：受開關管，開關關時沒有可見變化（第 4.2 節）。映像多帶三件只在開通時
   生效的事：Headscale 伺服器拒絕 key（401）時健康監看照 DQ-25 退避（之前認不出來，照樣每 15 秒查；HS7）、面板 Headscale「後端設定」
-  說明的每帳號版本（HS2）。其餘程式在 HM-08～HM-31 已經做好，本片補測試、文件與交接。Headscale 開通的升版片（0.4.19 → 0.5.0）照下面
+  說明的每帳號版本（HS2）、新建帳號不複製 `headscale_api_keys` 的寫入（`profile_initial_state` 與面板的建立說明，負責人 2026-11-25；HS9）。其餘程式在 HM-08～HM-31 已經做好，本片補測試、文件與交接。Headscale 開通的升版片（0.4.19 → 0.5.0）照下面
   寫 CHANGELOG、DOCS。
-- 開通版（0.5.0）要寫進 CHANGELOG 的 Headscale 項目（英文；開通後所有產品共通的改變照計畫 §7.2 第 1～6、8、9、11 點，句子由 HM-18
-  定稿、Odoo 首發的升版片 HM-19a 先寫，Headscale 照抄適用的；第 7 點（Odoo 換身分換 token）與第 10 點（Origin 清單）不適用：
-  Headscale 不換 token、Origin 照舊）：
+- 開通版（0.5.0）要寫進 CHANGELOG 的 Headscale 項目（英文；開通後所有產品共通的改變照契約第 1.4 節（HM-18 定稿的計畫 §7.2 完整清單）
+  與本檔第 7 節，句子由 Odoo 首發的升版片 HM-19a 先寫，Headscale 照抄適用的；第 16 點（Odoo 換身分換 token）不適用，第 5、10、19 點裡
+  標「Headscale 除外」的 Origin 政策部分不寫：Headscale 不換 token、Origin 照舊。HM-26 原本照計畫 §7.2 的 11 點寫，合併 HM-18 之後改指第 1.4 節；HS8 不在這份清單：它不受開關管，見上面「自己的修正」）：
   - HS1：`Multiple profiles: besides the default profile, the add-on can serve up to 3 additional profiles, each with its own Headscale URL and API key, MCP token, tool policy and MCP child. Profiles may use the same Headscale server with different tool policies, or different servers.`
   - HS2：`A Headscale API key administers the whole Headscale server, and Headscale has no narrower key: profiles on one Headscale server are kept apart only by their tool policies, whatever keys they use. A profile allowed to create API keys (headscale_api_keys create) can obtain a key that administers the whole server and that no tool policy, no "Revoke all" and no restore check reaches, and a profile allowed to expire or delete API keys can stop the other profiles' keys: deny these operations to every profile meant to be restricted (the connection page says so once profiles are on). An API key of its own per profile is still recommended (not enforced): one profile's key can then be revoked in Headscale without stopping the others.`
   - HS3：`Each profile's MCP child reads only its own profile's saved policy, at every call (also for calls made straight to the child inside the container); a profile directory whose owner or mode cannot be verified makes every call of that profile fail with HEADSCALE_POLICY_UNAVAILABLE.`
@@ -234,6 +234,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   - HS5：`A loopback Headscale URL (127.0.0.0/8, ::1, localhost) is now refused when it is saved (HTTP 400); the MCP child refused to connect to it before, and still does.`
   - HS6：`Saving a profile's tool policy restarts only that profile's MCP child; the other profiles' sessions and tool lists are not affected. The secret URL of every profile keeps the Headscale Origin rule: no Origin or exactly https://claude.ai; any Origin on Bearer requests is refused (403).`
   - HS7：`When the Headscale server refuses a profile's API key (HTTP 401: revoked, expired or wrong), that profile's health checks back off to 15, 30, 60, 120 and then 300 seconds apart; saving the profile's connection, restarting it from the panel or any other answer of the server ends the backoff. The reason shown is unchanged.`
+  - HS9：`A profile added in the panel starts without the API key writes: it copies the default profile's tool policy as before, except that headscale_api_keys create, expire and delete are not copied (listing API keys is). Turn them on in the new profile's tool permissions if it needs them. The default profile and profiles that already exist are not changed.`
 - DOCS（`addons/headscale/DOCS.md`「連線與權限」一節，繁中；升版片寫）要補的段落：
 
   ```text
@@ -241,7 +242,8 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
   可以是同一台 Headscale、各帳號不同的工具政策，也可以是不同台。Headscale 的 API key 是整台伺服器的管理權限，Headscale 沒有 key 層級的權限：
   同一台 Headscale 上的帳號，不論是否共用 key，彼此只靠工具政策分權。**要讓某個帳號真的受限，請在它的工具權限頁停用 `headscale_api_keys`
   的建立、作廢與刪除**：建立會把一把新的整台管理 key 交給持有這個帳號權杖的人，在 add-on 外也能用，工具政策、「全部撤銷」與還原都管不到；
-  作廢與刪除能停掉其他帳號的 key。新安裝時這些寫入預設開啟，新的帳號會複製預設帳號當下的工具政策。
+  作廢與刪除能停掉其他帳號的 key。新安裝時這些寫入預設開啟（預設帳號）；新增的帳號會複製預設帳號當下的工具政策，但**不複製 `headscale_api_keys` 的建立、作廢與刪除**：
+  新帳號預設不能用，要用請到它的工具權限頁自行開啟。
   **仍建議每個帳號在 Headscale 各建一把 API key**，不要共用：某個帳號不再使用時，就只撤銷它那一把；共用一把時，撤銷它會同時停掉共用的帳號。
   發生外洩時，在每一台 Headscale 列出所有 API key（`headscale apikeys list`），撤銷這個 add-on 用過的與不認得的每一把，再到面板逐帳號存新 key。
   帳號的網址改到另一台伺服器（scheme、主機或 port 不同）時要重新輸入 API key。
@@ -285,7 +287,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-21 LiteLLM 開通的功能 PR | 合併後補 | 合併後補 | 沒有程式：只有測試（`tests/test_litellm_multi_profile.py`）與文件；映像只多 `docs/provenance/` 的筆記 | 沒有任何變化；開通時的句子見第 3.5 節 |
 | HM-22 | 合併後補 | 合併後補 | Nextcloud 開通的功能片：換 url、username 換 token（url 照伺服器與存的路徑比）、面板 `identityBound` 加 Nextcloud；面板等核對時被擋的存檔說明寫自己產品的身分欄位（`identityChange`，HM-22 審查 MF-1） | 換身分不換 token，回應沒有新欄位；面板的提示與請求不變（Odoo 的說明文字逐字不變） |
 | HM-24 | 合併後補 | 合併後補 | Hermes 與 PaaS 一致：換後端身分不換 token；仍保留來源變更重填秘密及帳號隔離 | 換身分不換 token，回應、面板與子程式照舊；Odoo 的說明文字逐字不變 |
-| HM-26 | 合併後補 | 合併後補 | Headscale 伺服器拒絕 key 時監看的認證退避（`health.refused_login`）；面板 Headscale「後端設定」說明的每帳號版本；Headscale 開通前的測試（第 3.8 節） | 監看照舊每 15 秒、不退避，記下的原因不變；說明逐字照今天 |
+| HM-26 | 合併後補 | 合併後補 | Headscale 伺服器拒絕 key 時監看的認證退避（`health.refused_login`）；面板 Headscale「後端設定」說明的每帳號版本；新建 Headscale 帳號不複製 `headscale_api_keys` 的寫入（`profile_initial_state`，2026-11-25）與面板建立說明的 Headscale 版；Headscale 開通前的測試（第 3.8 節） | 監看照舊每 15 秒、不退避，記下的原因不變；說明逐字照今天；沒有建立帳號的路徑，建立說明不會出現 |
 | HM-25（開通後才走的部分；runtime 收斂在第 4.1 節） | #129 | 合併後補 | 額外帳號的子程式（HOME、`nodes.db` 副本與換後端時重做、命令列的 port、沒後端不起）、沒後端的額外帳號每支工具都 `backend_not_configured`、刪帳號（含孤兒、隔離目錄）清 catalog 副本、容器探針多帳號階段收 n8n | 沒有額外帳號：額外帳號的 spec 在關時直接拒絕，`prepare_child`、產品清理與 `documentation_child` 的額外帳號分支都不會被呼叫 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：

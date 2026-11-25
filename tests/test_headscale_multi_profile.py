@@ -19,6 +19,10 @@ serves today has a counterpart, switched off:
   (the vendored policy reader on the profile directories the panel's creation made), a profile that may not create API
   keys included; a profile directory a restore left widened is refused (fail closed) until the profile's store
   tightened it, which the add-on does before any child starts;
+- a profile made now starts without the three writes of headscale_api_keys (owner decision 2026-11-25, an exception to
+  DQ-02, contract #144): its policy is the default profile's of that moment but for create, expire and delete there
+  (list stays); from every state the default profile can be in, in the panel's own creation and at the child itself, and
+  once its administrator has turned them on they work, the default profile and every other profile as they were;
 - the child reads only a state that is its own (HM-26 security review S-1; not behind the switch): the state's child
   token must be the WOOW_MCP_CHILD_TOKEN the child was started with. A child started on another profile's state.json (B
   has the default profile's server and key, so nothing else tells the two apart), and one still running after its
@@ -62,7 +66,9 @@ from multi_profile_runtime import (Children, all_tokens, create_profile, free_po
                                    stored, update_profile)
 from mcp_admin_core import health as health_module, profiles
 from mcp_admin_core.health import protocol_reply
-from mcp_admin_core.products import DENY_LOOPBACK_ENV, ProductStore, child_spec
+from mcp_admin_core.policy import ToolCallRefused, authorize
+from mcp_admin_core.products import DENY_LOOPBACK_ENV, TOOLS, ProductState, ProductStore, child_spec
+from test_profile_admin_api import Panel, csrf_of
 from test_single_profile_golden import (ACCEPT, ADMIN, BEARER_REQUIRED, CONNECTIONS, GENUINE_CLIENT, NOT_FOUND,
                                         NoProcessSupervisor, answer, initialize_message, settle)
 from tool_refusal import refused
@@ -82,6 +88,15 @@ DENIED_403 = (403, [('content-length', '26'), ('content-type', 'application/json
 DENIED_400 = (400, b'{"error":"request denied"}')
 NEW_ORIGIN = b'{"error":"request denied","detail":{"code":"CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN"}}'
 SWITCH = pytest.mark.parametrize('switched_on', [True, False], ids=['switched-on', 'switched-off'])
+# The writes of headscale_api_keys, which a profile made now starts without (contract #144), and the calls and requests
+# that tell what a child does with them: list is a read (it goes through), the other three are the writes.
+API_KEY_WRITES = ('headscale_api_keys:create', 'headscale_api_keys:expire', 'headscale_api_keys:delete')
+KEY_CALLS = [('headscale_api_keys', {'operation': 'list'}),
+             ('headscale_api_keys', {'operation': 'create', 'expiration': '2099-01-01T00:00:00Z', 'reveal_once': True}),
+             ('headscale_api_keys', {'operation': 'expire', 'key_id': '401'}),
+             ('headscale_api_keys', {'operation': 'delete', 'prefix': 'AbCdEf012345'})]
+KEY_REQUESTS = [['GET', '/api/v1/apikey'], ['POST', '/api/v1/apikey'], ['POST', '/api/v1/apikey/expire'],
+                ['DELETE', '/api/v1/apikey/AbCdEf012345']]
 # The calls each child is asked (name, arguments): a write, two reads, the write that hands out a key administering
 # the whole server (headscale_api_keys create: HM-26 security review M-1, S-4) and the parent's private readiness
 # probe, and the request each one sends to the server when it is let through. TOOL_CALLS: all but the probe.
@@ -98,10 +113,15 @@ ANSWERS = {('POST', '/api/v1/user'): {'user': {'id': '7', 'name': 'hm26-user'}},
            ('GET', '/api/v1/user'): {'users': [{'id': '7', 'name': 'hm26-user'}]},
            ('GET', '/api/v1/node'): {'nodes': []},
            ('POST', '/api/v1/apikey'): {'apiKey': CREATED_KEY},
+           ('GET', '/api/v1/apikey'): {'apiKeys': [{'id': '401', 'prefix': 'AbCdEf012345'}]},
+           ('POST', '/api/v1/apikey/expire'): {},
+           ('DELETE', '/api/v1/apikey/AbCdEf012345'): {},
            ('GET', '/api/v1/health'): {'databaseConnectivity': True}}
 # The four profiles' policies: the default profile keeps every write (a new installation); B (the default profile's
-# server and key) loses the users:create and api_keys:create grants and the whole nodes tool; C (the same server, a key
-# of its own) has users:list denied; D (a server and key of its own) has the users tool disabled. Per call of CALLS:
+# server and key) loses the users:create grant and the whole nodes tool and has none of the three API-key writes, which
+# a profile made now starts without (API_KEY_WRITES); C (the same server, a key of its own) has users:list denied and
+# D (a server and key of its own) the users tool disabled, and both have every write grant, the API-key ones given by
+# their administrators. Per call of CALLS:
 # whether the profile's policy lets it through (the readiness probe always: the child keeps its private probe callable
 # whatever the policy).
 LETS_THROUGH = {'default': [True, True, True, True, True], B: [False, True, False, False, True],
@@ -123,13 +143,13 @@ def directory(data, profile_id):
 
 def give_policies(data, grants, connection, other):
     """B, C and D (created) given their backends and LETS_THROUGH's policies (grants: the default profile's write
-    grants, which a profile created now copies): B the default profile's server and key (*connection*), C the same
-    server with a key of its own, D another server with its own key (*other*)."""
-    kept = [grant for grant in grants if grant not in ('headscale_users:create', 'headscale_api_keys:create')]
+    grants, which a profile created now copies but for API_KEY_WRITES): B the default profile's server and key
+    (*connection*), C the same server with a key of its own, D another server with its own key (*other*)."""
+    kept = [grant for grant in grants if grant not in ('headscale_users:create', *API_KEY_WRITES)]
     update_profile(data, PRODUCT, B, connection=connection, disabled=['headscale_nodes'], enabled_write_tools=kept)
-    update_profile(data, PRODUCT, C, connection={**connection, 'api_key': OWN_KEY},
+    update_profile(data, PRODUCT, C, connection={**connection, 'api_key': OWN_KEY}, enabled_write_tools=grants,
                    denied_operations={'headscale_users': ['list']})
-    update_profile(data, PRODUCT, D, connection=other, disabled=['headscale_users'])
+    update_profile(data, PRODUCT, D, connection=other, disabled=['headscale_users'], enabled_write_tools=grants)
 
 
 def with_policies(data, *, server=None, other=None, ports=tuple(EXTRA_PORTS.values())):
@@ -399,6 +419,111 @@ def test_a_child_whose_profile_got_a_new_child_token_serves_nothing_until_it_is_
         update_profile(data, PRODUCT, profile_id, child_token=renewed)
         assert as_the_child(running) == refused, profile_id
         assert as_the_child(spec_of(data, profile_id, port)) == expected_outcomes(profile_id), profile_id
+
+
+POLICY_FIELDS = ('writes_enabled', 'disabled', 'enabled_write_tools', 'denied_operations')
+
+
+def starts(everything):
+    """The default profile's policy when a profile is made, three ways (contract #144): every write on (a new
+    installation), some off and one tool disabled, and the API-key operations denied already with their grants kept."""
+    return {'all open': {},
+            'partly open': dict(enabled_write_tools=[grant for grant in everything if grant not in (
+                'headscale_api_keys:expire', 'headscale_nodes:delete', 'headscale_policy:apply')],
+                disabled=['headscale_debug_node']),
+            'already denied': dict(denied_operations={'headscale_api_keys': ['create', 'expire', 'delete'],
+                                                      'headscale_users': ['delete']})}
+
+
+@pytest.mark.parametrize('start', ['all open', 'partly open', 'already denied'])
+def test_a_new_profile_has_no_api_key_write_until_its_administrator_turns_them_on(tmp_path, log_scan, start):
+    """Owner decision 2026-11-25 (an exception to DQ-02; contract #144), from each starting point of the default
+    profile: the profile made now (profile_initial_state, the panel's creation) has the default profile's policy but
+    for create, expire and delete of headscale_api_keys; the default profile's own state is as it was. The vendored
+    child in its own interpreter with the spec of that profile: list goes through (its own key, its own server), the
+    three writes are refused (HEADSCALE_POLICY_DENIED, nothing sent), whatever the default profile can do. Once its
+    administrator has granted the three (and cleared the deny on them that the default profile had, as the panel saves
+    it), every call goes through; the default profile's own child answers as it always did."""
+    data = tmp_path / 'data'
+    store = ProductStore(data, PRODUCT)
+    try:
+        everything = sorted(store.load().enabled_write_tools)
+        default = store.update(connection=SHARED, **starts(everything)[start])
+    finally:
+        store.close()
+    before = {name: stored(data)[name] for name in POLICY_FIELDS}
+    create_profile(data, PRODUCT, B, label=LABELS[B], port=EXTRA_PORTS[B], configured=False)
+    update_profile(data, PRODUCT, B, connection=SHARED)
+    watch(log_scan, data)
+    made = stored(directory(data, B))
+    assert {name: stored(data)[name] for name in POLICY_FIELDS} == before  # the default profile as it was
+    assert made['enabled_write_tools'] == [grant for grant in default.enabled_write_tools
+                                           if grant not in API_KEY_WRITES]
+    assert not [grant for grant in made['enabled_write_tools'] if grant.startswith('headscale_api_keys')]
+    assert (made['writes_enabled'], made['disabled'], made['denied_operations']) == (
+        default.writes_enabled, default.disabled, default.denied_operations)
+    closed = [['ok', [[*KEY_REQUESTS[0], True]]], *[['HEADSCALE_POLICY_DENIED', []]] * 3]
+    assert as_the_child(spec_of(data, B, EXTRA_PORTS[B]), KEY_CALLS) == closed
+    update_profile(data, PRODUCT, B, enabled_write_tools=[*made['enabled_write_tools'], *API_KEY_WRITES],
+                   denied_operations={tool: operations for tool, operations in made['denied_operations'].items()
+                                      if tool != 'headscale_api_keys'})
+    assert as_the_child(spec_of(data, B, EXTRA_PORTS[B]), KEY_CALLS) == [
+        ['ok', [[*request, True]]] for request in KEY_REQUESTS]
+    denied = 'HEADSCALE_POLICY_DENIED'  # the default profile, at its own child, is what it always was
+    assert [outcome for outcome, _ in as_the_child(spec_of(data, 'default', 3000), KEY_CALLS)] == {
+        'all open': ['ok', 'ok', 'ok', 'ok'], 'partly open': ['ok', 'ok', denied, 'ok'],
+        'already denied': ['ok', denied, denied, denied]}[start]
+
+
+async def test_a_profile_made_in_the_panel_starts_without_the_api_key_writes(tmp_path, log_scan, monkeypatch):
+    """The panel's own creation (POST /api/profiles on the switched-on add-on), not only the library call: the new
+    profile's stored policy is the default profile's but for the three API-key writes; the default profile's state is as
+    it was; the new profile's administrator saves the three (PUT /api/policy, as the panel does: 200) and they are
+    stored; and the policy check a tools/call passes (policy.authorize) refuses them before the save and takes them
+    after, for the new profile and not for the default profile's own state."""
+    monkeypatch.setattr(profiles, 'port_occupied', lambda port: None)  # the creation's own bind check (tests/owned_network)
+    data = tmp_path / 'data'
+    store = ProductStore(data, PRODUCT)
+    try:
+        default = store.update(connection=SHARED)
+    finally:
+        store.close()
+    children = Children()
+    children.profile_child(3000, 'default', PRODUCT, data)
+    async with multi_profile_runtime(PRODUCT, data, children=children) as runtime:
+        await settle(runtime, 'configured')
+        log_scan.watch(*all_tokens(data))
+        panel = Panel(runtime, await csrf_of(runtime))
+        created = await panel.create('Headscale Desk E')
+        assert created.status_code == 201, created.content
+        new = created.json()['id']
+        made = stored(directory(data, new))
+        log_scan.watch(made['token'], made['child_token'])
+        assert made['enabled_write_tools'] == [grant for grant in default.enabled_write_tools
+                                               if grant not in API_KEY_WRITES]
+        assert (made['writes_enabled'], made['disabled'], made['denied_operations']) == (
+            default.writes_enabled, default.disabled, default.denied_operations)
+        assert stored(data)['enabled_write_tools'] == default.enabled_write_tools  # all 21: the default is as it was
+        assert len(default.enabled_write_tools) == 21 and len(made['enabled_write_tools']) == 18
+
+        def allowed(state, number):
+            name, arguments = KEY_CALLS[number]
+            message = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': name, 'arguments': arguments}}
+            try:
+                return authorize(message, TOOLS[PRODUCT], state) == 'tools/call'
+            except ToolCallRefused as refused:
+                assert refused.kind == 'operation_not_permitted'
+                return False
+        closed, opened = ProductState.model_validate(made), ProductState.model_validate(stored(data))
+        assert [allowed(closed, number) for number in range(4)] == [True, False, False, False]
+        assert [allowed(opened, number) for number in range(4)] == [True, True, True, True]
+        saved = await admin_write(runtime, new, 'PUT', 'policy', policy_body(
+            made, enabled_write_tools=[*made['enabled_write_tools'], *API_KEY_WRITES]))
+        assert saved.status_code == 200, saved.text
+        turned_on = stored(directory(data, new))
+        assert set(API_KEY_WRITES) <= set(turned_on['enabled_write_tools'])
+        assert [allowed(ProductState.model_validate(turned_on), number) for number in range(4)] == [True] * 4
+        assert stored(data)['enabled_write_tools'] == default.enabled_write_tools
 
 
 def test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tightens_it(tmp_path, log_scan):

@@ -310,6 +310,7 @@ Headscale 再驗，**每一步先問使用者**：
   `headscale_api_keys` 的 create、expire、delete）的寫入被擋（閘道與子程式都擋，伺服器沒收到）、另一個做得到；受限帳號的
   `headscale_api_keys` create、expire、delete 經閘道與直連子程式都擋、伺服器沒收到（只送會被擋的呼叫）；在 Headscale 撤銷某個帳號
   自己的那把 key 後，只有那個帳號的呼叫失敗（`HEADSCALE_UPSTREAM_ERROR`、401）、它的健康監看進入認證退避，其他帳號照常。
+  新建的額外帳號預設就拒絕 `headscale_api_keys` 的 create、expire、delete（讀取 `list` 可以；預設帳號照舊全開）：經閘道與直連子程式都擋、伺服器沒收到，到它的工具權限頁開啟後才做得到（只做會被擋的那一邊，**不要真的 create**；契約 #144）。
 - T-05、T-08、T-09、T-13：P9 kit 照 [P9 kit](ha-p9-kit.md)（`--cross`、`--temp-profile`、`childkill`）。
 - T-07：存一個帳號的政策，只有它的子程式換 PID，別的帳號的 session 不斷。
 - T-20：0.4.19 → 0.5.0 升級後預設帳號的 token、兩條網址、`state.json` 位元不變（Store `verify`）；回退與再升級照 T-20。

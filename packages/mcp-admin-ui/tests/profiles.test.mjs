@@ -4,9 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AdminApi, ApiError, ProfileEchoError, StaleProfileError } from '../src/api.js';
 import { OperationIdentity, PROFILES_SCOPE } from '../src/operation-identity.js';
-import { DEFAULT_PROFILE, blockedNotice, clientName, disabledNotice, echoMatches, indexState, labelProblem, optionLabel, orphanIds, profileName, profileRows, shortId } from '../src/profiles.js';
+import { DEFAULT_PROFILE, blockedNotice, clientName, createDescription, disabledNotice, echoMatches, indexState, labelProblem, optionLabel, orphanIds, profileName, profileRows, shortId } from '../src/profiles.js';
 import { readFileSync } from 'node:fs';
-import { clientExample, policyFingerprint, policyRestartNotice, UiError } from '../src/contracts.js';
+import { clientExample, policyFingerprint, policyRestartNotice, products, UiError } from '../src/contracts.js';
 import { createP9AdminClient } from '../../../packaging/ha_p9_admin.mjs';
 // HM-12: read through the modules, so a name a module does not have fails only the cases that use it.
 import * as panelApi from '../src/api.js';
@@ -393,6 +393,18 @@ test('labels count code points; control, format and reserved names are refused b
   for (const bad of ['', '   ', 'a\u200bb', 'a\u202eb', 'a\u0007b', 'a\u2028b', 'a\u2029b', 'a\ue000b', 'a\ufeffb', 'a\u{e0001}b', 'a\ud800b', 'Default', ' DEFAULT ', 'ｄｅｆａｕｌｔ', '預設帳號', 42, null]) {
     assert.notEqual(labelProblem(bad), null, String(bad));
   }
+});
+
+test('the create dialog says what a new profile copies; Headscale\'s also what it does not (owner decision 2026-11-25), every other product\'s as it was', () => {
+  const copies = '新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。';
+  for (const product of Object.keys(products).filter(name => name !== 'headscale')) {
+    assert.equal(createDescription(product), `${copies}建立後會自動切換到新帳號；需要權杖時到「連線與權杖」按「顯示權杖」。`, product);
+  }
+  const headscale = createDescription('headscale');
+  assert.ok(headscale.startsWith(copies + 'Headscale 的 API 金鑰是整台伺服器的管理權限，'));
+  assert.match(headscale, /所以新帳號不複製 headscale_api_keys 的建立、作廢與刪除（讀取照複製），預設不能用；需要時到這個帳號的「工具權限」頁自行開啟。建立後會自動切換到新帳號；/);
+  assert.ok(headscale.endsWith('需要權杖時到「連線與權杖」按「重新產生」。'));  // PR #130: Headscale shows no existing token
+  assert.doesNotMatch(headscale, /顯示權杖/);
 });
 
 test('the policy fingerprint names the profile; the example names an additional profile; a restart notice says only this profile', () => {

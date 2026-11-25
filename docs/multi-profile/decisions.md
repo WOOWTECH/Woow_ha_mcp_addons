@@ -11,7 +11,7 @@
 
 ## 結論
 
-- 46 題裡 41 題已定（DQ-08 只定了 HM-06 的部分）：
+- 46 題裡 42 題已定（DQ-08 只定了 HM-06 的部分）：
   - 2026-11-14（台北 13:4x）：使用者**全部採用計畫 §13.1 的 15 項建議**（16 題；DQ-07 與 DQ-29 同一項）。
   - 2026-11-14 21:5x：§13.2 的 DQ-09、DQ-12、DQ-19 採用計畫建議；DQ-38 選 (a) 原樣 vendor。
   - 2026-11-15 06:1x：DQ-36 補上合併授權：不改版號的多帳號功能 PR 由主對話在 CI 全綠後依序合併；升版 PR 仍要使用者逐次批准。
@@ -34,15 +34,18 @@
     前因後果後選「不承諾天數」。計畫 §13 的註與進度紀錄有原文；HM-18 記進來（2026-11-19）。
   - 2026-11-19 08:4x（主對話用 AskUserQuestion 問 n8n 的兩題）：DQ-04、DQ-22 採用計畫建議（使用者選「照計畫建議定案（推薦）」）。
     HM-18 同日記進來。
-- 其餘 5 題（§13.2 的 0 題、§13.3 的 5 題）維持「待定」：DQ-26、DQ-27、DQ-41、DQ-44、DQ-46，都不擋 R1（Odoo 首發）。
+  - 2026-11-25（負責人；主對話用 AskUserQuestion「火車 B 要怎麼做？」，選「三個一起，照建議做」）：DQ-26 照計畫建議定案（同台不同政策與多台都支援，
+    建議每帳號不同 key、不強制）；安全審查另問的兩件也照建議：新建的 Headscale 額外帳號預設不給 `headscale_api_keys` 的 create、expire、delete
+    （偏離 DQ-02，只限這一處，第 1.1 節），子程式核對 state 的 child token（安全審查 S-1，不受開關管）。
+- 其餘 4 題（§13.2 的 0 題、§13.3 的 4 題）維持「待定」：DQ-27、DQ-41、DQ-44、DQ-46，都不擋 R1（Odoo 首發）。
   每題寫了負責片與最晚何時要定；計畫的建議照列，但不是決定。
 
-## 1. 已定（計畫 §13.1 全部；§13.2 的 DQ-05、DQ-08（HM-06 部分）、DQ-09、DQ-10、DQ-12～DQ-19、DQ-21、DQ-25、DQ-30、DQ-31、DQ-35、DQ-38、DQ-42、DQ-43；§13.3 的 DQ-04、DQ-22、DQ-23、DQ-24、DQ-45）
+## 1. 已定（計畫 §13.1 全部；§13.2 的 DQ-05、DQ-08（HM-06 部分）、DQ-09、DQ-10、DQ-12～DQ-19、DQ-21、DQ-25、DQ-30、DQ-31、DQ-35、DQ-38、DQ-42、DQ-43；§13.3 的 DQ-04、DQ-22、DQ-23、DQ-24、DQ-26、DQ-45）
 
 | DQ | 題目 | 結論 | 狀態 | 負責片 |
 |---|---|---|---|---|
 | DQ-01 | Bearer `/mcp` 也依 token 選帳號 | (a) 要：Bearer 的 token 值就是帳號 token，和密鑰網址用同一個解析器 | 2026-11-14 使用者採用建議 | HM-08 |
-| DQ-02 | 新帳號初始政策 | (a) 複製預設帳號當下的政策（PaaS 做法）；`n8n_session` 不複製；建立不記 history | 2026-11-14 使用者採用建議 | HM-07、HM-10 |
+| DQ-02 | 新帳號初始政策 | (a) 複製預設帳號當下的政策（PaaS 做法）；`n8n_session` 不複製；建立不記 history。**一個例外（2026-11-25 負責人）**：Headscale 的新額外帳號不複製 `headscale_api_keys` 的 create、expire、delete（讀取照複製，其他工具與其他產品照複製）；見第 1.1 節 | 2026-11-14 使用者採用建議；2026-11-25 負責人補上 Headscale 的例外 | HM-07、HM-10、HM-26 |
 | DQ-03 | 還原資料沒用過多帳號時，預設帳號要不要也撤銷 | (b) A2，首發先這樣：只有磁碟上有帳號資料的還原才撤銷預設帳號；單帳號安裝的還原行為和今天一樣，面板與 log 提示「權杖已回到備份當時的值」；白名單節奏（DQ-35）做到後再評估改 (a) | 2026-11-14 使用者採用建議 | HM-13b、HM-13c |
 | DQ-05 | Odoo 換身分換 token；Nextcloud、Hermes 是否比照 | 照計畫 §9：Odoo 換 url／database／username 時先停舊子程式 → 一次寫新連線＋新 token＋history（沿用 `rotate`）→ `TokenAccess.committed()` → 起新子程式；提交失敗用舊 state 重起；回 `token_rotated:true`；只換密碼或初次設定不換。比照的範圍照 DQ-40 ⑩：Nextcloud 換 url／username、Hermes 換 gateway_url／dashboard_url／dashboard_username 也換 token。HM-24 的細分（2026-11-19，HM-12 筆記第 15 節交辦的確認）：Hermes 的 Dashboard 三欄一起清空也算換身分，照 HM-12 的 Odoo 規則（清空連線也換：不換的話，先清空、再補上另一個帳號就成了初次設定）；三欄一起補上（原本只有 Gateway）也換是 HM-24 自己的做法，**還沒經使用者確認**（狀態欄；PaaS 的通用判斷不會換）；三欄只給一部分照今天 400；只換 `gateway_api_key`、`dashboard_password` 不換（`contract.md` 第 9 節 #134）。2026-11-20 使用者定案取代這一句：Hermes 任何身分變更都不換 token，與 PaaS 一致（見本檔開頭的定案；以上為歷史）。HM-12 的實作細分（2026-11-17 記，獨立審查 S-1；不是新題目）：「提交失敗用舊 state 重起」只用在確定什麼都沒寫的失敗（舊子程式停不下來、store 拒絕寫入、新的 state 檔在取代舊檔之前寫不出來：磁碟上的 token 還是舊的）；取代 state 檔途中失敗（`os.replace` 或之後的目錄 fsync）結果不明，store 照今天毒化（該帳號到 add-on 重啟前 503；預設帳號的新檔已換上時 8081 全部 503），**不**重起舊子程式（磁碟上可能已是新 token，重起會讓舊憑證的子程式在新 token 可能存在時執行，UC-21），重啟後照磁碟上的 state（token 與身分一起）；寫入丟出例外但新 token 已在磁碟上時也不重起（`contract.md` 第 3.1 節 `backend` 列、§8.8「換身分途中失敗」列）。HM-22 的實作細分（2026-11-19 記；不是新題目）：Nextcloud 的 url 照它指的伺服器比（scheme、host 不分大小寫，寫不寫預設 port 都一樣）再比存的路徑（大小寫算），只差這些寫法不換 token，對齊 PaaS #154 的 `normalize_base_url`；2026-11-20 依使用者明確要求對齊 PaaS：存檔先切貼上的頁面路徑，再以正規化結果比較；等價舊寫法沿用、不換；username 去前後空白後逐字比（`contract.md` §8.8 #131） | 已定（依 DQ-40 (a)，2026-11-14）：照計畫 §9 的 Odoo、Nextcloud、Hermes 列；HM-12 的細分，主對話 2026-11-17 已在合併前向使用者說明（審查判定安全上正確）。HM-24 的細分：清空 Dashboard 也換照 HM-12 的規則；**「補上 Dashboard 也換」待使用者確認**（HM-24 筆記第 12 節；第 4 節），確認前不合併 HM-24（2026-11-20 使用者已定案 Hermes 不換 token，這一點不再待確認） | HM-12、HM-22、HM-24 |
 | DQ-06 | 對齊基準 | (a) PaaS main `69ac425`；#149 與 `091dfbc` 合併後收進來；之後的變動每片開工前列出（`docs/provenance/multi-profile-parity-baseline.md`）。補記：同日兩條都已合併——`091dfbc`（#150，main `5a06d53`，只改文件、測試與註解）、#149（main `7d111b1`，14:19，正式碼只動 `log_redaction.py`）；收進來的內容與影響見基準文件第 3 節 | 2026-11-14 使用者採用建議 | 每片（provenance）；HM-02（#149）、HM-14（#150） |
@@ -81,6 +84,7 @@
 | DQ-42 | J1900 指令集檢查是不是每次發版 RC 的必要步驟 | 是：每次發版都在模擬舊 CPU（QEMU `-cpu Nehalem`）上跑一次 J1900 指令集檢查（GitHub 託管機器的 `release.yaml` candidate 已做，`docs/operations/release.md`；`unreleased-changes.md` 第 5 節第 9 點） | 2026-11-17 13:5x 使用者採用建議（計畫 §13.2；AskUserQuestion） | HM-19a、每個升版片 |
 | DQ-45 | 額外帳號的 `serverInfo.name` 要不要帶 id 前 8 碼 | 不改，和 PaaS 一致：每個帳號都是 `woow-mcp-<產品>`；DOCS 建議一個代理或一個對話只接一個帳號、用戶端範例名稱帶 id（`docs/operations/clients.md`；面板的範例名稱見 DQ-31） | 2026-11-17 13:5x 使用者採用建議（計畫 §13.3；AskUserQuestion） | HM-18（文件）、HM-11（面板的範例名稱） |
 | DQ-04 | n8n nodes.db 放哪 | 每個額外帳號一份，放在 `/tmp/woow-n8n-mcp/profiles/<id>/`：不在 `/data`、不進備份（和預設帳號今天的語意相同，不加大備份）；預設帳號的路徑不變（`/tmp/woow-n8n-mcp/nodes.db`）（`contract.md` 第 8 節、第 9 節 #47）。HM-25 照這個實作：做法見 `contract.md` 第 7 節「n8n 額外帳號」與第 9 節 #47 | 2026-11-19 08:4x 使用者採用建議（計畫 §13.3；AskUserQuestion，選「照計畫建議定案（推薦）」） | HM-25 |
+| DQ-26 | Headscale 形態 | 同台不同政策與多台都支援；建議每帳號不同 key，不強制、不檢查。HM-26 的實作（2026-11-19；`contract.md` 第 9 節 #137、#138）：兩種形態都支援、都有測試；DOCS 與開通時的面板說明建議每帳號不同 key，並寫明同一台的帳號不論 key 都只靠工具政策分權、受限的帳號要停用 `headscale_api_keys` 的建立、作廢與刪除。同一次決定補的兩件：新建的額外帳號預設不給這三個寫入（DQ-02 的例外，第 1.1 節；#144）、子程式核對 state 的 child token（#138） | 2026-11-25 負責人定（AskUserQuestion「火車 B 要怎麼做？」，選「三個一起，照建議做」）：照計畫建議 | HM-26 |
 | DQ-22 | n8n 額外帳號細節 | 額外帳號沒填後端時不起子程式；所有工具（含 7 支文件工具）回明確的 `backend_not_configured`，不再回「try again shortly」；逾時與限流維持 HA 現值（session 逾時預設 600 秒；`AUTH_RATE_LIMIT_MAX` 不設，用 n8n-mcp 的預設；PaaS 是 900 秒與 1000，FEATURE-MATRIX FM-84）。預設帳號照今天：沒後端也起文件模式子程式（`contract.md` 第 4.2 節、第 9 節 #28、#62）。HM-25 照這個實作：做法見 `contract.md` 第 7 節「n8n 額外帳號」與第 9 節 #28、#62、#142 | 2026-11-19 08:4x 使用者採用建議（計畫 §13.3；AskUserQuestion，選「照計畫建議定案（推薦）」） | HM-25 |
 
 ## 1.1 計畫外的決定（沒有 DQ 編號；HM-31 記，HM-30、HM-13c、HM-18 補）
@@ -103,6 +107,7 @@
 | 2026-11-19 | HM-10 審查 S-5：`tests/contract/profiles_v1_cases.json` 要不要補管理面（8099）的資料案例（計畫 §10.3 的 HM-10 列寫「擴充」；HM-10 沒做，交 HM-18 決定） | **不補，檔案不改**。理由：(1) 它是 HM-01 的守門檔，格式只描述 8081（原始 HTTP 請求打真 listener，`ha` 欄是預設帳號的回應），加管理面會改它的意思與讀它的 `tests/test_mcp_contract_freeze.py`、`tests/test_profile_routing.py`；(2) 管理面已有三層守住：`tests/test_admin_pipeline_matrix.py`（從路由表自動產生：新路由沒進表就失敗、非管理員在任何帳號狀態下拿到逐位元相同的 403、管線的固定回應開關開與關逐位元相同）、`tests/test_admin_contract_freeze.py`（HM-01 的 8099 凍結，開關關）、`tests/test_panel_profile_api_shapes.py`＋`packages/mcp-admin-ui/tests/profile-api-cases.json`（開通後面板用到的每個管理呼叫與拒絕，錄自真的 8099 app，同一份案例也對面板的 mock 跑）；(3) HM-18 逐項核對，沒有只有資料檔才擋得住的缺口。附帶查到：`contract.md` 第 1.4 節第 4 點的兩個位元組變化，PATCH、DELETE 那一點有斷言（`test_the_dispatcher_routes_every_route_of_its_table`），表外方法（OPTIONS 等）的 `Allow` 變成 6 個方法沒有測試斷言（HM-18 本機核對過行為）；這是 8099 測試的缺口，不屬這個 8081 的檔，交下一個動 8099 測試的片補一案 | HM-18（主對話 2026-11-16 交辦：計畫 §12.3 HM-10 的註） | HM-18 |
 | 2026-11-23 | HM-19c 契約 §2.4、§5、§6 修訂：開通 Odoo 的回覆記憶體票券（全域 8 張、每張 64 MiB）使大型回覆只能預設帳號 3 筆、每個額外帳號 1 筆；舊的「A 同時 32 個大型回覆」gate 不可能成立，要不要改契約 | **使用者接受修訂（2026-11-23 05:5x）**：票券式大型回覆上限預設帳號 3、每個額外帳號 1；超過上限不排隊：GET 回 429、`-32003`、`Retry-After: 30`，第二筆帶回覆的 POST 回 200、`-32003`、`Retry-After: 5`，皆在轉送給子程式前；舊的「32 個重疊大型回覆」gate 由 offered／admitted／busy／success 帳目取代（§5 的 64 個請求帳目屬於此修訂）；其他門檻不變（迴圈停頓 ≤50 ms、B／C 健康檢查 0 逾時、B 的 p99 ≤2d＋0.2 秒、輸出位元組相同）。改動：契約 §2.4、§5、§6 由「待確認」改為已接受；程式為 `profile_router.py` 的 3／1 上限（Codex `13d1268`，等價於本分支的 `73be8aa`）；worker 喘息 2→4 ms（`803cb2b`，獨立審查無正確性或安全阻擋）也併入 | 使用者 | HM-19c、HM-19a |
 | 2026-11-23 | Odoo 0.5.0 HM-19b 驗收在展示機用官方 MCP TypeScript SDK 1.32.2 重現 F1：開通多帳號的 Odoo 每條 GET 事件串流在整個生命週期占一張 64 MiB 回覆票券（`gateway.reply_may_hold_large_child_output` 對 GET 回 True；`profile_router.py` 把串流上限壓成票券數：預設 3、額外 1）。額外帳號的 SDK 用戶端連線後，自己開的常駐 GET 占走唯一一張票，它自己的 `tools/list` 與每次 `tools/call` 都回 200＋`-32003`（外掛的回覆記憶體額度已滿）；預設帳號 5 個 SDK 用戶端時 5 次 `tools/call` 全忙碌。證據：`artifacts/ha-multiprofile-parity-20261114/takeover-20261123/hm19b-kit/evidence-20261123/f1sdk-*.log`、`f1-*.log`、`deviations-zh-TW.md` 第 12 項。上面 2026-11-23 的 3／1 串流上限要不要保留、F1 怎麼處理 | **負責人決定：「修好再發 0.5.1」**。HA 版只要與 PaaS／podman 功能一致，所以照 PaaS woow-mcp-server 閘道：每帳號 GET 串流有自己的上限，串流開滿時 POST 仍有名額、照常運作。做法：GET 串流不再取回覆票券（`reply_may_hold_large_child_output` 對 GET 回 False）；串流上限回到一般名額（預設帳號 24、額外帳號 8），超過照舊 429＋`-32003`＋`id: null`＋`Retry-After: 30`；記憶體改由每條串流自己的小上限限住（交給 server 還沒收走的位元組 2 MiB（審查 MF-1 後由 1 MiB 改，見 contract §5）、子程式單一事件 128 KiB，超過乾淨結束串流並記 WARNING），全域最壞算式加保留項 `ODOO_STREAM_RESERVE_MIB`＝128。版號 0.5.0 → 0.5.1：0.5.0 已推到 GHCR 但從未上架 Store（Store 上是 0.4.14），所以 0.5.1 是第一個上架的多帳號版，使用者從 0.4.14 直接升級。**不改**（已接受）：回覆票券本身（每張 64 MiB、全域 512 MiB、預設帳號 3 張、額外帳號各 1 張、超過不排隊、POST 回 200＋`-32003`＋`Retry-After: 5`）照舊只用在可能帶大型回覆的 POST；HM-19c 極端壓力只記錄不擋發版；閘道核心修正（`fix/hm19c-*` 分支）不在這一版。契約 §2.4、§5、§6 同步改（見 `contract.md` 變更紀錄 0.5.1） | 負責人（2026-11-23） | Odoo 0.5.1（HM-19c、HM-19b 的後續） |
+| 2026-11-25 | HM-26 安全審查另問負責人的兩件：(1) 新建的 Headscale 額外帳號要不要預設不給 `headscale_api_keys` 的寫入（偏離 DQ-02「複製預設帳號當下的政策」）；(2) 子程式要不要核對 state 的 child token（安全審查 S-1，建議開通前合；開關關也生效）。同一次一併定 Headscale 的 token 揭露對齊 PaaS（PR #130 已做）與 DQ-26 | **都照建議做**（選項原文的 Headscale 部分：「Headscale 照 PaaS 不再顯示舊金鑰、新帳號預設不給 API 金鑰管理的寫入、補子程式核對。」）。(1) 偏離 DQ-02 只限 Headscale 的 `headscale_api_keys` 的 create、expire、delete 三個寫入：新建的額外帳號複製預設帳號當下的政策，唯獨這三個不複製（`list` 照複製）；管理員之後在該帳號的工具權限頁自行開啟。只影響建立當下：預設帳號、已存在的帳號、其他工具、其他產品都不變；開關關時沒有建立，所以沒有影響。面板「新增帳號」的說明在 Headscale 多一句（`contract.md` 第 9 節 #144）。(2) 子程式比對 state 的 `child_token` 與自己的 `WOOW_MCP_CHILD_TOKEN`，不符每個呼叫 fail closed；不受開關管，Headscale 的下一版 CHANGELOG 要寫（`unreleased-changes.md` HS8）。(3) 不再顯示既有 token：PR #130 已做（`contract.md` 第 3.1 節「Headscale 權杖例外」）。DQ-26 同時定案（第 1 節） | 使用者（負責人） | HM-26（火車 B） |
 
 ## 2. 待定：首發前要定（計畫 §13.2；HM-08～HM-13 開工前）
 
@@ -113,11 +118,10 @@
 
 ## 3. 待定：擴產品或加固時再定（計畫 §13.3）
 
-DQ-04、DQ-22（n8n）在 2026-11-19 定案，移到第 1 節（HM-18）。
+DQ-04、DQ-22（n8n）在 2026-11-19 定案，移到第 1 節（HM-18）；DQ-26（Headscale）在 2026-11-25 定案，移到第 1 節。
 
 | DQ | 題目 | 計畫建議（還沒問，不是決定） | 狀態 | 負責片 | 最晚何時 |
 |---|---|---|---|---|---|
-| DQ-26 | Headscale 形態 | 同台不同政策與多台都支援；建議每帳號不同 key，不強制 | 待定（HM-26 照建議實作與測試，2026-11-19：兩種形態都支援、都有測試；DOCS 與開通時的面板說明建議每帳號不同 key、不檢查，並寫明同一台的帳號不論 key 都只靠工具政策分權、受限的帳號要停用 `headscale_api_keys` 的建立、作廢與刪除。安全審查建議另問一題：新建的 Headscale 額外帳號要不要預設不給這三個寫入（偏離 DQ-02 的「複製預設帳號當下的政策」）。使用者確認後移到第 1 節） | HM-26 | Headscale 升版 PR 前 |
 | DQ-27 | EMQX 子程式再擋一次政策 | 不做 | 待定 | HM-23 | HM-23 開工前 |
 | DQ-41 | 是否評估 Ingress 的 `X-Remote-User-Groups` 當白名單外的管理身分備援 | 列為評估項目，要獨立安全審查；不是本計畫前提 | 待定 | HM-29 | HM-29 |
 | DQ-44 | 0.5.0 之後的升版比對怎麼驗「有額外帳號」的資料 | `seed` 以 root 寫一份合成帳號樹（擁有者 10001），或請 Store 為本 repo 開 `ha_core` | 待定 | HM-16（工具）、HM-21（R2 第一個升版） | R2 升版 PR 前 |
@@ -169,3 +173,4 @@ DQ-04、DQ-22（n8n）在 2026-11-19 定案，移到第 1 節（HM-18）。
 | 2026-11-19 | HM-25 PR：DQ-04、DQ-22 照計畫建議實作（使用者還沒確認，狀態仍是待定；選了別的做法時，回功能 PR 改）；DQ-10 子題帶出的 webhook 評估寫在 HM-25 的 provenance 筆記（威脅說明），結論等 HM-25 之後的獨立安全審查。DQ 的題數不變 |
 | 2026-11-19 | HM-25 審查修正（安全審查 S-9）：DQ-04、DQ-22 的「最晚何時」不由功能片自己改，回到原文「HM-25 開工前」並註明已過，「n8n 的升版 PR 合併前」只是 HM-25 的提議，等使用者或主對話確認。第 4 節 DQ-10 待辦補 HM-25 獨立安全審查的結論（S-1：建議開通後 webhook、chat、form 也拒 loopback，區網照舊；交使用者定，定之前照舊 `permissive`）。DQ 的題數不變 |
 | 2026-11-19 | HM-25 合併 `claude-delivery` `95b7e9d`（HM-18 的 PR #122）之後：以 HM-18 的已定、待定分法與題數為底（41 題已定、5 題待定，不變）。DQ-04、DQ-22 已由負責人定案（2026-11-19 08:4x），本片在第 3 節寫的「待定：HM-25 先照建議實作（使用者還沒確認）」與提議的期限（n8n 的升版 PR 合併前）拿掉，兩題留在第 1 節；本片的做法出處（`contract.md` 第 7 節「n8n 額外帳號」、第 9 節 #28、#47、#62、#142）加進第 1 節那兩列的結論。第 4 節 DQ-10 待辦（HM-25 獨立安全審查 S-1 的結論，使用者的決定待定）照本片。上面本片的兩列寫在合併之前，內容照原樣。DQ 的題數不變 |
+| 2026-11-25 | 火車 B（Headscale）：負責人定 DQ-26（照計畫建議）並照建議做兩件安全審查另問的事：DQ-02 的 Headscale 例外（新建的額外帳號不複製 `headscale_api_keys` 的 create、expire、delete；第 1.1 節、第 1 節 DQ-02 列補一句）與子程式核對 child token（S-1）。DQ-26 從第 3 節移到第 1 節；結論改成 42 題已定、4 題待定（§13.2 0 題、§13.3 4 題）。契約跟著改：第 9 節 #137（原稿 #129）類型由待決改成部署、加 #144（原稿 #133；列號暫定）、#138（原稿 #130）加 child token 核對（`contract.md` 第 10 節） |

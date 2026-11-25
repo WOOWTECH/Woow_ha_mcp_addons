@@ -1,6 +1,6 @@
 import { AdminApi, ApiError, DEFAULT_ORIGINS, ProfileEchoError, StaleProfileError, TOKEN_ROTATED, originList } from './api.js';
 import { products, connectionHelpFor, policyRestartsChild, policyRestartNotice, UiError, explicitUrl, backendPayload, granularPolicy, operationPolicy, staleOperationDenies, toolRows, policyPayload, policyFingerprint, savedGrant, policySummary, catalogSummary, operationSummary, conditionalWriteSummary, environmentLabels, clientExample, claudeConnectorUrl, ownerDefaultsView, noticeTime, odooSwitches, odooSwitchKeys, odooSwitchPayload, maskedCurrentToken, tokenHistory, backendEdit, backendPatchPayload, newOriginSecrets, urlSecrets, n8nSession, n8nSessionPayload, odooMethods, odooMethodsPayload } from './contracts.js';
-import { DEFAULT_PROFILE, clientName, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId, statusLabel } from './profiles.js';
+import { DEFAULT_PROFILE, clientName, createDescription, indexState, isExtraProfile, labelDialog, profileMenu, profileName, shortId, statusLabel } from './profiles.js';
 import { QUARANTINE_SHOWN, dormantProfiles, exportDocument, exportEntry, policyLine, quarantineTime, restoreNotice, restoreReview, tokenText, waitsForReview } from './restore.js';
 import './styles.css';
 
@@ -194,8 +194,7 @@ function onProfileChange(select) {
 }
 async function createProfile() {
   if (busy || !profiles || profiles.revision === null) return;
-  const label = await labelDialog({ el, button }, { title: '新增帳號', submit: '建立帳號',
-    description: `新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。建立後會自動切換到新帳號；需要權杖時到「連線與權杖」按「${state.product === 'headscale' ? '重新產生' : '顯示權杖'}」。` });
+  const label = await labelDialog({ el, button }, { title: '新增帳號', submit: '建立帳號', description: createDescription(state.product) });
   if (label === null) return;
   const revision = profiles.revision;
   let created = null;

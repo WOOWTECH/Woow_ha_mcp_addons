@@ -184,7 +184,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
   Odoo 5、n8n 2，Hermes、EMQX、LiteLLM、Nextcloud、Headscale 各 3；OpenDesign、Odoo Manage 不開放（DQ-28）。記憶體或開檔數不夠時上限更低
   （下面兩點）。
 - 每個帳號有自己的後端連線與憑證、一把 MCP 權杖、一份工具政策、一個子程式。新帳號複製預設帳號當下的工具政策（之後各自獨立），後端連線是空的，
-  要另外設定（DQ-02）。「MCP 用戶端端點」全 add-on 一個，只在預設帳號設定（DQ-13）。
+  要另外設定（DQ-02）；Headscale 例外：新帳號不複製 `headscale_api_keys` 的建立、作廢與刪除（API 金鑰是整台伺服器的管理權限），要用就到新帳號的工具權限頁自行開啟。「MCP 用戶端端點」全 add-on 一個，只在預設帳號設定（DQ-13）。
 - **一組管理身分管全部帳號**：任何能開這個 add-on 面板的 HA 管理員（owner 或系統管理員），都能看、輪替、撤銷、刪除每個帳號的權杖，改每個帳號的
   後端與政策。沒有帳號層級的管理權限，也沒有跨帳號總覽（DQ-31）。
 
