@@ -43,7 +43,7 @@
   Hermes 0.4.15、Headscale 0.4.20 各寫一句（只有面板建置階段換了基底映像；本機用兩個版本的官方執行檔各建一次面板，443 個檔逐位元相同）；根 CHANGELOG 一條。
   OpenDesign 的來源帶同一個釘版，它的 CHANGELOG 沒有另寫（照前例指向根 CHANGELOG）。
   2026-11-25 火車 B 升版（分支 `release/train-b-0.5.0-20261125`，基準：整合分支 `integ/train-b-20261125` `0ab5393`，依序以 merge commit 併入維修版分支 `release/maintenance-20261125`（PR #138，`fec2e3ec292d`）與 `feat/duplicate-jsonrpc-id-20261125`；升版 commit 合併後補）：
-  Hermes、n8n、Headscale 開通（`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`、`hermes`、`n8n`、`headscale`），A8、A9、A11、第 7 節、各產品自己的項目（Hermes 的 H3～H5 句子照 2026-11-20 定案、n8n 的五句與 S-1、Headscale 的 HS1～HS9、HS8 與權杖不再顯示）與 A12（重複 JSON-RPC id，原稿叫 A10，和維修版的 A10 撞號改編）寫進三個 0.5.0 CHANGELOG；A11 從第 1 節刪除（七個開通的產品都寫了）；A12 只有 Hermes、n8n、Headscale 寫了，Odoo、EMQX、LiteLLM、Nextcloud（維修版的映像沒有它）與 OpenDesign 的來源還沒寫，留在第 1 節。總表與第 1、3.2、3.3、3.8、4.2、7 節跟上。
+  Hermes、n8n、Headscale 開通（`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`、`hermes`、`n8n`、`headscale`），A8、A9、A11、第 7 節、各產品自己的項目（Hermes 的 H3～H5 句子照 2026-11-20 定案、n8n 的五句與 S-1、Headscale 的 HS1～HS9、HS8 與權杖不再顯示）與 A12（重複 JSON-RPC id，原稿叫 A10，和維修版的 A10 撞號改編）寫進三個 0.5.0 CHANGELOG；A11 從第 1 節刪除（七個開通的產品都寫了）；A12 只有 Hermes、n8n、Headscale 寫了，Odoo、EMQX、LiteLLM、Nextcloud（維修版的映像沒有它）與 OpenDesign 的來源還沒寫，留在第 1 節。總表與第 1、3.2、3.3、3.8、4.2、7 節跟上。升版後（同日）又加：n8n 補認證被拒退避的「下一版要做」（第 3.2、6 節與總表；契約第 1.4 節第 12 點、第 7 節「健康監看」列與第 9 節 #18 加 n8n 例外），0.5.0 照現況發。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
@@ -53,7 +53,7 @@
 | 產品 | 目前版號 | 上次升版 commit | 映像來源 | 要寫進 CHANGELOG 的項目 | 已合併、CHANGELOG 沒記的產品自身修正 |
 |---|---|---|---|---|---|
 | Odoo | 0.5.2（2026-11-25 維修版；0.5.1 是 2026-11-24 上架的多帳號首發，0.5.0 已推 GHCR 但從未上架；0.4.14 是 #119 `53ffe61`） | 維修版升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 1（A12；A10、A11 已寫進 0.5.2） | 無 |
-| n8n | 0.5.0（火車 B 升版，2026-11-25 準備；0.4.15 是維修版，0.4.14 是 #119 `53ffe61`） | 火車 B 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、A11、A12、第 7 節與 n8n 自己的項目已寫進 0.5.0） | 無 |
+| n8n | 0.5.0（火車 B 升版，2026-11-25 準備；0.4.15 是維修版，0.4.14 是 #119 `53ffe61`） | 火車 B 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、A11、A12、第 7 節與 n8n 自己的項目已寫進 0.5.0） | 無（下一版要補 n8n 認證被拒退避，還沒合併：第 3.2、6 節） |
 | Hermes | 0.5.0（火車 B 升版，2026-11-25 準備；0.4.15 是維修版） | 同上 | 尚未建置（同上） | 0（A8、A9、A11、A12、第 7 節與 Hermes 自己的項目已寫進 0.5.0） | 無 |
 | EMQX | 0.5.1（2026-11-25 維修版；0.5.0 是火車 A，2026-11-24 發佈到 GHCR、#136 合併） | 維修版升版 commit | 尚未建置（同上） | 1（A12；A10、A11、E4 已寫進 0.5.1） | 無 |
 | LiteLLM | 0.5.1（同上） | 同上 | 尚未建置（同上） | 1（A12；A10、A11 已寫進 0.5.1） | 無 |
@@ -139,6 +139,19 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 - 上次發版：0.5.0（火車 B 升版，2026-11-25 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.15（2026-11-25 維修版，PR #138）與 0.4.14（`7252d9e`；映像來源 `24de6ec`；#119 在 2026-11-18 合併）。
 - 要寫：沒有。A8、A9、A11、A12、第 7 節（開通）與下面 n8n 自己的項目已寫進 0.5.0；A1～A7、B1 已寫進 0.4.14，A10 與 Node 基底已寫進 0.4.15；A2 不適用。
 - 自己的修正：沒有。`apps/n8n` 在 0.4.13 之後的改動除了開通要寫的項目，只有 HM-04（#91，port 參數化）與 HM-20（#102，開通後才拒絕 loopback 與檢查存檔）。
+- **下一版要做（還沒合併）：n8n 補認證被拒退避。** 火車 B 的 0.5.0 照現況發（2026-11-25 發版準備時決定，不改共用核心）：n8n 的 401 文字不在
+  `health.AUTH_REFUSED` 裡，所以 n8n 的監看在 API key 被拒時仍每 15 秒檢查一次、沒有 15→300 秒退避，其他開通的產品都有。契約第 1.4 節第 12 點、
+  第 7 節「健康監看」列、第 9 節 #18 與 n8n 0.5.0 的 CHANGELOG 已照實寫這個例外（三處一致）。
+  - 補的做法由那一片定：n8n-mcp 內部把 401 叫 `AUTHENTICATION_ERROR`（npm 套件 n8n-mcp 2.96.2 的 `dist/utils/n8n-errors.js`），
+    它回給 MCP 的結果長什麼樣要先量；可以把那段文字加進 `AUTH_REFUSED`，或像 Headscale 的 `health.refused_login` 另外辨認。要在
+    `tests/test_health_backoff.py` 加 n8n 的案例（現在那個測試用 n8n 當探測的外殼，但文字是測試自己給的，沒有釘 n8n 真正的 401）。
+  - 共用的 `health.py` 一改，下一個發版的產品都會帶出去，但只有 n8n 看得到變化（其他產品的認證被拒文字本來就認得）。
+  - 合併時（照第 6 節）：n8n 節的「要寫」加下面這句，把 0.5.0 CHANGELOG 裡「this add-on's n8n health check has no such back-off」那句的說法在新版改掉，
+    並拿掉契約的 n8n 例外（第 1.4 節第 12 點、第 7 節、第 9 節 #18）與第 10 節補一列。建議句（草稿，英文；做法定了再改）：
+
+    ```text
+    - Health: when the n8n server refuses a profile's API key (HTTP 401), that profile's checks now back off to 15, 30, 60, 120 and then 300 seconds apart (normally every 15 seconds) until new credentials are saved, the child is restarted in the panel or the server answers anything else, as they do for the other products with multiple profiles; in 0.5.0 the n8n check stayed at 15 seconds.
+    ```
 - **（歷史，已寫進 0.5.0）開通 n8n 的項目**：HM-25（#129）的額外帳號部分，用 `505212c`（11-19 兩份獨立審查過的那一版），加安全審查 S-1（負責人 2026-11-25 定，整合分支 `5552f20`；契約 #90）。
   0.5.0 CHANGELOG 寫了：額外帳號上限 2、沒後端的額外帳號不起子程序且每支工具回 `Backend not configured`、session 名額每帳號各自（20 個、10 分鐘）、每個額外帳號自己的 node catalog 與 workflow 版本歷史（`/tmp`，
   不進備份）、webhook／chat／form 連線拒絕這個 add-on 自己的位址（區網照舊）、換網址要重填 API key 與 MCP Access Token、n8n 網址不能填 loopback、兩個帳號接同一台 n8n 時 webhook 與 form 共用；
@@ -301,6 +314,8 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 目前沒有。2026-11-17 這裡列的四片都已合併：#108（HM-13b，`f5e296f`）、#112（HM-13c，`e108a12`）、#116（HM-27，`fcd0b22`）、
 #109（HM-16，`c90b214`）。它們合併時沒改本檔；HM-18（2026-11-19）照這一節原本寫的「合併時要改本檔的地方」補了：第 1 節 A8（HM-13b）、
 A9（HM-13c），第 4.1 節 HM-13b 的其餘部分與 HM-16，第 4.2 節 HM-13c 的其餘部分與 HM-27。之後的片照檔頭「怎麼更新」在自己的 PR 裡改。
+
+2026-11-25 加一片（預計下一版，還沒開）：**n8n 補認證被拒退避**（內容與建議句見第 3.2 節）。它合併時在自己的 PR 改本檔：第 3.2 節的「下一版要做」改成「要寫」（句子已備好）、總表 n8n 列的最後一欄改回「無」，並同一個 PR 拿掉契約的 n8n 例外。
 
 ## 7. 開通某個產品的那一版（升版片把它加進 `MULTI_PROFILE_PRODUCTS`；2026-11-19 HM-18 加）
 
