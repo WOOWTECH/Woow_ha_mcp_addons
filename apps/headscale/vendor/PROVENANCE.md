@@ -16,5 +16,15 @@ at the pinned HTTPX/httpcore TCP seam, and launches on loopback via
 `apps/headscale/launch.py`. `operation_policy.py` is the local subset needed
 by the reviewed Headscale registry. No PaaS platform extension is included.
 
+The saved-policy reader also binds the state it reads to this child: the
+state's `child_token` must equal the child's own `WOOW_MCP_CHILD_TOKEN` (the
+value `products.child_spec` gives the child, and the bearer the listener's
+gate in `apps/runtime/session_idle.py` holds), compared with
+`hmac.compare_digest`. A state of another profile on the same server and key,
+or one whose child token was replaced while this child kept running, fails
+every call like any other mismatch (`HEADSCALE_POLICY_UNAVAILABLE`, no value
+in the message); so does a missing or malformed variable. HM-26 security
+review S-1; it is not behind the multi-profile switch.
+
 The source app's `pyproject.toml` declares MIT. `LICENSE` is the WOOWTECH MIT
 text already shipped in that same repository's `apps/emqx/LICENSE`.

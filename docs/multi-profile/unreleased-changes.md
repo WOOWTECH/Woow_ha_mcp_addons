@@ -45,7 +45,7 @@
 | LiteLLM | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、第 7 節與 L2～L6 已寫進 0.5.0） | 無 |
 | Nextcloud | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、NC1、第 7 節與 HM-22 句子已寫進 0.5.0） | 無 |
 | OpenDesign | 0.4.14（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 2（A8、A9，寫成「applies to its source too」） | 無 |
-| Headscale | 0.4.19（2026-11-18 合併，#119 `53ffe61`） | `5a7c191`（2026-11-18，0.4.19 升版 commit） | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
+| Headscale | 0.4.19（2026-11-18 合併，#119 `53ffe61`） | `5a7c191`（2026-11-18，0.4.19 升版 commit） | `24de6ec`（2026-11-18 推 GHCR） | 3（A8、A9、HS8） | 1（HS8：子程式核對 child token，不受開關管；合併後補 PR 號） |
 
 - 0.4.13：PR #76 在 2026-11-09 合併（`e2108f6`）。六個映像從 `4966f40` 建（`docs/operations/release-decision-0.4.13.md`）；`4966f40` 之後
   #76 只多一個紀錄 commit（`0913611`）。
@@ -204,8 +204,20 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.8 Headscale
 
 - 上次發版：0.4.19（升版 commit `5a7c191`；映像來源 `24de6ec`；和 0.4.14 同一個 PR #119，2026-11-18 合併）。
-- 要寫：A8、A9（第 1 節）。A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內。
-- 自己的修正：沒有（`apps/headscale`、`addons/headscale` 在 `55f3528` 之後只改了 0.4.19 的版號、CHANGELOG 與文件）。
+- 要寫：A8、A9（第 1 節）、HS8（下面「自己的修正」）。A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內。
+- 自己的修正：**HS8**，子程式核對 state 的 child token（HM-26 安全審查 S-1；負責人 2026-11-25 選「三個一起，照建議做」；PR 號與 commit 合併後補）。
+  **不受開關管**：開關關的安裝也會帶出去，所以 Headscale 的下一版（維修版或開通的 0.5.0，誰先發）都要把 HS8 寫進 CHANGELOG。改的是 vendored
+  `policy.py`（`apps/headscale/vendor/PROVENANCE.md`、`runtime-sources.json`、`tool-surface.json` 的摘要同步），沒有改版號、`addons/` 與面板。
+  - 看得到的變化：子程式每次呼叫（含直連）讀 state 時，state 的 `child_token` 要等於它啟動時拿到的 `WOOW_MCP_CHILD_TOKEN`（`hmac.compare_digest`），
+    否則回 `HEADSCALE_POLICY_UNAVAILABLE`、不送任何請求、訊息不帶任何值；環境變數缺或格式不對也一樣。add-on 自己起的子程式（`products.child_spec`
+    照 state 給）一定相等，所以今天的安裝沒有可見變化；只有「子程式讀到別的帳號的 state」（同一台、同一把 key 的兩個帳號，網址與 key 的比對分不出來）
+    與「child token 換了、子程式沒重起」（開通後的「全部撤銷」重起失敗時只記一行 log；開機守門在任何子程式起來之前換，遇不到）會被擋。
+  - HS8 的 CHANGELOG 建議句：
+
+    ```text
+    - Hardening of the Headscale MCP child (HM-26 security review S-1): at every call the child now also checks that the saved state it reads is its own, by comparing the state's child token with the WOOW_MCP_CHILD_TOKEN the add-on started it with (also for calls made straight to the child inside the container). A state of another profile, or one whose child token was replaced while the child kept running, makes every call fail with HEADSCALE_POLICY_UNAVAILABLE before anything is sent to the Headscale server. Nothing changes for a child the add-on started on its own state.
+    ```
+  - 出處：報告 `artifacts/…/wave5/review-HM-26-security.md` S-1（repo 外）；`docs/provenance/ha-multiprofile-HM-26-20261119.md` 第 15 節第 2 點。
 - 發版時另外驗：第 5 節。Headscale 第一次走 GitHub 發版流程（之前每一版都是 builder VM 推的）：觸發前負責人要先給 `amd64-mcp-headscale`
   套件設 Actions 權限（`docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
 - HM-26（Headscale 開通前的產品片；PR 號與 commit 合併後補）：受開關管，開關關時沒有可見變化（第 4.2 節）。映像多帶兩件只在開通時

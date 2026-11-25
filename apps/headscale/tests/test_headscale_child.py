@@ -31,6 +31,10 @@ P0 = '{"acls":[]}'
 P1 = '{"acls":[{"action":"accept","src":["*"],"dst":["*:*"]}]}'
 DIGEST = hashlib.sha256(P0.encode()).hexdigest()
 PREFIX = "AbCdEf012345"
+# HM-06: products.child_spec gives the child its state's child_token as WOOW_MCP_CHILD_TOKEN (save_state's value here).
+CHILD_ENV = "WOOW_MCP_CHILD_TOKEN"
+CHILD = "b" * 43
+OTHER_CHILD = "c" * 43
 
 
 # native, native arguments, task, task arguments, HTTP verb, path, query, JSON
@@ -82,7 +86,7 @@ def response_for(native):
 def save_state(path, **changes):
     state = {
         "schema_version": 4, "product": "headscale", "token": "a" * 43,
-        "child_token": "b" * 43, "backend_url": None, "backend_key": None,
+        "child_token": CHILD, "backend_url": None, "backend_key": None,
         "connection": {"url": "https://headscale.example.com/api/v1", "api_key": API_SECRET},
         "endpoint": None, "mcp_access_token": None, "writes_enabled": True,
         "disabled": [], "enabled_write_tools": sorted(WRITE_GRANTS),
@@ -102,6 +106,12 @@ def state_path(tmp_path):
     path = tmp_path / "state.json"
     save_state(path)
     return path
+
+
+@pytest.fixture(autouse=True)
+def own_child_token(monkeypatch):
+    """The child as the add-on starts it: its environment holds the child token its state holds (products.child_spec)."""
+    monkeypatch.setenv(CHILD_ENV, CHILD)
 
 
 def client_for(handler):
@@ -252,6 +262,9 @@ async def test_raw_mcp_tool_call_obeys_live_state_and_private_health(state_path)
     {"connection": {"url": "https://headscale.example.com", "api_key": "changed-key"}},
     {"enabled_write_tools": ["headscale_users:made_up"]},
     {"denied_operations": {"headscale_users": ["delete", "delete"]}},
+    {"child_token": OTHER_CHILD},  # HM-26 security review S-1: a state that is not this child's own
+    {"child_token": CHILD[:-1]},
+    {"child_token": 7},
 ])
 async def test_invalid_or_mismatched_ha_state_fails_closed(state_path, changes):
     save_state(state_path, **changes)
@@ -284,6 +297,74 @@ async def test_missing_symlink_duplicate_and_wrong_mode_state_fail_closed(state_
         with pytest.raises(HeadscaleError, match="HEADSCALE_POLICY_UNAVAILABLE"):
             await execute_tool("headscale_health", {}, client, state_path=state_path)
     assert calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("own", [
+    OTHER_CHILD, None, "", CHILD[:-1], CHILD + "b", CHILD + "\n", "\u00e9" * 43, "Bearer " + CHILD,
+], ids=["another child token", "missing", "empty", "short", "long", "trailing newline", "non-ASCII", "with the scheme"])
+@pytest.mark.parametrize("name,arguments", [
+    ("headscale_health", {}),  # the parent's private probe reads the state like every other call
+    ("headscale_users", {"operation": "list"}),
+    ("headscale_users", {"operation": "create", "name": "mcp-test"}),  # a write the saved grants allow
+])
+async def test_a_state_that_is_not_this_childs_own_fails_closed(state_path, monkeypatch, own, name, arguments):
+    """HM-26 security review S-1 (FM-88): the child_token of the state it reads must be the WOOW_MCP_CHILD_TOKEN the child
+    was started with (the one the gateway's bearer gate holds, apps/runtime/session_idle). Another profile's state on the
+    same server and key passes every other check; a missing or malformed variable is no token to compare. Every call fails
+    closed before any request, whatever it is, and the refusal names no value."""
+    if own is None:
+        monkeypatch.delenv(CHILD_ENV)
+    else:
+        monkeypatch.setenv(CHILD_ENV, own)
+    calls = []
+    async with client_for(lambda request: calls.append(request)) as client:
+        with pytest.raises(HeadscaleError) as error:
+            await execute_tool(name, arguments, client, state_path=state_path)
+    assert error.value.code == "HEADSCALE_POLICY_UNAVAILABLE" and calls == []
+    shown = json.dumps(error.value.as_dict()) + str(error.value) + repr(error.value)
+    assert not [secret for secret in (CHILD, OTHER_CHILD, API_SECRET, str(state_path)) if secret in shown]
+
+
+def test_the_reader_compares_with_the_token_the_listeners_gate_holds():
+    """The variable and the token's form are the ones apps/runtime/session_idle.py holds the child's bearer gate with
+    (HM-06): a state this reader takes is one whose child token that gate would take as the gateway's bearer."""
+    import session_idle
+    from headscale_mcp_server import policy
+
+    assert policy.CHILD_TOKEN_ENV == session_idle.BEARER_ENV == CHILD_ENV
+    assert policy._TOKEN.pattern == session_idle.CHILD_TOKEN.pattern + r"\Z"
+    assert CHILD_ENV in session_idle.REFUSED
+
+
+@pytest.mark.asyncio
+async def test_a_child_token_replaced_without_a_restart_stops_the_child_until_it_restarts(state_path, monkeypatch):
+    """The restore guard and "Revoke all" give a profile a new child token and start its child again. A child that was
+    not started again (one line in the log, profile_admin.revoke_all) holds the old token, which a holder of it could
+    still use at the child: it must serve nothing from the new state, in a session already open too, until it is started
+    again with the new token (HM-26 security review S-1)."""
+    from fastmcp import Client
+    from mcp.shared.exceptions import MCPError
+
+    calls = []
+    backend = client_for(lambda request: calls.append(request) or httpx.Response(200, json={"users": []}))
+    async with Client(build_server(backend, state_path)) as mcp:
+        assert "headscale_users" in {tool.name for tool in await mcp.list_tools()}
+        assert not (await mcp.call_tool("headscale_users", {"operation": "list"})).is_error
+        assert len(calls) == 1
+        save_state(state_path, child_token=OTHER_CHILD)  # the guard rewrote the state; this child went on running
+        refused = await mcp.call_tool("headscale_users", {"operation": "list"}, raise_on_error=False)
+        assert refused.is_error and "HEADSCALE_POLICY_UNAVAILABLE" in refused.content[0].text
+        health = await mcp.call_tool("headscale_health", {}, raise_on_error=False)
+        assert health.is_error and "HEADSCALE_POLICY_UNAVAILABLE" in health.content[0].text
+        with pytest.raises(MCPError):
+            await mcp.list_tools()
+        assert len(calls) == 1  # nothing was sent
+        assert OTHER_CHILD not in refused.content[0].text + health.content[0].text
+        monkeypatch.setenv(CHILD_ENV, OTHER_CHILD)  # started again: a new process with the new child token
+        assert not (await mcp.call_tool("headscale_users", {"operation": "list"})).is_error
+        assert "headscale_users" in {tool.name for tool in await mcp.list_tools()}
+        assert len(calls) == 2
 
 
 @pytest.mark.parametrize("url,allowed", [
@@ -371,12 +452,13 @@ def test_launch_contract_and_loopback_only(monkeypatch, state_path):
 
 
 @pytest.mark.asyncio
-async def test_reader_accepts_actual_ha_product_store_and_live_revocation(tmp_path):
+async def test_reader_accepts_actual_ha_product_store_and_live_revocation(tmp_path, monkeypatch):
     from mcp_admin_core.products import ProductStore
 
     store = ProductStore(tmp_path / "mcp", "headscale")
     calls = []
     try:
+        monkeypatch.setenv(CHILD_ENV, store.load().child_token)  # the token products.child_spec gives the child
         store.update(connection={"url": "https://headscale.example.com/api/v1", "api_key": API_SECRET})
         assert store.path == tmp_path / "mcp/state.json"
         async with client_for(lambda request: calls.append(request) or

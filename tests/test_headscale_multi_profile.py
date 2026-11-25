@@ -19,6 +19,10 @@ serves today has a counterpart, switched off:
   (the vendored policy reader on the profile directories the panel's creation made), a profile that may not create API
   keys included; a profile directory a restore left widened is refused (fail closed) until the profile's store
   tightened it, which the add-on does before any child starts;
+- the child reads only a state that is its own (HM-26 security review S-1; not behind the switch): the state's child
+  token must be the WOOW_MCP_CHILD_TOKEN the child was started with. A child started on another profile's state.json (B
+  has the default profile's server and key, so nothing else tells the two apart), and one still running after its
+  profile's child token was replaced ("Revoke all") without a restart, refuse every call;
 - real children, two fake Headscale servers, four profiles: through 8081 each token reaches its own child, which sends
   its own key to its own server only (D's server gets D's requests alone, the other server never D's key); straight on
   loopback (a caller holding a child token) each child refuses what its own policy refuses and takes no other
@@ -270,14 +274,18 @@ asyncio.run(main())
 '''
 
 
-def as_the_child(spec, calls=CALLS):
+def as_the_child(spec, calls=CALLS, state=None):
     """*calls* run by the vendored child code in the child's own interpreter, environment and working directory (its
     spec): the state it reads is HEADSCALE_MCP_STATE_PATH, at every call; the server is in memory. Per call its outcome
     ('ok' or the child's error code) and the requests the server got: [method, path, whether it carried this child's
-    own key to this child's own server]."""
+    own key to this child's own server]. state: another state.json for HEADSCALE_MCP_STATE_PATH (a child started on the
+    wrong profile's state)."""
     answers = {' '.join(key): value for key, value in ANSWERS.items()}
+    env = dict(spec.env)
+    if state is not None:
+        env['HEADSCALE_MCP_STATE_PATH'] = str(state)
     result = subprocess.run([spec.argv[0], '-c', CHILD_PROGRAM, json.dumps(calls), json.dumps(answers)],
-                            env=dict(spec.env), cwd=spec.cwd, capture_output=True, text=True, timeout=60)
+                            env=env, cwd=spec.cwd, capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr[-2000:]
     return json.loads(result.stdout.splitlines()[-1])
 
@@ -340,6 +348,57 @@ async def test_each_child_is_started_on_its_own_profiles_state_and_applies_its_p
                 for profile_id, spec in specs.items()} == {
             'default': (SHARED['url'], SHARED['api_key']), B: (SHARED['url'], SHARED['api_key']),
             C: (SHARED['url'], OWN_KEY), D: (OTHER['url'], OTHER['api_key'])}
+
+
+def spec_of(data, profile_id, port):
+    """The spec a start of profile_id's child gets from its state as it is now."""
+    store = ProductStore(directory(data, profile_id), PRODUCT, existing_only=profile_id != 'default')
+    try:
+        return child_spec(store.load(), store.directory, port=port)
+    finally:
+        store.close()
+
+
+def test_a_child_started_on_another_profiles_state_refuses_every_call(tmp_path, log_scan):
+    """HM-26 security review S-1 (FM-88; not behind the switch): the child compares the child token of the state it
+    reads with its own (WOOW_MCP_CHILD_TOKEN). B has the default profile's server and key, so the URL and key checks
+    cannot tell their two states apart: B's child on the default profile's state.json would apply the default profile's
+    policy (every write, api_keys create included) and the default profile's child on B's would apply B's. Both, and
+    every other pair (C: the same server with a key of its own; D: another server), serve nothing: every call fails
+    closed (HEADSCALE_POLICY_UNAVAILABLE, nothing sent), the probe too; on its own state each child answers as ever."""
+    data = tmp_path / 'data'
+    with_policies(data)
+    watch(log_scan, data)
+    specs = {profile_id: spec_of(data, profile_id, port)
+             for profile_id, port in zip(PROFILES, (3000, *EXTRA_PORTS.values()))}
+    for profile_id, spec in specs.items():
+        assert as_the_child(spec) == expected_outcomes(profile_id), profile_id
+    refused = [['HEADSCALE_POLICY_UNAVAILABLE', []]] * len(CALLS)
+    for profile_id, spec in specs.items():
+        for other in PROFILES:
+            if other != profile_id:
+                assert as_the_child(spec, state=directory(data, other) / 'state.json') == refused, (profile_id, other)
+
+
+def test_a_child_whose_profile_got_a_new_child_token_serves_nothing_until_it_is_started_again(tmp_path, log_scan):
+    """HM-26 security review S-1 (not behind the switch): "Revoke all" gives a profile a new child token and starts its
+    child again (restore_lock.Sweep.revoke, profile_admin.revoke_all: a child that did not start again is one line in
+    the log; the boot guard changes the token before any child starts). The child still running holds the old token in
+    its environment and finds the new one in the state: every call fails closed (nothing sent), where it used to go on
+    with whatever policy the state held. Once started again, from the state as it is now, it answers as ever. The
+    default profile's child and an additional profile's alike."""
+    data = tmp_path / 'data'
+    with_policies(data)
+    watch(log_scan, data)
+    refused = [['HEADSCALE_POLICY_UNAVAILABLE', []]] * len(CALLS)
+    for profile_id, port in (('default', 3000), (B, EXTRA_PORTS[B])):
+        running = spec_of(data, profile_id, port)
+        assert as_the_child(running) == expected_outcomes(profile_id), profile_id
+        renewed = secrets.token_urlsafe(32)
+        log_scan.watch(renewed)
+        update_profile(data, PRODUCT, profile_id, child_token=renewed)
+        assert as_the_child(running) == refused, profile_id
+        assert as_the_child(spec_of(data, profile_id, port)) == expected_outcomes(profile_id), profile_id
 
 
 def test_a_profile_directory_a_restore_widened_is_refused_until_its_store_tightens_it(tmp_path, log_scan):

@@ -112,7 +112,7 @@
     "apps/headscale/vendor/headscale_mcp_server/models.py": "94b2664100fd5fc65f67aa6acdf4faf27612579f51a1d540a47c8338f38f156a",
     "apps/headscale/vendor/headscale_mcp_server/native.py": "c27ddc043429376688140488e88aa8ef6946a856ff49430391010abf8aeeb054",
     "apps/headscale/vendor/headscale_mcp_server/operation_policy.py": "f6fc80610276b6edca14118c1c9010b82bed02d10c7592ec727f32484dbe5dfb",
-    "apps/headscale/vendor/headscale_mcp_server/policy.py": "db25356154d0069ee141fe7d9ce596e766875a79b7d35d0fc31cb2f219f10cbd",
+    "apps/headscale/vendor/headscale_mcp_server/policy.py": "2c40e78fb73ac6a39e2b49793e49a64ab081d4a180837d2ad7e3930e90d8ac21",
     "apps/headscale/vendor/headscale_mcp_server/registry.py": "d8e4ff233de26fdabc1aaeff87200e7e22f2893acf115aa798ac95595cb99728",
     "apps/headscale/vendor/headscale_mcp_server/server.py": "c502e31d22a6b614ab55729310cbbc11a941bca729310ed674964346d903d203",
     "apps/n8n/node_modules/n8n-mcp/dist/mcp/tools.js": "e30bddb3967661d36ae5dd8c6b5eb8b7e1b56f6053b2bb972543d7bbc4d57803",

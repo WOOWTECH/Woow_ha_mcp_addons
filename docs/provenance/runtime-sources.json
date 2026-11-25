@@ -488,8 +488,8 @@
     "path": "headscale_mcp_server/policy.py",
     "upstream_path": "apps/headscale/headscale_mcp_server/policy.py",
     "upstream_sha256": "fb915802b08fa91ee036bc20e44f7e900547217a5ad1bf39621d9f1fcda771c2",
-    "local_sha256": "db25356154d0069ee141fe7d9ce596e766875a79b7d35d0fc31cb2f219f10cbd",
-    "modification": "Read the exact HA schema-4 state on every call with file identity, ownership and permission checks; bind saved connection, grants, disables and operation denials to this child."
+    "local_sha256": "2c40e78fb73ac6a39e2b49793e49a64ab081d4a180837d2ad7e3930e90d8ac21",
+    "modification": "Read the exact HA schema-4 state on every call with file identity, ownership and permission checks; bind saved connection, grants, disables and operation denials to this child. HM-26 security review S-1: bind the state's child token to the child's own WOOW_MCP_CHILD_TOKEN too (hmac.compare_digest; a missing or malformed variable fails closed)."
   },
   {
     "product": "headscale",

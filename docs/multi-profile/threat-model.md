@@ -230,15 +230,17 @@
   `172.30.32.2`，所以最多是把這個帳號的後端憑證送進自己的閘道或面板、拿到 401、403 或 404。要連 bridge 位址一起擋，是另一個
   決定，不在 HM-20。
 - Headscale（HM-26，開通後）：API key 是整台 Headscale 的管理權限，Headscale 沒有 key 層級的權限。同一台的帳號不論用幾把 key，彼此
-  都只靠工具政策分權：每個子程式每次呼叫讀自己帳號的 state（`HEADSCALE_MCP_STATE_PATH`）；同一把 key 時，讀到別的帳號的 state，網址
-  與 key 的比對也擋不下來（FM-88；`tests/test_headscale_multi_profile.py` 守住每個子程式只拿到自己帳號的路徑、伺服器與 key，照自己帳號
-  的政策，直連也一樣）。
+  都只靠工具政策分權：每個子程式每次呼叫讀自己帳號的 state（`HEADSCALE_MCP_STATE_PATH`）；同一把 key 時，網址與 key 的比對分不出兩個帳號的
+  state（FM-88），所以子程式另外比對 state 的 child token 與自己的 `WOOW_MCP_CHILD_TOKEN`，不符就每個呼叫 fail closed（HM-26 安全審查
+  S-1，不受開關管）：接錯別的帳號的 state、child token 換了而子程式沒重起，都擋得下（能拿舊 child token 的只有容器裡同 uid 的程序，在 DQ-37
+  的已知限制內）。`tests/test_headscale_multi_profile.py` 守住每個子程式只拿到自己帳號的路徑、伺服器、key 與 child token，照自己帳號的政策，
+  直連也一樣。
 - 工具政策只在受限的帳號拒絕 `headscale_api_keys` 的 create、expire、delete 時才算數（HM-26 安全審查 M-1）。create（`reveal_once`）
   把一把整台管理權限的新 key 明文交給持有這個帳號 token 的人，在 add-on 外也能用，任何工具政策、「全部撤銷」、還原守門、刪帳號都撤不到；
   expire、delete 能停掉別的帳號的 key。同理，`headscale_preauth_keys` create 發出的金鑰能讓任何裝置加入 tailnet。新安裝這些寫入 grant
   全開，額外帳號照 DQ-02 複製預設帳號當下的政策，所以管理員要自己收緊。
 - 同 uid 被攻破的子程式讀得到每個帳號的 key（第 1 節），等於拿到每一台設定過的 Headscale 的完整管理權限。建議每個帳號各一把 key（DQ-26
-  建議，不強制）：可以只撤銷那一把，接錯 state 時連線比對也擋得下；共用一把時，在 Headscale 撤銷它會同時停掉共用的帳號。
+  建議，不強制）：可以只撤銷那一把（接錯 state 由 child token 的核對擋下，和 key 是否共用無關）；共用一把時，在 Headscale 撤銷它會同時停掉共用的帳號。
 - 事故處理（第 4 節）第 2 步對 Headscale：在每一台 Headscale 列出所有 API key（`headscale apikeys list`），撤銷這個 add-on 用過的與不認得的
   每一把（經 `headscale_api_keys create` 發出的 key 不在任何帳號的 state 裡），再到面板逐帳號存新 key。
 
