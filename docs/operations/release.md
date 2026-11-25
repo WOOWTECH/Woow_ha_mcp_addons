@@ -106,6 +106,11 @@ override，workflow 第一次帶三路串接（`<app> == 'odoo' && '0.5.1' || <a
 `validate.py` 產生、本機求值過：odoo 是 0.5.1，emqx、litellm、nextcloud 是 0.5.0，headscale 是 0.4.19，其餘 0.4.14）。三路形式 GitHub 在 Odoo 0.5.0 的候選（0.5.0 已建置但未上架）
 （2026-11-22，tag `local/mcp-odoo:0.5.0`）算對了；六路是同一種串接寫法多幾段，還沒被 GitHub 算過，第一個火車 A 的候選建置的 tag 檢查就是驗證
 （算錯時 `supply_chain.py candidate` 在推送前停）。
+火車 B 的 0.5.0（Hermes、n8n、Headscale）升版起，七個商店產品各有自己的版號線：`VERSION_OVERRIDES` 有 Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud、Headscale 七個 override，workflow 帶七路串接
+（`<app> == 'odoo' && '0.5.2' || <app> == 'n8n' && '0.5.0' || <app> == 'hermes' && '0.5.0' || <app> == 'emqx' && '0.5.1' || <app> == 'litellm' && '0.5.1' || <app> == 'nextcloud' && '0.5.1' || <app> == 'headscale' && '0.5.0' || '0.4.15'`，
+`validate.py` 產生、本機求值過：odoo 是 0.5.2，n8n、hermes、headscale 是 0.5.0，emqx、litellm、nextcloud 是 0.5.1，其餘只有 OpenDesign 的來源版本，0.4.15）。六路形式 GitHub 在火車 A 的候選建置（2026-11-24）算對了；
+七路是同一種串接寫法多一段，還沒被 GitHub 算過，第一個火車 B 的候選建置的 tag 檢查就是驗證（算錯時 `supply_chain.py candidate` 在推送前停）。預設版號 `VERSION`（0.4.15）現在只有 OpenDesign 的來源版本在用；
+`validate.py` 要求它不等於任何一個 override 的版號。
 本節只列版號資料；CHANGELOG、`upgrade-notes.yaml`（見 `AGENTS.md`）等其他升版要改的檔不在這裡。
 寫 CHANGELOG 前先看 `docs/multi-profile/unreleased-changes.md`：上一版以來已合併、會跟著這個產品下一版出去但 CHANGELOG 還沒記的變更，
 每項的 CHANGELOG 句子，以及發版時要另外驗的事（多帳號計畫 §11.5；其他工作線的修補版也一樣）。

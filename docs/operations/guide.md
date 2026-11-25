@@ -179,7 +179,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
 
 ## 多帳號（產品開通後）
 
-**狀態（2026-11-23）：Odoo 從 0.5.1 起、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通**（HM-19a、火車 A；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），其他產品還沒開通。這一節寫開通之後的行為；之後哪一版、
+**狀態（2026-11-25）：Odoo 從 0.5.1 起，LiteLLM、Nextcloud、EMQX、Hermes、n8n、Headscale 從各自的 0.5.0 起開通**（HM-19a、火車 A、火車 B；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`、`hermes`、`n8n`、`headscale`），只有 OpenDesign 與 Odoo Manage 不開放（DQ-28）。Hermes、n8n、Headscale 的 0.5.0 是火車 B，尚未發佈。這一節寫開通之後的行為；之後哪一版、
 哪個產品開通，以該產品的 CHANGELOG 為準。連線與網址見 [client 文件](clients.md#多帳號產品開通後)；還原、回退與緊急關閉見 [更新、備份與回復](update-backup-rollback.md)。
 完整規則在多帳號契約 `docs/multi-profile/contract.md`（開通後預設帳號會變的事：第 1.4 節）；威脅模型與已知限制在 `docs/multi-profile/threat-model.md`。
 

@@ -235,7 +235,7 @@ backup ID、版本、時間、保管位置類型、權限檢查結論，不記�
 2. 改的檔：
    - `packages/mcp-admin-core/mcp_admin_core/features.py`：把產品移出 `MULTI_PROFILE_PRODUCTS`；或 revert 出事的那一片。
    - 釘住開通集合的測試照新的集合改：`tests/test_upgrade_zero_rewrite.py` 的 `SWITCHED_ON`（`test_a_product_is_switched_on_only_by_its_release`
-     斷言 `MULTI_PROFILE_PRODUCTS` 正好等於它；Odoo 0.5.1 起是 `{'odoo'}`，火車 A 的 0.5.0 起是 `{'odoo', 'emqx', 'litellm', 'nextcloud'}`），和 `features.py` 一起把產品拿掉。HM-19a 為開通改過的其他測試都改成自己
+     斷言 `MULTI_PROFILE_PRODUCTS` 正好等於它；Odoo 0.5.1 起是 `{'odoo'}`，火車 A 的 0.5.0 起是 `{'odoo', 'emqx', 'litellm', 'nextcloud'}`，火車 B 的 0.5.0 起是 `{'odoo', 'emqx', 'litellm', 'nextcloud', 'hermes', 'n8n', 'headscale'}`），和 `features.py` 一起把產品拿掉。HM-19a 為開通改過的其他測試都改成自己
      指定開關模式（`tests/switch_modes.py` 的 `switched_off`，或子程序前置碼明說開關），開關關了照樣測同一件事，關閉版不用改回；逐檔清單在
      `docs/provenance/ha-multiprofile-HM-19a-20261119.md` 第 4 節。
    - 版號資料 7 處照 [release](release.md)「升版時要改的版號資料」（`docs/provenance/runtime-patches.json` 的 `features.py`、`__init__.py` 摘要一起更新）。

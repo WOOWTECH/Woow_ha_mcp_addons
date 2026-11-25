@@ -85,7 +85,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
 **狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。Odoo 0.5.1 的升版 PR（HM-19a）把 `odoo` 加進 `MULTI_PROFILE_PRODUCTS`；
-映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)）。LiteLLM、Nextcloud、EMQX 的 0.5.0（火車 A）也開通，各自的發佈紀錄（`release-decision-litellm-0.5.0.md`、`release-decision-nextcloud-0.5.0.md`、`release-decision-emqx-0.5.0.md`）寫明展示機真後端驗收還沒做；其他產品還沒開通。
+映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)）。LiteLLM、Nextcloud、EMQX 的 0.5.0（火車 A）也開通，各自的發佈紀錄（`release-decision-litellm-0.5.0.md`、`release-decision-nextcloud-0.5.0.md`、`release-decision-emqx-0.5.0.md`）寫明展示機真後端驗收還沒做；Hermes、n8n、Headscale 的 0.5.0（火車 B，2026-11-25 準備）也開通，各自的發佈紀錄（`release-decision-hermes-0.5.0.md`、`release-decision-n8n-0.5.0.md`、`release-decision-headscale-0.5.0.md`）是草稿，下面各產品的 HAOS 項目（Hermes 開通、n8n 開通、Headscale 開通版）還沒做；只有 OpenDesign 與 Odoo Manage 不開放。
 
 - **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
   的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。
@@ -249,7 +249,31 @@ Dashboard 密碼一律不印、不存。
    - 每 30 秒記：每個子程式的 RSS 與 PSS（`/proc/<pid>/smaps_rollup`）、管理程序的 RSS、MemAvailable；負載停止後再記 10 分鐘。
    - 結論寫：開始、穩定後、最後 10 分鐘的最大值，停止後的值，每個子程式穩定後的最大值加餘裕作為建議值。改
      `profiles.CHILD_MEMORY_MIB['hermes']`（暫定 160）與契約第 5 節要另開功能 PR，請求內容位元組預算（HM-31）會跟著重算；升版 PR 不改常數。
+   - 負責人 2026-11-25（火車 B「三個一起，照建議做」）：這項用免費模型（或測試用 Gateway）做，**只記錄、不擋發版**；結果寫進
+     `release-decision-hermes-0.5.0.md` 的驗收紀錄。
    - 證據放 repo 外 `artifacts/…`，repo 內只放不含秘密的摘要。
+
+### n8n 開通（HM-25；n8n 的升版片做）
+
+n8n 的升版 PR（把 `n8n` 加進 `MULTI_PROFILE_PRODUCTS`）在 HAOS 上除了上表與下一節，另外做這幾項。功能 PR（HM-25）只有 LOCAL 的測試
+（`tests/test_n8n_multi_profile.py`，假 n8n、真的 n8n-mcp 子程序），沒有任何 HA 實測。每一步照上面的規則先經使用者批准；token、API key、MCP Access Token
+一律不印、不存。
+
+1. **要使用者先批准的後端身分**：兩個 n8n 帳號要用的兩組 n8n API key，建議同一台 n8n 的兩個受限使用者（各自的 API key），或兩台 n8n；要驗官方 MCP 端點時再各加一把
+   instance-level MCP access token。預設帳號用既有的那一組。只用合成名稱，建立與刪除每一組都要使用者批准，驗完刪掉並留清理證明（T-29）。
+2. **T-02 上限與容器階段**：n8n 的額外帳號上限是 2（`profiles.EXTRA_PROFILE_LIMITS['n8n']`）：第 3 個額外帳號回 409 `profile_limit_reached`＋`limit`。
+   容器階段（`packaging/container_profiles.py`）n8n 一樣跑：預設帳號的子程序命令列沒有 `--port`（就當 3000），額外帳號在入口後面多 `--port N`，並檢查每個額外帳號的目錄副本
+   （`/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`）。
+3. **T-22 名額與沒後端的帳號**：兩個帳號各自 20 個 session（一個帳號開滿不影響另一個）；存 session 設定只重啟該帳號的子程序；沒有後端的額外帳號每支工具（含 7 個文件工具）回
+   `backend_not_configured`，不起子程序。
+4. **T-04（N×N）**：各帳號建一個標記 workflow，每個帳號只在對角線看得到自己的（只對 API 成立：n8n 的 webhook 與 form 整台共用，安全審查 S-2，驗收紀錄要寫明）。
+5. **T-05、T-07、T-09、T-13、T-14**：P9 `--cross`；存政策只換該帳號的子程序 PID；刪帳號後舊 token 失效、`/tmp` 的副本也刪掉；P9 `childkill --child-port` 打 n8n 的額外帳號。
+6. **T-17**：三個 n8n 子程序的記憶體（`CHILD_MEMORY_MIB` 是 300 MiB，只記錄）。
+7. **T-21**：還原後 `/tmp` 副本重做（還原不帶回副本）；T-23、T-29（合成憑證掃描與清理）。
+8. **UC-09 真機確認**：兩個帳號各自更新同一個 id 的 workflow，`n8n_workflow_versions` 只看得到自己的；一個帳號換到另一個後端之後，讀不到換之前的快照（審查 S-8）。
+9. **webhook、chat、form 的連線（2026-11-25 負責人定；契約 #90）**：n8n 在區網上的位址時，`n8n_test_workflow` 的 webhook 照常連得到（區網照舊）；把 n8n 網址換成 add-on 自己的
+   loopback（127.0.0.1 或 localhost）存檔被拒（400），webhook 的 loopback 位址不連線、回固定錯誤。
+10. **面板情境重錄**：`profile-api-cases.json` 的 `new-origin-unset-secret`（標了 `rerecord_on_real_backend`）在真後端重錄，回應不同就改情境與 fixture。
 
 ### 每次升版都要重驗（每個開通的產品，每一版）
 
@@ -311,6 +335,7 @@ Headscale 再驗，**每一步先問使用者**：
   `headscale_api_keys` create、expire、delete 經閘道與直連子程式都擋、伺服器沒收到（只送會被擋的呼叫）；在 Headscale 撤銷某個帳號
   自己的那把 key 後，只有那個帳號的呼叫失敗（`HEADSCALE_UPSTREAM_ERROR`、401）、它的健康監看進入認證退避，其他帳號照常。
   新建的額外帳號預設就拒絕 `headscale_api_keys` 的 create、expire、delete（讀取 `list` 可以；預設帳號照舊全開）：經閘道與直連子程式都擋、伺服器沒收到，到它的工具權限頁開啟後才做得到（只做會被擋的那一邊，**不要真的 create**；契約 #144）。
+- 權杖不再顯示（和 PaaS 一致，不受開關管）：面板沒有「顯示權杖」，`token/reveal` 回 404；「產生新的 Claude.ai 連線網址」會輪替權杖（舊網址立即失效）；新增的帳號要「重新產生」一次才顯示它的第一把權杖（P9 kit 的 Headscale 路徑照此，[P9 kit](ha-p9-kit.md)）。
 - T-05、T-08、T-09、T-13：P9 kit 照 [P9 kit](ha-p9-kit.md)（`--cross`、`--temp-profile`、`childkill`）。
 - T-07：存一個帳號的政策，只有它的子程式換 PID，別的帳號的 session 不斷。
 - T-20：0.4.19 → 0.5.0 升級後預設帳號的 token、兩條網址、`state.json` 位元不變（Store `verify`）；回退與再升級照 T-20。
