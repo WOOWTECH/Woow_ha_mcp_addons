@@ -54,10 +54,13 @@ CURRENT_POST_SOURCE_BYTES = {
         'emqx', 'fef905c6b76e7b07e6a0c67264ae2981e0c4e2aaeb5ebf4a57927ed2eac95261'),
     # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
     # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend); its review: the
-    # copy made through directory descriptors and again for another backend. No tool, schema or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', '4f3832c0ca38d9a1a2fda80e3d6d74617dac9e9c2882a5dd91e8fc1ab8ba765f'),
-    # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
-    'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
+    # copy made through directory descriptors and again for another backend; HM-25 security review S-1 (2026-11-25): comments
+    # only. No tool, schema or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', 'c26630383366d7bc36619e2e651abb070881f0fbeeb526a145d53a380c8a01e1'),
+    # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; HM-25 security review S-1
+    # (2026-11-25): the same refusal in createPinnedAgents, for the webhook, chat and form clients' connections; no
+    # tool, schema or handler change.
+    'apps/n8n/backend_policy.cjs': ('n8n', '665aed20ed757fd5baac46dd80de9fb0166f3cd1f205eac9db76f5e8c81806e6'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
     # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
     # run_product's (the n8n adapter); no tool, schema or handler change.

@@ -394,14 +394,16 @@ def child_spec(state: State, directory: Path, port: int = CHILD_PORT) -> ChildSp
             env["N8N_MCP_ACCESS_TOKEN"] = state.mcp_access_token
     if products.loopback_refused("n8n"):
         # HM-20 (multi-profile plan 8.7, DQ-10; unreleased, behind the product switch): backend_policy.cjs refuses
-        # every loopback answer for the configured instance (its API and its official MCP endpoint). Webhooks are not
-        # the configured instance's clients: they keep the mode below.
+        # every loopback answer for the configured instance (its API and its official MCP endpoint) and, since the
+        # HM-25 security review S-1 (owner decision 2026-11-25), for the connections of n8n_test_workflow's webhook, chat
+        # and form clients too (their agents come from SSRFProtection.createPinnedAgents); the mode below stays.
         env[products.DENY_LOOPBACK_ENV] = "1"
     # 0.2.1 (owner decision 2026-10-15): n8n-mcp's widest webhook/URL mode (dist/utils/ssrf-protection.js): any
     # address, private and loopback included (only cloud metadata names stay blocked), so n8n_test_workflow can reach
     # an n8n on the HA network. The configured API backend keeps its own DNS-pinned agents (backend_policy.cjs).
-    # Kept as it is by the owner on 2026-11-15 (DQ-10): whether to tighten it with additional profiles is decided by the
-    # independent security review before n8n is switched on (HM-25).
+    # Kept as it is by the owner on 2026-11-15 (DQ-10) and again on 2026-11-25 after the independent security review
+    # (HM-25 S-1): the validators stay permissive, and only once n8n is switched on the connection to this add-on itself
+    # (loopback) is refused, as above; the LAN stays reachable.
     env["WEBHOOK_SECURITY_MODE"] = "permissive"
     if catalog is not None:
         # the private writable copy made at start-up (prepare_catalog), or the additional profile's own (prepare_child)

@@ -136,6 +136,8 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
     `MCP sessions are counted per profile: each profile has its own 20 sessions (10 minutes idle) unless its own settings say otherwise.`
   - 每個額外帳號有自己的 node catalog 與 workflow 版本歷史（`/tmp`，不進備份；換了後端（網址或 key）時重做、刪帳號一起刪；HM-25 安全審查 S-8）：
     `Each additional profile keeps its own node catalog and workflow version history (in /tmp, not in backups): a new backend (URL or key) starts it afresh, and it is deleted with the profile.`
+  - 開通後 `n8n_test_workflow` 的 webhook、chat、form 連線也拒絕這個 add-on 自己的位址（127.0.0.0/8、::1、0.0.0.0/8、::，IPv4-mapped 含；名稱的任何一個位址是本機就拒）；區網與公開位址照舊（HM-25 安全審查 S-1；負責人 2026-11-25 定，契約 #90；受開關管，**開通那一版才寫**，沒開通的 n8n 照今天）：
+    `Once multiple profiles are switched on, the webhook, chat and form connections of n8n_test_workflow refuse an address that is the add-on itself (127.0.0.0/8, ::1, 0.0.0.0/8, ::; a name with any such answer is refused); LAN and public addresses connect as before.`
   - DOCS 要跟著改（`addons/n8n/DOCS.md`，升版 PR 改）：「所有 client **共用 20 個**同時 session」改成「每個帳號的 client 共用該帳號的 20 個
     session」；「n8n 沒有後端時子程序照常啟動，7 個文件工具照常回答」補「額外帳號沒有後端時不起子程序，每支工具都回 `Backend not configured`」。
   - DOCS 的已知限制要加（HM-25 的獨立安全審查 S-2、S-7、S-8；`threat-model.md` 第 3 節）：
@@ -143,7 +145,7 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
       每個帳號接自己的 n8n，或在 webhook 節點加 header 驗證。
     - workflow 版本歷史在容器的 `/tmp`（HAOS 的資料分割區），沒有大小上限：每次更新 workflow 存一版、每個 workflow 留 10 版。
     - 預設帳號的版本歷史只在 add-on 重啟時清掉：把預設帳號換到另一個後端、交給別人用之前，重啟 add-on。
-    - webhook 的網址模式（`permissive`）要不要在開通後拒 loopback，等使用者定（契約 #90）；定了要改這一段與 CHANGELOG。
+    - webhook、chat、form 的網址驗證仍是 `permissive`（連得到區網與其他 add-on），但開通後它們的連線拒絕這個 add-on 自己的位址（127.0.0.0/8、::1、0.0.0.0/8、::）：n8n 要放在區網或別的主機，不能用 `localhost` 或 `127.0.0.1`（負責人 2026-11-25 定，契約 #90）。
 
 ### 3.3 Hermes
 
@@ -289,6 +291,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 | HM-24 | 合併後補 | 合併後補 | Hermes 與 PaaS 一致：換後端身分不換 token；仍保留來源變更重填秘密及帳號隔離 | 換身分不換 token，回應、面板與子程式照舊；Odoo 的說明文字逐字不變 |
 | HM-26 | 合併後補 | 合併後補 | Headscale 伺服器拒絕 key 時監看的認證退避（`health.refused_login`）；面板 Headscale「後端設定」說明的每帳號版本；新建 Headscale 帳號不複製 `headscale_api_keys` 的寫入（`profile_initial_state`，2026-11-25）與面板建立說明的 Headscale 版；Headscale 開通前的測試（第 3.8 節） | 監看照舊每 15 秒、不退避，記下的原因不變；說明逐字照今天；沒有建立帳號的路徑，建立說明不會出現 |
 | HM-25（開通後才走的部分；runtime 收斂在第 4.1 節） | #129 | 合併後補 | 額外帳號的子程式（HOME、`nodes.db` 副本與換後端時重做、命令列的 port、沒後端不起）、沒後端的額外帳號每支工具都 `backend_not_configured`、刪帳號（含孤兒、隔離目錄）清 catalog 副本、容器探針多帳號階段收 n8n | 沒有額外帳號：額外帳號的 spec 在關時直接拒絕，`prepare_child`、產品清理與 `documentation_child` 的額外帳號分支都不會被呼叫 |
+| HM-25 安全審查 S-1（`backend_policy.cjs`） | 合併後補 | 合併後補 | n8n 的 webhook、chat、form 連線也拒 loopback（`SSRFProtection.createPinnedAgents`，和 HM-20 同一個 `WOOW_MCP_DENY_LOOPBACK` 變數；負責人 2026-11-25 定） | 子程式不帶那個變數，`createPinnedAgents` 與 `createPinnedFetch` 是 n8n-mcp 原本的函式（測試逐字比對），三種連線照舊 permissive 全放行 |
 
 要用一句話交代第 4 節（可選；主對話補寫，照計畫 §3.3、§7.1）：
 

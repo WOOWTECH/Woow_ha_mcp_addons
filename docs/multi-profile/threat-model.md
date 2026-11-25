@@ -32,6 +32,7 @@
   HM-25 在第 3 節加 n8n 的兩條（webhook 網址照舊 `permissive`、每帳號的 catalog 副本不是安全邊界；2026-11-19），交 HM-25 之後的獨立安全審查；
   依那次審查（S-2、S-7、S-8）改寫 webhook 那條（只有 DNS rebinding 打得到 loopback）並補三件、副本那條補換後端時重做、加版本歷史沒有上限一條（同日）；
   合併 `claude-delivery` `95b7e9d`（HM-18）之後照原樣接在 HM-18 的 Bearer 那條後面（同日）。
+  HM-25 安全審查 S-1 的決定（負責人 2026-11-25：只收 loopback、區網照舊）：第 3 節 webhook 那條改寫（開通後 webhook、chat、form 的連線也拒 loopback，DNS rebinding 那條路關了）。
 - 來源：計畫 §8.1、§8.2、§8.9、§8.10（repo 外）；決策見 `decisions.md`（DQ-37 採 (a)：接受同 uid 信任邊界並寫明）。
 - 契約與差異表：`contract.md`；不變式對應的測試檔：`acceptance-matrix.md` 的測試檔登記表。
 
@@ -277,21 +278,24 @@
   其他帳號也可能變慢」。
 - Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14；HM-03b 沒做，交 HM-19b）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
 - Hermes Dashboard 的登入限流是全部帳號共用的（HM-24；`contract.md` 第 9 節 #135）：Hermes Agent 對每個來源位址每 60 秒只放 10 次登入（成功也算），而同一個 add-on 的每個帳號子程式都從同一個位址連線（Dashboard 在別台機器時看到的是 HA 主機的位址，同一台 HA 上別的程式也算在內）。每個子程式各自登入、cookie 快取 10 分鐘、401 時重登一次，Hermes 最多 4 個子程式，平常碰不到上限；子程式反覆重啟、或同一位址還有別的程式在登入時才會碰到：登入回 429，子程式退避 1、2 秒重試兩次，仍 429 的那次工具呼叫失敗（`BACKEND_HTTP_ERROR status=429`），下一次呼叫再試。PaaS 同一個 Pod 的子程式與管理端代理也共用一個位址。
-- n8n 的 webhook、chat、form 網址照舊是 `permissive`（契約第 9 節 #90；HM-25 沒改）。網址一律是設定的 n8n 網址（去掉 `/api/v1`）
-  加 `/webhook/…`、`/form/…`（n8n-mcp 2.96.2 `triggers/handlers/base-handler.js` 的 `getBaseUrl`；`x-n8n-url` 不轉送，換不掉），
-  `n8n_test_workflow` 每次觸發前先經 API 讀那個 workflow（`mcp/handlers-n8n-manager.js:1285`），開通後這次拒 loopback（#39，HM-20）。
-  所以只有 DNS rebinding 打得到 loopback：設定的名稱在 API 那次查到公開位址、在 webhook 那次查到 127.0.0.1，port 是設定網址的 port；
-  路徑可以用 `..` 走到同一個 origin 的任何路徑，方法、標頭與內容由持有人定（n8n 的 API key 不會跟著送）。打到別帳號子程式的 port
-  （18000 起、3000）要那個帳號的 child bearer（每個子程式的環境只有自己的，n8n-mcp 驗 `AUTH_TOKEN`）；打到 8081 要某個帳號的 token；
-  打到 8099 的來源是 127.0.0.1，不是 Ingress，管理 API 一律 403。另外三件（HM-25 獨立安全審查 S-2）：
-  - n8n-mcp 的 `/` 與 `/health` 不驗 bearer（`http-server-single-session.js:803,832`）：loopback 上任何來源都讀得到它的版本與 uptime。
+- n8n 的 webhook、chat、form 網址的驗證照舊是 `permissive`（契約第 9 節 #90），但開通後這三種用戶端的**連線**也拒 loopback（HM-25 安全審查 S-1；
+  負責人 2026-11-25 採用：只收本機、區網照舊）：n8n-mcp 2.96.2 把三者的連線都建在 `SSRFProtection.createPinnedAgents` 上，`backend_policy.cjs`
+  在那裡檢查它拿到的每個位址，任何一個是 127.0.0.0/8、::1、0.0.0.0/8、::（IPv4-mapped 含）就整組拒絕、不連線，錯誤文字同 API 與官方 MCP
+  端點的拒絕（不帶位址）；沒開通時完全照今天。網址一律是設定的 n8n 網址（去掉 `/api/v1`）加 `/webhook/…`、`/form/…`（n8n-mcp 2.96.2
+  `triggers/handlers/base-handler.js` 的 `getBaseUrl`；`x-n8n-url` 不轉送，換不掉），`n8n_test_workflow` 每次觸發前先經 API 讀那個 workflow
+  （`mcp/handlers-n8n-manager.js:1285`），開通後這次拒 loopback（#39，HM-20）。S-1 以前只有 DNS rebinding 打得到 loopback：設定的名稱在 API 那次
+  查到公開位址、在 webhook 那次查到 127.0.0.1，port 是設定網址的 port（路徑可以用 `..` 走到同一個 origin 的任何路徑，方法、標頭與內容由持有人定，
+  n8n 的 API key 不會跟著送）；現在這條路關了，webhook、chat、form 到不了這個 add-on 的子程式 port（18000 起、3000）。區網與公開位址照舊連得到
+  （permissive 保留的功能：`n8n_test_workflow` 要打 HA 網路上的 n8n），包括 add-on 自己的 bridge 位址：從那裡只連得到 8081（要某個帳號的 token）
+  與 8099（只收 `172.30.32.2`，來源不符一律 403），子程式只聽 127.0.0.1（見上面「後端網址拒絕 loopback」那條）。另外三件（HM-25 獨立安全審查 S-2）：
+  - n8n-mcp 的 `/` 與 `/health` 不驗 bearer（`http-server-single-session.js:803,832`）：loopback 上任何來源都讀得到它的版本與 uptime
+    （S-1 之後，token 持有人經 webhook 碰不到）。
   - n8n-mcp 的登入限流（`authLimiter`）以來源 IP 計、15 分鐘 20 次失敗（`AUTH_RATE_LIMIT_MAX` 沒設，HA 現值；PaaS 是 1000，#62）：
     閘道的請求都從 127.0.0.1 來，所以對一個子程式的 port 送 20 次錯的 bearer，那個子程式對閘道也回 429 十五分鐘（跨帳號的 DoS；
-    從別帳號只有上面那條 DNS rebinding 做得到，拿不到任何憑證）。
+    S-1 以前從別帳號只有上面那條 DNS rebinding 做得到，拿不到任何憑證；現在那條路關了）。
   - 兩個帳號接同一台 n8n 時，n8n 的 webhook、form 是整台共用、不看 API key：A 的持有人可以用自己看得到的 workflow 帶 B 的 webhook
     路徑觸發 B 的 workflow。HAOS 驗收 T-04「標記只在對角線」只對 API 成立；要 webhook 也分開，就每個帳號接自己的 n8n，或 webhook
     節點加 header 驗證（寫進 DOCS 草稿，`unreleased-changes.md` 第 3.2 節）。
-  審查建議開通後 webhook、chat、form 也拒 loopback、區網照舊（契約 #90），等使用者定；定之前照舊。
 - n8n 每個額外帳號的 `nodes.db` 副本（`/tmp/woow-n8n-mcp/profiles/<id>/`）只讓 n8n-mcp 自己的版本歷史分開（UC-09：單一租戶模式的
   `instance_id` 一律是空字串，共用一份就會互看、互刪、互相回滾），不是安全邊界：同 uid 的子程式讀寫得到每一份（DQ-37）。副本不在
   `/data`、不進備份，容器重建或管理程序重啟後重做（版本歷史跟著清掉，同預設帳號今天）；額外帳號換了後端（網址或 key）時也重做，
