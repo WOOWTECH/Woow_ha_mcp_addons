@@ -18,6 +18,7 @@ LiteLLM 0.5.0 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（H
 ## 來源
 
 - 分支 `release/maintenance-20261125`（基準 `claude-delivery` `092b1b5`，#136 合併之後），PR #138（主對話推上去時的 head 是 `3bcfa1f`；升版 commit 與這些紀錄之後另外推）。分支上依序有：HA Core 2026.11.3 審查與同月份修補版放行（`529c8c0`、`131d1a9`）、面板讀弱 ETag（`635f800`、`40574ce`）、EMQX 說明對齊 PaaS #160（`806df82`、`d214e2b`、`48c2e2e`、`3bcfa1f`），再來是升版 commit（版號資料與測試釘選、CHANGELOG、DOCS／README、未發佈清單與這七份發佈紀錄草稿；commit 號合併後補）。
+- Node 基底 26.12.1 → 26.13.1（`f988a5f`，在 `80ed536` 之後，上面那串 commit 寫成時還沒有它；文件與 CHANGELOG 的對應句在其後的 commit）：n8n 的候選映像在供應鏈關卡被 Node 26.12.1 執行檔的 7 個 High 漏洞擋下（CVE-2026-123863、123864、123865、123866、123872、123874、126051；26.13.1 修掉）。這是七支共同的建置輸入變更：映像要從含它的分支 head 建。
 - 映像來源：觸發 `release.yaml` 時這個分支的 head（`source_sha`，待補）。**七支都推完之前，不准再往分支推任何 commit（紀錄檔也不行）**：`workflow_dispatch` 永遠跑在分支 head，`source_sha` 又必須等於它（[release](release.md)「部分失敗怎麼辦」）。都推完之後的證據 commit 只加紀錄檔。
 - 發版鎖：同一時間只有一個凍結中的升版 PR（計畫 §11.5）；觸發前要再查一次有沒有別的開著的升版 PR（例如火車 B）。
 
@@ -34,7 +35,8 @@ LiteLLM 0.5.0 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（H
 | 7 | `docs/operations/release-decision-litellm-0.5.1.md` | 本檔（推 GHCR、展示機驗收之後補證據） |
 
 - **運算式本機求值**（`packaging/test_validate.py` 的規則，`&&` 先於 `||`）：`odoo`→0.5.2、`emqx`／`litellm`／`nextcloud`→0.5.1、`headscale`→0.4.20、`n8n`／`hermes`／`opendesign`→0.4.15，`ci.yaml` 與 `release.yaml` 兩組結果相同；`packaging/validate.py` 通過。六路形式在火車 A（2026-11-24）的候選建置（emqx、litellm、nextcloud 各一次）已被 GitHub 算對（tag 檢查通過）；這一批的形式相同、只有值不同，但 odoo、headscale 那兩路與落到預設值的 n8n、hermes 沒有在六路形式下實跑過，候選建置的 tag 檢查就是驗證（算錯時 `supply_chain.py candidate` 在推送前停，不燒版號）。
-- 測試釘選：`tests/test_output_schemas.py` 的 n8n `Dockerfile` 位元組釘選換成新的 SHA-256（只有 `ARG BUILD_VERSION` 的預設值不同）；`packaging/test_validate.py` 沒有釘選要改。
+- 測試釘選：`tests/test_output_schemas.py` 的 n8n `Dockerfile` 位元組釘選換成新的 SHA-256（相對 0.4.14：`ARG BUILD_VERSION` 的預設值，加上 Node 基底的兩處 `FROM` 與一處 `node --version` 檢查，見下一條；沒有工具、schema 或 handler 的改動）；`packaging/test_validate.py` 沒有釘選要改。
+- **Node 基底映像**（不是版號，但同一批換）：`packaging/inputs.json` 的 `bases.node` 與 `native_addons.better-sqlite3.node`、9 個 `apps/*/Dockerfile` 的 `FROM node`（n8n 兩處，另有複製後的 `node --version` 檢查）、`ci.yaml`／`release.yaml`／`woow-addon-release.yml` 的 `setup-node` 版本與三處 `node --version` 檢查、`packaging/validate.py` 的同一組字串、`tests/test_boundary.py` 與 `packaging/test_j1900_check.py` 的 Node 版本字串：26.12.1 → 26.13.1（`f988a5f`）。基底摘要 `sha256:28147155…` → `sha256:0042e17d…`（multi-arch index，匿名 Docker Hub 取得，等於 `Docker-Content-Digest`；linux/amd64 子 manifest `40168539…`，config `603e1397…` 宣告 `NODE_VERSION=26.13.1`；映像裡的 `/usr/local/bin/node`（sha256 `d931c649…`）與官方 `node-v26.13.1-linux-x64.tar.xz` 的 `bin/node` 逐位元相同）。Node ABI 仍是 147（nodejs.org `dist/index.json`），better-sqlite3 預建檔的網址、sha256、大小不變；官方 26.13.1 執行檔在本機載得進它並跑 FTS5。證據全文在 `packaging/inputs.json` 的 `evidence`。 這個產品的最終映像沒有 Node.js：Node 基底只用在面板建置階段，面板輸出（`packages/mcp-admin-ui/dist`，443 個檔）用 26.12.1 與 26.13.1 的官方執行檔各建一次，逐位元相同（本機驗證，不是映像建置本身）。摘要與基底掃描的細節見 [n8n 的紀錄](release-decision-n8n-0.4.15.md)。
 
 ## 內容（寫進 CHANGELOG 的項目）
 
@@ -86,3 +88,4 @@ LiteLLM 0.5.0 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（H
   - 4 案是 CPU 計時：`test_request_structure` 的 `test_the_scan_costs_what_the_limit_allows_not_what_the_body_holds`、`test_closers_after_balanced_structure_are_bounded_too`，以及 `test_a_closing_bracket_flood_does_not_stall_the_scan` 的其中兩個參數（兩輪失敗的組合不同）。16 MiB 輸入的掃描在這台機器上單獨量是 0.27～0.30 秒（門檻 0.3），「balanced then closers」穩定 0.38 秒。`request_limits.py` 與這個測試檔都和 `092b1b5` 逐位元相同，這次修改沒有碰。
   - 1 案偶發：`test_restore_review` 的 `test_revoke_all_revokes_every_profile_and_starts_every_child_again`（記憶體吃緊時額外帳號因 `memory_capacity` 沒起；單獨重跑通過）。
 - 沒跑的：全套 pytest（約 40 分鐘，交給 CI）、Playwright 瀏覽器測試（本機沒有 Chromium；`3bcfa1f` 的 CI 是 168 過；之後只有上面三個面板測試相關檔的註解變了，都用 `node --check` 驗過語法）、需要 root 的 `packaging` 測試案例（上面的 5 skip）。
+- 2026-11-25，`f988a5f`（Node 基底 26.12.1 → 26.13.1）之後重跑：上面 `fc87b34` 那條寫「之後的 commit 只動這些發佈紀錄」，到 `80ed536` 為止是對的，`f988a5f` 動了 Dockerfile、workflow、`packaging/` 與兩個測試檔。Node 用官方 26.13.1 執行檔（與映像裡的逐位元相同，放在 PATH 最前面；本機原本的 Node 是 22）。結果：`packaging/validate.py` 通過；packaging 單元測試 378 案過（5 skip，要 root）；`scripts/ledger_precheck.py` 三份帳本 0 漂移；面板 `npm test` 122 案過；pytest `tests/test_output_schemas.py` 189 案過（含 n8n Dockerfile 的新位元組釘選）、`tests/test_boundary.py` 與 `tests/test_n8n_catalog_copy.py` 共 51 案過（含真的 Node 26.13.1 載入釘版 better-sqlite3、n8n-mcp 用 `BetterSQLiteAdapter` 的那一案）。沒重跑：其餘 pytest 檔（`fc87b34` 以前的結果照舊）、Playwright、要 root 的案例；映像沒有建置，所以建置期的 `node --version` 檢查與複製後的函式庫載入要等 CI。

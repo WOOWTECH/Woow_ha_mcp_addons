@@ -37,6 +37,11 @@
   合併後補）：照第 3 點把 A8～A11 與 E4 寫進各產品 CHANGELOG（Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、n8n／Hermes 0.4.15、Headscale 0.4.20、
   OpenDesign 只升來源版本到 0.4.15）。A8、A9、A10 適用的 8 個產品都寫了，E4 只有 EMQX，從第 1、3.4 節刪除；A11 只有開通多帳號的產品看得到，n8n、
   Hermes、Headscale 開通的那一版才寫，留在第 1 節（句子與事實已改正：帳號清單在 Cloudflare 上量到不受影響）。總表與各產品節跟上。
+  2026-11-25 維修版（Node 基底；分支 `release/maintenance-20261125`，`f988a5f`，在 `80ed536` 之後）：Node 基底映像 26.12.1 → 26.13.1（Node 26.12.1
+  執行檔被 7 個 High 漏洞命中，n8n 候選映像過不了供應鏈關卡；26.13.1 修掉）。這一項不是 A～H 的功能片、也不受開關管，直接寫進 CHANGELOG，
+  所以總表與各產品節的「要寫」不變：n8n 0.4.15 寫完整的一條（n8n 是唯一把 Node binary 放進最終映像的產品）；Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、
+  Hermes 0.4.15、Headscale 0.4.20 各寫一句（只有面板建置階段換了基底映像；本機用兩個版本的官方執行檔各建一次面板，443 個檔逐位元相同）；根 CHANGELOG 一條。
+  OpenDesign 的來源帶同一個釘版，它的 CHANGELOG 沒有另寫（照前例指向根 CHANGELOG）。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
