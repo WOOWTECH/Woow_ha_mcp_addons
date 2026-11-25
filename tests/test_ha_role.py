@@ -520,6 +520,9 @@ def test_the_unreviewed_core_page_is_static_text(version, heading):
     assert response.status_code == 403 and response.media_type == "text/html" and heading in body
     # What is accepted without a review is on the page too, so a later patch release is not expected to be refused.
     assert "自動放行" in body and "修補版" in body
+    # The sentence is about the visitor's own version: it is NOT in the two accepted groups. It once said the reverse
+    # ("這個 Core 版本不是（新的月份、…）"), the very list this page is shown for (independent review 2026-11-25, M2).
+    assert "不在這兩類之內" in body and "版本不是（" not in body
     assert "<img" not in body and not any(tag in body for tag in ("<script", "<style", "<link", "<form", " style="))
 
 
