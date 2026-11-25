@@ -2,6 +2,169 @@
 # pipeline #89) has not yet defined a machine-readable schema; this follows the format already used by
 # WOOWTECH/Woow_ha_cloudflare_tunnel_webgui. One release per entry, newest first.
 releases:
+  # Hermes, n8n and Headscale 0.5.0 switch multiple profiles on for these three products (train B; multi-profile plan
+  # R3, docs/multi-profile/contract.md section 1.4 is the complete list of what the default profile sees change).
+  # Odoo, EMQX, LiteLLM and Nextcloud keep their versions. The release is built on the 2026-11-25 maintenance release
+  # (Hermes and n8n 0.4.15, Headscale 0.4.20), so it also carries the Home Assistant Core 2026.11.3 rule and the Node
+  # 26.13.1 base image; Headscale upgrades from 0.4.20 (or 0.4.19), Hermes and n8n from 0.4.15 (or 0.4.14).
+  - to_version: "0.5.0"
+    from_version: "0.4.15"
+    addons: [woow_mcp_hermes, woow_mcp_n8n, woow_mcp_headscale]
+    summary: >-
+      Multiple profiles: the default profile plus up to three more (Hermes, Headscale) or two more (n8n), each with its
+      own backend connection, MCP token and both of its URLs, tool policy and child; only the token decides the profile.
+      An installation that never adds a profile keeps its token, both URLs, state.json byte for byte, its policy and its
+      child (port 3000), except that Headscale no longer shows its current token in the panel (below). No option, port,
+      architecture, image name, tool name or state schema change.
+    breaking_changes:
+      - id: admin-api-profile-header
+        affects: Scripts that call the admin API (port 8099) directly; the bundled panel and the P9 kit are updated together.
+        change: >-
+          Every profile-scoped admin request needs exactly one X-MCP-Profile header (default or a profile id): missing
+          400 profile_id_required, repeated or malformed 400 profile_id_invalid, unknown 404 profile_not_found, never
+          the default profile instead. Answers carry the profile echo (the bootstrap adds profile, profiles_supported
+          and profile_index_state). The administrator check runs before any profile state is read.
+        migration: Send X-MCP-Profile on every profile-scoped request and ignore the added fields, or use the bundled panel.
+      - id: headscale-token-not-shown
+        affects: "Headscale only: anyone who reads the MCP token or the Claude.ai connection URL from the panel (the default profile too)."
+        change: >-
+          As on the PaaS server the panel no longer reveals the current token: "show token" is gone, token/reveal
+          answers 404, and "show the Claude.ai connection URL" became "generate a new Claude.ai connection URL", which
+          rotates the token first. A token is shown once, briefly, when it is generated. Clients that hold the current
+          token keep working until the token is rotated or revoked.
+        migration: >-
+          Keep the token or URL a client already has; to get one, rotate the token in the panel (the old token and both
+          old URLs stop working at once) and update every client. A profile that is added needs one rotation before its
+          first token is shown.
+      - id: backend-origin-change-needs-secret
+        affects: Anyone moving a profile's backend URL to another scheme, host or port.
+        change: >-
+          The save needs the secret that URL is sent to (Hermes: the Gateway API key for the Gateway URL, the Dashboard
+          password for the Dashboard URL; n8n: the API key and the saved MCP Access Token; Headscale: the API key) in the
+          same save, otherwise 422 CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN and nothing is saved. A loopback
+          backend URL (127.0.0.0/8, ::1, localhost; for n8n also 0.0.0.0/8 and IPv4-mapped forms) is refused (400);
+          one saved earlier still reads back but the child cannot connect to it (Headscale's child already refused
+          loopback).
+        migration: Enter the secret again when moving to another server; use a reachable, non-loopback backend URL.
+      - id: restore-revokes-profiles
+        affects: Restoring a backup that has additional profiles.
+        change: >-
+          Before anything is served the token of every profile, the default profile's included, is revoked, every
+          child token renewed and restore-record.json written; a profile gets a new token only after it is checked on
+          the default profile's review card (token/rotate 409 restore_review_required before), and operation ids from
+          before the restore answer 410 operation_restored. Unreadable profiles are moved to a quarantine directory.
+        migration: >-
+          Review each profile on the card, issue new tokens and update clients. A backup without additional profiles
+          revokes nothing (next section). The protection covers backups made with 0.5.0 or later only.
+    behavior_changes:
+      - id: admin-panel-profiles
+        change: >-
+          A profile menu (also with only the default profile) adds, renames, deletes and switches profiles; new global
+          routes list, add, rename and delete profiles, revoke all, show and review the restore record, quarantine an
+          unusable index, delete a quarantine directory and (not Headscale, which keeps its fixed Origin rule) keep the
+          secret URL's Origin policy. The panel's first bootstrap carries no profile header on purpose, so the browser
+          console shows one 400.
+        migration: None needed.
+      - id: admin-two-byte-level-changes
+        change: >-
+          A PATCH or DELETE request that fails the identity check (for example without CSRF) gets 403
+          {"error":"request denied"} (400 with the same body for a malformed X-Ingress-Path) instead of 405, because
+          the identity check now runs before the method check. A method other than GET, HEAD, POST, PUT, PATCH and
+          DELETE still gets 405, but its Allow header lists six methods instead of four (PATCH and DELETE added; the
+          order was never fixed).
+        migration: None needed for clients that send the panel's headers.
+      - id: mcp-busy-answers-and-interruptions
+        change: >-
+          Admission per profile on 8081: over 64 requests of the default profile get JSON-RPC -32003 with
+          Retry-After 5 (200 for a small body with an id, else 503) instead of a plain-text 503; at most 32 wait and
+          a forwarding slot not free within 1 second gives -32003. Each additional profile has 32 and 8 streams of its
+          own (the default profile 24); a further stream of the same profile gets 429, -32003 and Retry-After 30; the
+          outer bound is 160 connections (n8n: 128). Pending replies are capped at 32 MiB per profile (soft). A token
+          changed during an answer gives -32005, a child lost during one -32004, without a log traceback. Replies are
+          processed on one worker thread, profile by profile.
+        migration: Retry -32003 after Retry-After; check the backend before retrying a write after -32004; reconnect with the new token after -32005.
+      - id: duplicate-jsonrpc-id-refused
+        change: >-
+          A request whose JSON-RPC id is already in flight in the same MCP session (7 and "7" are one id) is refused
+          at once with HTTP 400, -32600 and "id": null (PaaS #161) and is not sent to the MCP server; before, both
+          requests' answers overwrote each other and the clients waited for the gateway's limit. Not behind the profile
+          switch. Clients that use a new id for every request (the MCP rule; the official SDK clients, Claude.ai and
+          ChatGPT) are not affected.
+        migration: A script that reuses an id before its first request has been answered must use a new id.
+      - id: child-watchdog-and-health
+        change: >-
+          The child watchdog backs off 2 to 300 seconds without a limit on attempts (reset after 120 seconds up), a
+          failed spawn included; the backend is unreachable after two failed checks in a row; refused credentials back
+          the monitor off 15 to 300 seconds (Hermes and Headscale; n8n has no such back-off); port 3000 is checked
+          before spawn; lifecycle warnings name a profile by the first 8 characters of its id. The soft open-file limit
+          is raised to about 530 at start (n8n: about 455); when it cannot be, only the default profile is served and
+          adding one answers 409 profile_limit_reached (limit 0). Adding a profile (or starting its child for the first
+          time) needs 256 MiB plus 160 MiB of MemAvailable (n8n: 300 MiB), else 409 profile_memory_insufficient or a
+          blocked child (memory_capacity).
+        migration: None needed.
+      - id: secret-url-origin-report-only
+        change: >-
+          Hermes and n8n: the secret URL checks one Origin list for the whole add-on, by default https://claude.ai in
+          report-only mode: an Origin outside it is served as before and logged once (decision=would_deny). The panel
+          can switch to enforce (403 outside the list). An unusable policy file makes every profile's secret URL answer
+          503 until a new policy is saved; a restore brings back the backup's policy without a notice. Bearer /mcp with
+          an Origin stays 403; no CORS header is added. Headscale keeps its own fixed rule (no Origin or exactly
+          https://claude.ai, any other 403) with no list and no policy file.
+        migration: Read the would_deny lines before switching to enforce; check the policy after a restore.
+      - id: new-files-and-restore-notice
+        change: >-
+          The first start adds .instance-sentinel and .instance-record (no secrets) to /data/mcp. A restore is detected
+          by the restore marker (0.4.14 leaves it; this version removes it) or the sentinel. Without additional profiles
+          nothing is revoked: one log line, restore-record.json with the default profile kept, the receipts beside the
+          index (and, for Hermes and n8n, the Origin policy) renewed (earlier operation ids 410), restore-notice.json and
+          the bootstrap field restore_notice until the default token is rotated or revoked; the panel shows the notice.
+        migration: Rotate the default token when it may have leaked after the backup.
+      - id: hermes-profiles
+        change: >-
+          Hermes only: changing a profile's Gateway URL, Dashboard URL or Dashboard user (adding or clearing the
+          Dashboard included) keeps its MCP token and URLs, as on the PaaS server (Odoo and Nextcloud issue a new
+          token); the old URLs then reach the new backend. Profiles that use one Dashboard share Hermes's login limit
+          (10 a minute per source address). A running hermes_chat turn (up to 300 seconds) holds one forwarding slot of
+          its own profile (32 for the default profile, 16 for each additional one); when all are busy the next request
+          waits 1 second and gets -32003.
+        migration: Rotate or revoke the token when the holders of the old URLs must lose access after a connection change.
+      - id: n8n-profiles
+        change: >-
+          n8n only: an additional profile without a backend runs no process and every tool, the seven documentation tools
+          included, answers -32603 "Backend not configured" (the default profile keeps its documentation child);
+          sessions (20, 10 minutes idle by default) are counted per profile; each additional profile keeps its own node
+          catalog and workflow version history in /tmp (not in backups); the webhook, chat and form connections of
+          n8n_test_workflow refuse the add-on's own addresses (127.0.0.0/8, ::1, 0.0.0.0/8, ::; LAN and public addresses
+          still connect). Two profiles on one n8n share its webhooks and forms.
+        migration: Put n8n on the LAN or another host, not on localhost; give each profile its own n8n or add header authentication to webhook nodes.
+      - id: headscale-profiles-and-child-token
+        change: >-
+          Headscale only: profiles on one server are kept apart only by their tool policies (an API key administers the
+          whole server); a profile added in the panel starts without headscale_api_keys create, expire and delete;
+          every call of the child reads its own profile's saved state and now also requires that state's child token to
+          equal the one the add-on started it with (HEADSCALE_POLICY_UNAVAILABLE otherwise, nothing sent to the server;
+          not behind the profile switch); a refused API key (401) backs the profile's health checks off 15 to 300
+          seconds; saving a policy restarts only that profile's child.
+        migration: Turn the three API key writes on in a new profile's tool permissions only if it needs them; use one API key per profile.
+    preserved:
+      - Add-on slugs, image names (ghcr.io/woowtech/amd64-mcp-hermes, -n8n, -headscale), amd64 only, ports 8081/tcp and Ingress 8099, manifest options and privileges.
+      - The default profile's token (Headscale: see above for how to get it), both URLs, state.json bytes (state schema 4), policy, child port 3000 and working directory, receipt key and format.
+      - Tool names and counts, annotations, write grants and the full-functionality defaults; the 15-second health interval.
+      - Odoo, EMQX, LiteLLM and Nextcloud keep their versions and their images.
+    backup_and_rollback:
+      - Create a Home Assistant add-on backup before upgrading.
+      - >-
+        Home Assistant cannot install an older version over a newer one. Roll back by restoring that backup: the old
+        image and data come back, profiles added since, rotations and revocations are lost, and the default token is
+        the backup's (nothing is revoked). After upgrading again press "revoke all" and issue new tokens.
+      - >-
+        Switching profiles off again is a release with a higher version (about a working day: build, acceptance, GHCR,
+        merge, Store sync); additional profiles then become dormant (tokens revoked, data kept). Meanwhile stop the
+        add-on, or revoke or delete a profile, or press "revoke all" in the panel.
+      - >-
+        The restore protection covers backups made with 0.5.0 or later. After restoring an older backup, or a VM or
+        disk snapshot (no restore signal), update to the latest version and press "revoke all". See
+        docs/operations/update-backup-rollback.md. Downgrades and rollback drills are pending (real-backend acceptance).
   # LiteLLM, Nextcloud and EMQX 0.5.0 switch multiple profiles on for these three products (train A; multi-profile plan
   # R2, docs/multi-profile/contract.md section 1.4 is the complete list of what the default profile sees change).
   # Hermes, Headscale and n8n keep their versions and stay switched off.
