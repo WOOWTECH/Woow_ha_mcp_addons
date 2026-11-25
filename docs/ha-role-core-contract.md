@@ -137,6 +137,9 @@ and for the adjacent `http/const.py`, `http/__init__.py`, `hassio/const.py` and 
    enough: 2026.10.0 moves Core's schemas from voluptuous to probatio, which changes most of these files).
 3. Add the version to `_HA_VERSIONS` and add a column for it to the table above (files are rows, versions are columns);
    note under the table what changed, and update the heading of that review section.
+   `_HA_VERSIONS` takes only `year.month.patch` release strings, in plain digits (no pre-release suffix, no fourth number, no
+   zero padding): the rule's table is built from it when the module loads, and a pre-release suffix or a fourth number in
+   the list breaks that import; `tests/test_ha_role.py` pins the form.
 4. In the same change, update every other place that spells out the reviewed versions:
    - the comment above `_HA_VERSIONS` in `ha_role.py`;
    - `tests/test_ha_role.py`: add the version to `test_the_reviewed_versions_are_exactly_these`, to the per-release list of

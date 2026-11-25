@@ -368,6 +368,26 @@ def test_the_rule_table_is_computed_from_the_reviewed_list_and_cannot_be_changed
         ha_role._HA_VERSIONS.add("2026.12.0")
 
 
+def test_the_rule_needs_a_patch_above_the_newest_reviewed_one_of_its_month():
+    # _auth_message accepts a listed version before it asks the rule, so `>` against `>=` cannot be seen through the verifier
+    # (an equivalent mutation there): pin it on the function itself (independent review 2026-11-25, S3). The newest reviewed
+    # patch of a month is listed, not a "later" patch; the next one is.
+    assert ha_role._later_patch("2026.11.3") is False and ha_role._later_patch("2026.7.4") is False
+    assert ha_role._REVIEWED_MONTHS
+    for (year, month), (first, last) in ha_role._REVIEWED_MONTHS.items():
+        assert ha_role._later_patch(f"{year}.{month}.{last}") is False
+        assert ha_role._later_patch(f"{year}.{month}.{last + 1}") is True
+
+
+def test_every_reviewed_version_has_the_year_month_patch_form():
+    # ha_role._reviewed_months() int()s every element of _HA_VERSIONS when the module loads, so a pre-release string in the
+    # list would break the import with a ValueError. The list holds only year.month.patch releases
+    # (docs/ha-role-core-contract.md "Adding a release", step 3): the form the rule accepts for a later patch.
+    assert ha_role._HA_VERSIONS
+    for version in ha_role._HA_VERSIONS:
+        assert ha_role._PATCH_RELEASE.fullmatch(version), version
+
+
 @pytest.mark.parametrize("version,month,span", [
     ("2026.11.4", "2026.11", "2026.11.0 to 2026.11.3"), ("2026.7.5", "2026.7", "2026.7.2 to 2026.7.4"),
     ("2026.10.40", "2026.10", "2026.10.0 to 2026.10.4"),
