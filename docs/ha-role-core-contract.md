@@ -165,7 +165,10 @@ Owner decision 2026-11-25 (DQ-35, [decisions](multi-profile/decisions.md)): a re
 release of a month already in `_HA_VERSIONS` is accepted without waiting for an add-on release; a new month is still
 reviewed first ("reviewed 2026.11 means 2026.11.x is accepted"). Before, every Core update, a patch release included,
 locked the management panel (403) of every installed add-on until an add-on release listed it. This is a change to a
-permission check, so it needs a separate review before it enters a release: it first enters the maintenance release of 2026-11-25 (Odoo 0.5.2, EMQX, LiteLLM and Nextcloud 0.5.1, n8n and Hermes 0.4.15, Headscale 0.4.20); the status of that review is in the decision log (DQ-35).
+permission check, so it was reviewed separately before it entered the maintenance release of 2026-11-25 (Odoo 0.5.2,
+EMQX, LiteLLM and Nextcloud 0.5.1, n8n and Hermes 0.4.15, Headscale 0.4.20): an independent review of 2026-11-25 passed
+after corrections, and the verifier was also run against real Home Assistant Core 2026.11.3, 2026.11.2 and 2026.11.0
+([provenance note](provenance/ha-core-later-patch-review-20261125.md); decision log DQ-35).
 
 **The rule** (`ha_role._later_patch`; its table `_REVIEWED_MONTHS` is computed from `_HA_VERSIONS` when the module loads,
 not per request, and cannot be changed at run time):
@@ -212,8 +215,10 @@ pre-releases, are not covered: they need the full review above before any add-on
 - Recovery. The rule has no run-time switch. Refusing a Core version again takes a new add-on release (an estimated
   working day or more, [threat model](multi-profile/threat-model.md)), or stopping the add-on.
 
-**Where the exposure is today.** Home Assistant no longer ships patch releases of the older months (the last ones are
-2026.7.4, 2026.8.3, 2026.9.4 and 2026.10.4), so in practice the rule newly accepts 2026.11.4 and later, nothing before it.
+**Where the exposure is today.** The rule holds for every reviewed month, by design: 2026.7.9 or 2026.10.9 would be accepted
+too, and so would a patch of up to three digits. But Home Assistant no longer ships patch releases of the older months
+(the last ones are 2026.7.4, 2026.8.3, 2026.9.4 and 2026.10.4), so in practice the rule newly accepts 2026.11.4 and later,
+nothing before it.
 
 **What stands behind the rule, and what does not.** (1) Core's Ingress check is not an independent gate. From Core
 2026.11.0 the dedicated commands `hassio/ingress/info` and `hassio/ingress/session` call `_async_check_ingress_access`

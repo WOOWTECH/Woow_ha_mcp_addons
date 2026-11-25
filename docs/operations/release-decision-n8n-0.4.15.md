@@ -51,7 +51,7 @@ n8n 0.4.14 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA �
 | # | 步驟 | 結果 |
 |---|---|---|
 | 1 | 推送分支、開 PR | PR #138 已開（head `3bcfa1f`）；升版 commit 推上之後的 head 待補 |
-| 2 | 獨立安全審查（DQ-35 的條件，見下面「關卡」第 1 項） | 待補 |
+| 2 | 獨立安全審查（DQ-35 的條件） | 已做：2026-11-25 修正後通過；必修 4 項（文字與紀錄）已處理，建議 2 項交負責人決定，見 [審查筆記](../provenance/ha-core-later-patch-review-20261125.md) |
 | 3 | CI：`checks`、`Release train`、`Upgrade comparison`（`compare`、`runtime`） | 待補 |
 | 4 | 候選建置與容器驗收（`release.yaml` 的 gate → candidate：容器驗收含子程式 bearer 401 與 HM-13a 還原樹；source／history／全部 layer 的 Gitleaks、SBOM、Grype、授權） | 待補（run、`image.tar` SHA-256、image ID） |
 | 5 | J1900 指令集檢查（candidate job 內建，QEMU `-cpu Nehalem`） | 待補 |
@@ -65,12 +65,12 @@ n8n 0.4.14 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA �
 
 ## 已知限制與事實
 
-- **展示機的 Core 版本**：維持 2026.7.2 時，這一版對 2026.11.3 與之後修補版的放行只由單元測試（`tests/test_ha_role.py`，含窮舉 2025～2027 年的版本字串）涵蓋，沒有在真的 Core 2026.11.x 上跑過這個 add-on 映像；要驗證需另外的 Core 2026.11.3 環境，由負責人決定。
-- **A10 是權限檢查的改動**：放行的版本沒有逐版審查，add-on 紀錄每個版本每個程序記一行；下一次發版再補審並列入清單。風險與不變的防線見 [ha-role-core-contract](../ha-role-core-contract.md)「Later patch releases of a reviewed month」。
+- **展示機的 Core 版本與真 Core 驗證**：`ha_role` 已用真的 Core 2026.11.3、2026.11.2、2026.11.0（PyPI 官方套件，前面接 Supervisor 代理替身）驗過（[審查筆記](../provenance/ha-core-later-patch-review-20261125.md)第 5 節）；沒有真的 2026.11.4 以上的 Core。這個 add-on 映像沒有在真的 Core 2026.11.x 的 HA 上跑過：展示機維持 2026.7.2 時只驗沒有退步，2026.11.3 與後續修補版的放行由單元測試（`tests/test_ha_role.py`，含窮舉 2025～2027 年的版本字串）與上面的真 Core 驗證涵蓋；要在 HA 上驗證需另外的 Core 2026.11.3 環境，由負責人決定。
+- **A10 是權限檢查的改動**：放行的版本沒有逐版審查，add-on 紀錄每個版本每個程序記一行；下一次發版再補審並列入清單。最壞情況、偵測、回復與今天實際的曝險範圍（規則對每個已審月份都成立，但 HA 已不再出舊月份的修補版，實際只在 2026.11.4 起）見 [ha-role-core-contract](../ha-role-core-contract.md)「Later patch releases of a reviewed month」。
 
 ## 發版前的關卡（草稿時列的阻擋事項）
 
-1. **A10 的獨立安全審查（DQ-35 的條件）**：負責人選「同月份修補版自動放行」時的條件是放進維修版之前先做獨立安全審查；`docs/multi-profile/decisions.md` DQ-35 目前寫「尚未做」。審查結果出來之前，不觸發 `release.yaml`。結果：待補。
+1. **A10 的獨立安全審查（DQ-35 的條件）**：已做（2026-11-25，審查者不是作者），修正後通過：程式不用改，必修 4 項是文字與紀錄，已處理；建議 S4、S5 交負責人決定（規則要不要只對 2026.11 起生效、面板要不要顯示被規則放行的版本）。另外，主對話用真的 Core 2026.11.3、2026.11.2、2026.11.0 跑過 `ha_role`（維修版 67／67、30／30、30／30 全過）。見 [審查筆記](../provenance/ha-core-later-patch-review-20261125.md)。
 2. **映像尚未建置**：這份草稿寫成時，沒有建置、沒有推 GHCR、沒有展示機驗收；上面的表每一格都要等實際執行後補。
 3. **`upgrade-notes.yaml`**：這一批沒有加；`Upgrade comparison / compare` 要求時照 `AGENTS.md` 第 3 點補。
 4. **發版鎖與 PR head 凍結**：七支（或當批要發的各支）候選都通過之後才批准任何一支的 publish；之後的 commit 只加紀錄檔。
