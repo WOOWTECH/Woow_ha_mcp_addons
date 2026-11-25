@@ -76,6 +76,7 @@ Hermes、Headscale、n8n 的開關與版號都不動，OpenDesign 不跟著升�
 ## 已知限制（不擋這一版，細節見 [ha-test-emqx-0.5.0](ha-test-emqx-0.5.0.md)）
 
 - **經 Cloudflare 開 HA 時，面板不能儲存「瀏覽器來源檢查」設定**（F2，與 Odoo 0.5.1 同一份面板）：Cloudflare 壓縮把 ETag 改成弱 ETag，面板只接受強 ETag。只影響這一張卡片，預設值照常運作；從區網開 HA 可以儲存。下一版三個產品與 Odoo 一起修。負責人 2026-11-24 決定先發。
+- 後續（2026-11-25）：F2 在維修版修好了：面板也把 Cloudflare 這類代理改成的弱 ETag（`W/"…"`）當成同一個版本，送出時照舊送強的 `If-Match`，add-on 的比對沒有放寬；帳號清單的 ETag 用同一個讀法，一起修；但在 Cloudflare 上量到不受影響（2026-11-25 在真的 HA 加 Cloudflare 上量，瀏覽器的 `Accept-Encoding: gzip, deflate, br, zstd`）：`api/origin-policy`（94 位元組）被 Cloudflare 壓成 br、ETag 變弱，所以卡片不能存；`api/profiles`（161 位元組）由 Home Assistant 自己先壓 gzip、ETag 維持強；只有前面的代理改寫 HA 沒壓縮的回應時才可能變弱，例如用戶端不收壓縮（`docs/multi-profile/unreleased-changes.md` A11）。上面寫的是這一版映像的行為，沒有改。
 - **EMQX 5.9 以前的開源版不強制 API key 角色**：展示機的 broker 5.8.9 開源版接受建立 `viewer` key（不報錯），但用它 publish、新增 ban 都被接受。DOCS 本來就寫「API key 角色：Enterprise 5.4 起、5.9 起所有版本都有」；陷阱是建立時不報錯。這種 broker 上，唯讀帳號只靠 add-on 的寫入閘道與子程式政策擋（驗收時 17 個寫入拒絕都過）。「唯讀 key 的寫入被 EMQX 擋」這一項在展示機無法驗證。DOCS 下一版補一句。
 - 相關但不屬於本產品：驗收期間發現展示機 broker add-on 本身的設定問題，已另外回報負責人（由 broker add-on 那條線處理）；驗收期間對 broker 做的暫時加固，測完隨 options 還原全部移除。
 - HA Core：`ha_role.py` 只認到 Core 2026.11.2；目標 HAOS 比 2026.11.2 新時要先補審。

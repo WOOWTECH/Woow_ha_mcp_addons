@@ -1,3 +1,8 @@
+## 0.4.15 — source only (disabled)
+
+- Source only: OpenDesign stays disabled in the Store, so no 0.4.15 OpenDesign image, HAOS test or Store release is planned or claimed. Its source version follows the shared default, as in the earlier source-only releases.
+- The shared changes of this release apply to its source too (details in the repository CHANGELOG, 2026-11-25 maintenance release): the administrator check accepts Home Assistant Core 2026.11.3 and later patch releases of the reviewed months (owner decision 2026-11-25); the restore guard reads and removes the `.restore-detected` marker after a restore (PR #108) and the admin panel shows a restore notice (PR #112).
+
 ## 0.4.14 — source only (disabled)
 
 - Source only: OpenDesign stays disabled in the Store, so no 0.4.14 OpenDesign image, HAOS test or Store release is planned or claimed. Its source version follows the shared default, as in the earlier source-only releases.

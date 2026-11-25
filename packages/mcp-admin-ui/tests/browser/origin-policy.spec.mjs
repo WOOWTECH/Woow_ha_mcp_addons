@@ -80,6 +80,33 @@ test('switched on: the default policy is shown; a save sends the request with CS
   expect(await page.evaluate(() => sessionStorage.length)).toBe(0);
 });
 
+// F2: a proxy in front of the Ingress that compresses the small JSON answers (Cloudflare) turns the add-on's strong ETag into a
+// weak one, W/"o1-...". The card used to lose its revision, say so and disable its save button; now it saves, and the If-Match
+// it sends is the strong one (the mock compares it strictly, as the add-on does).
+test('F2: behind a proxy that makes the ETag weak the card still saves, with the strong If-Match', async ({page, request}) => {
+  await reset(request, {product: 'odoo', parity: true, profiles: {weakEtag: true}});
+  const answers = [];
+  page.on('response', response => { if (new URL(response.url()).pathname.endsWith('/api/origin-policy')) answers.push(response.headers().etag); });
+  await open(page, '/access');
+  await expect(card(page)).toContainText('目前是預設值（還沒儲存過）');
+  await expect(card(page)).not.toContainText('沒有回傳這份設定的版本資訊');
+  await expect(page.getByRole('button', {name: '儲存來源檢查設定', exact: true})).toBeEnabled();
+  await save(page, 'enforce', 'https://claude.ai\nhttps://app.example');
+  await confirm(page, '確認儲存');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已儲存來源檢查設定：阻擋（enforce），清單 2 個來源。');
+  // The next save goes from the revision the page took from a weak ETag again.
+  await save(page, 'report-only', 'https://claude.ai');
+  await confirm(page, '確認儲存');
+  await idle(page);
+  await expect(page.locator('#notice')).toContainText('已儲存來源檢查設定：只記錄（report-only），清單 1 個來源。');
+  const puts = await calls(request, call => call.operation === 'origin-policy');
+  expect(puts.map(call => call.ifMatch)).toEqual([etag(1), etag(2)]);  // strong: quoted, no W/
+  expect(answers.length).toBeGreaterThan(0);
+  expect(answers.every(value => value.startsWith('W/"o1-'))).toBe(true);  // and every answer the page read was weak
+  expect(await fixtureOrigin(request)).toMatchObject({state: 'saved', mode: 'report-only', allowed: ['https://claude.ai']});
+});
+
 test('switched on, an additional profile shown: the same card (the add-on\'s); its save names no profile', async ({page, request}) => {
   await reset(request, {product: 'odoo', parity: true, profiles: {extra: [{id: B, label: '會計', configured: true, status: 'running'}]}});
   await open(page, '/access');

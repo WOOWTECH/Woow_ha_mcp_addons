@@ -307,4 +307,4 @@ def test_the_n8n_child_loads_the_one_pinned_native_addon_and_n8n_mcp_uses_it(sto
     assert result.returncode == 0, result.stderr
     found = json.loads(result.stdout)
     assert found.pop("sqlite").count(".") == 2  # the SQLite inside the addon (3.53.2 for better-sqlite3 12.11.1)
-    assert found == {"node": "v26.12.1", "native": "loaded", "fts5": True, "adapter": "BetterSQLiteAdapter", "fts_hits": True}, found
+    assert found == {"node": "v26.13.1", "native": "loaded", "fts5": True, "adapter": "BetterSQLiteAdapter", "fts_hits": True}, found

@@ -110,7 +110,8 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
   `profile_index_etag`）。隔離後預設帳號立刻恢復 MCP 服務，原本的帳號都變成孤兒。409 時重讀狀態並說明原因
   （索引已可用、索引檔又變了、或沒有索引檔可隔離：要修好後重啟 add-on）；503（別的帳號拿著鎖）保留識別碼，可重送。
 - 清單不能用時不鎖面板（審查 S-2）：清單讀不到或格式不合，選單只剩預設帳號（與目前帳號），新增改名刪除停用並說明；
-  清單沒帶 `ETag` 時照列但唯讀；這個瀏覽器顯示不了的名稱只藏那一列的名稱（以 id 前 8 碼稱呼；建立後的提示也一樣）。
+  清單沒帶 `ETag`（或帶的不是索引的版本）時照列但唯讀；前面的代理把強 ETag 改成弱的 `W/"p1-…"` 時，
+  版本照樣讀得到（F2），送出時仍是強的 `If-Match`（Cloudflare 上量到清單不受影響：HA 自己先壓 gzip，ETag 維持強；只有代理改寫 HA 沒壓縮的回應才會變弱，例如用戶端不收壓縮）；這個瀏覽器顯示不了的名稱只藏那一列的名稱（以 id 前 8 碼稱呼；建立後的提示也一樣）。
 - `profiles_supported` 是 false 的產品（OpenDesign、Odoo Manage，DQ-28）沒有「新增帳號」；`limit` 0（可開的檔案數不夠，
   只服務預設帳號）另有說明。
 - fixture 以 `profiles` 選項開關多帳號；Playwright 的 `profiles-on` 專案讓四個既有 spec 在開關開時原封不動再跑一次
@@ -153,8 +154,8 @@ bootstrap；product/contract/tools/schema/disabled/global/grants 任一變更即
 （Headscale 除外：它照舊只放 `https://claude.ai`，沒有這份設定），「連線與權杖」頁多一張卡片「瀏覽器來源檢查（全 add-on 共用）」：
 
 - 讀：每次畫這一頁就讀一次 `GET {base}/api/origin-policy`（全域路徑：不帶 `X-MCP-Profile`、回應沒有回聲），版本取自 `ETag`
-  （`"o1-…"`）。額外帳號的畫面也是同一份（整個 add-on 一份，存檔不分帳號）。回應形狀不符就不顯示（`originView`）；
-  缺 `ETag` 時照顯示、但不能存。畫面換掉或換帳號之後才到的回應丟掉。
+  （`"o1-…"`；前面的代理壓縮回應而改成弱的 `W/"o1-…"` 時取出同一個版本，F2，送出時一律是強的 `If-Match`）。額外帳號的畫面也是同一份（整個 add-on 一份，存檔不分帳號）。回應形狀不符就不顯示（`originView`）；
+  缺 `ETag` 或不是這份政策的版本時照顯示、但不能存。畫面換掉或換帳號之後才到的回應丟掉。
 - 模式（只記錄／阻擋）與允許的來源（每行一個）。面板先擋看得出的錯（`api.js` 的 `originList`：去頭尾空白、略過空行、
   `http(s)://主機[:port]` 以外的寫法、不分大小寫與預設 port 的重複、超過 16 個），訊息不回顯打的值；其餘由伺服器決定
   （422 `origin_policy_invalid`，固定文字）。確認對話框寫明兩種模式的效果（阻擋：清單外的瀏覽器來源 403）。

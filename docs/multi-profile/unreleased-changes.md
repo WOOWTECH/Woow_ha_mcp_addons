@@ -30,22 +30,34 @@
   2026-11-23 火車 A 升版（分支 `release/train-a-0.5.0-20261123`，基準：Odoo 發版分支 `27c17b3` 與整合分支 PR #134 `d8fe291` 的 merge commit）：LiteLLM、Nextcloud、EMQX 開通
   （`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），A8、A9、第 7 節與各產品自己的句子（L2～L6 的更新版、NC1 與 HM-22 句子、EMQX 的 #153 三句與子程式政策）寫進三個 0.5.0 CHANGELOG，
   表與第 1、3.4～3.6、4.2 節跟上；Hermes、Headscale、n8n 開關與版號不動。
+  2026-11-25 維修版（分支 `release/maintenance-20261125`，基準 `claude-delivery` `092b1b5`）：第 1 節加 A10（HA Core 2026.11.3 與已審查月份後續修補版自動放行）、A11（面板讀弱 ETag，F2），總表與各產品節的「要寫」跟上；版號與 `addons/` 不在這一片。
+  2026-11-25 維修版（基準 `claude-delivery` `092b1b5`）：EMQX 加 E4（`emqx_list_topics` 的說明對齊 PaaS #160；不受開關管；PR 號與合併 commit
+  合併後補），總表與第 3.4 節跟上；其他產品與版號不動。
+  2026-11-25 維修版升版（分支 `release/maintenance-20261125`，基準 `claude-delivery` `092b1b5`，寫進 CHANGELOG 之前的分支 head `3bcfa1f`，PR #138；升版 commit
+  合併後補）：照第 3 點把 A8～A11 與 E4 寫進各產品 CHANGELOG（Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、n8n／Hermes 0.4.15、Headscale 0.4.20、
+  OpenDesign 只升來源版本到 0.4.15）。A8、A9、A10 適用的 8 個產品都寫了，E4 只有 EMQX，從第 1、3.4 節刪除；A11 只有開通多帳號的產品看得到，n8n、
+  Hermes、Headscale 開通的那一版才寫，留在第 1 節（句子與事實已改正：帳號清單在 Cloudflare 上量到不受影響）。總表與各產品節跟上。
+  2026-11-25 維修版（Node 基底；分支 `release/maintenance-20261125`，`f988a5f`，在 `80ed536` 之後）：Node 基底映像 26.12.1 → 26.13.1（Node 26.12.1
+  執行檔被 7 個 High 漏洞命中，n8n 候選映像過不了供應鏈關卡；26.13.1 修掉）。這一項不是 A～H 的功能片、也不受開關管，直接寫進 CHANGELOG，
+  所以總表與各產品節的「要寫」不變：n8n 0.4.15 寫完整的一條（n8n 是唯一把 Node binary 放進最終映像的產品）；Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、
+  Hermes 0.4.15、Headscale 0.4.20 各寫一句（只有面板建置階段換了基底映像；本機用兩個版本的官方執行檔各建一次面板，443 個檔逐位元相同）；根 CHANGELOG 一條。
+  OpenDesign 的來源帶同一個釘版，它的 CHANGELOG 沒有另寫（照前例指向根 CHANGELOG）。
 - **本檔只管 CHANGELOG**。`upgrade-notes.yaml` 照 `AGENTS.md` 第 3 點與升版比對（`Upgrade comparison`）的要求另外判斷；版號資料照
   `docs/operations/release.md`「升版時要改的版號資料」。
 - 「主對話補寫」：該片的筆記沒有英文句子，是照筆記的中文要點或程式照實寫的，最後的英文由發版片定。其他句子照筆記原文。
 
-## 總表（2026-11-19）
+## 總表（2026-11-25 維修版升版後）
 
 | 產品 | 目前版號 | 上次升版 commit | 映像來源 | 要寫進 CHANGELOG 的項目 | 已合併、CHANGELOG 沒記的產品自身修正 |
 |---|---|---|---|---|---|
-| Odoo | 0.5.1（0.5.0 已推 GHCR 但從未上架，負責人 2026-11-23 決定修 F1 後以 0.5.1 上架，使用者從 0.4.14 直接升級；以下的 0.5.0 都讀成 0.5.1）；0.5.0（HM-19a 升版 PR，2026-11-19 準備；合併後補 PR 號與合併 commit；0.4.14 是 #119 `53ffe61`） | HM-19a 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9 與第 7 節已寫進 0.5.0） | 無 |
-| n8n | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
-| Hermes | 0.4.14（同上） | 同上 | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
-| EMQX | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置；0.4.14 是 #119 `53ffe61`） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、第 7 節與 EMQX 自己的項目已寫進 0.5.0） | 無 |
-| LiteLLM | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、第 7 節與 L2～L6 已寫進 0.5.0） | 無 |
-| Nextcloud | 0.5.0（火車 A 升版，2026-11-23 準備；映像尚未建置） | 火車 A 的升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A8、A9、NC1、第 7 節與 HM-22 句子已寫進 0.5.0） | 無 |
-| OpenDesign | 0.4.14（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 2（A8、A9，寫成「applies to its source too」） | 無 |
-| Headscale | 0.4.19（2026-11-18 合併，#119 `53ffe61`） | `5a7c191`（2026-11-18，0.4.19 升版 commit） | `24de6ec`（2026-11-18 推 GHCR） | 2（A8、A9） | 無 |
+| Odoo | 0.5.2（2026-11-25 維修版；0.5.1 是 2026-11-24 上架的多帳號首發，0.5.0 已推 GHCR 但從未上架；0.4.14 是 #119 `53ffe61`） | 維修版升版 commit（合併後補） | 尚未建置（`release.yaml` 待負責人批准） | 0（A10、A11 已寫進 0.5.2） | 無 |
+| n8n | 0.4.15（2026-11-25 維修版，共用預設版號線；0.4.14 是 #119 `53ffe61`） | 同上 | 尚未建置（同上） | 0（A8、A9、A10 已寫進 0.4.15；A11 等開通） | 無 |
+| Hermes | 0.4.15（同上） | 同上 | 尚未建置（同上） | 0（A8、A9、A10 已寫進 0.4.15；A11 等開通） | 無 |
+| EMQX | 0.5.1（2026-11-25 維修版；0.5.0 是火車 A，2026-11-24 發佈到 GHCR、#136 合併） | 同上 | 尚未建置（同上） | 0（A10、A11、E4 已寫進 0.5.1） | 無 |
+| LiteLLM | 0.5.1（同上） | 同上 | 尚未建置（同上） | 0（A10、A11 已寫進 0.5.1） | 無 |
+| Nextcloud | 0.5.1（同上） | 同上 | 尚未建置（同上） | 0（A10、A11 已寫進 0.5.1） | 無 |
+| OpenDesign | 0.4.15（只升來源版本，商店停用；同上） | 同上 | 沒有映像 | 0（A8、A9、A10 寫成「applies to its source too」，已寫進 0.4.15） | 無 |
+| Headscale | 0.4.20（2026-11-25 維修版；0.4.19 是 #119 `53ffe61`） | 同上 | 尚未建置（同上） | 0（A8、A9、A10 已寫進 0.4.20；A11 等開通） | 無 |
 
 - 0.4.13：PR #76 在 2026-11-09 合併（`e2108f6`）。六個映像從 `4966f40` 建（`docs/operations/release-decision-0.4.13.md`）；`4966f40` 之後
   #76 只多一個紀錄 commit（`0913611`）。
@@ -53,6 +65,8 @@
 - 0.4.14：升版 commit `7252d9e`（2026-11-17）。映像從凍結的 PR head 建（`24de6ec`），映像來源記在 `docs/operations/release-decision-0.4.14.md`
   與各產品自己的紀錄；PR #119 在 2026-11-18 合併（`53ffe61`）。
 - Headscale 0.4.19：升版 commit `5a7c191`，和 0.4.14 同一個 PR #119 合併（`53ffe61`）。映像來源記在 `docs/operations/release-decision-headscale-0.4.19.md`。
+- 2026-11-25 維修版：升版 commit 與映像來源（凍結的 PR head）合併／建置後補；版號資料與發佈紀錄見 `docs/operations/release-decision-<產品>-<版號>.md`
+  （7 份，草稿）。0.5.1（Odoo）與火車 A 的 0.5.0（EMQX、LiteLLM、Nextcloud）在 2026-11-24 已發佈到 GHCR 並通過展示機驗收，#137、#136 已合併。
 - 2026-11-13 之後到 0.4.14 合併之前沒有任何產品發版。0.4.14 合併之後到 2026-11-19 也沒有（之後合併的是 #108、#112、#116、#109，都沒改版號）。
 
 ## 1. 所有產品共通（A：不受開關管的共用變更）
@@ -65,35 +79,35 @@ A1～A7 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 
   A5 HM-31 請求內容位元組預算與 JSON 結構守門（#105）、A6 HM-09 追補（#106）、A7 管理員驗證接受 HA Core 2026.11.2（#120）。原來的句子、
   看得到的變化與出處見 `4cc7bee`（#120 的合併）的本檔與 `docs/provenance/ha-multiprofile-unreleased-changes-20261117.md`。寫進 CHANGELOG 時
   照 0.4.14 那批的寫法：A3、A6 補 PR 號，A4 寫明狀態碼、其他標頭與其餘文字不變、只有 `Content-Length` 跟著變；以各產品 CHANGELOG 為準。
-- 之後不受開關管的共用變更照檔頭第 1 點加在這一節，從 A8 編起（A1～A7 已用在各 PR 與發版紀錄裡）。
 
-A8、A9 是 0.4.14 合併之後才合併的（2026-11-18～19），適用全部 8 個產品（n8n 的守門與提示在 `apps/n8n/run.py`；OpenDesign 只有來源，照前例寫一行
-「applies to its source too」）；Odoo 0.5.0（HM-19a）與 LiteLLM、Nextcloud、EMQX 0.5.0（火車 A）已寫進 CHANGELOG（開通的版本，和第 7 節的還原那一點寫在一起），其他 4 個產品（n8n、Hermes、OpenDesign、Headscale）還沒寫。0.4.14 的 CHANGELOG 寫過 A3（還原標記「之後的版本會讀並刪掉它，在那之前一直留著」），
-A8 就是那個之後的版本；寫的時候和 A3 那句對得起來。
+A8～A10 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第 3 點刪除：
 
-- **A8　HM-13b 開機守門（#108，合併 `f5e296f`；不受開關管）**
-  - 看得到的變化（今天的安裝：沒開通、沒有帳號資料）：還原之後的那次開機，管理程序在任何子程式與 listener 之前讀 entrypoint 留下的
-    `.restore-detected`，記一行 WARNING（`restore_lock.KEPT_NOTICE`：權杖已回到備份當時的值、什麼都沒撤銷、可能外洩時到面板重新產生），存 A9 的
-    還原提示 `restore-notice.json`，然後刪掉標記；除了這個提示檔，`/data/mcp` 其他一個位元組都不動。還原提示存不下或標記刪不掉時照常啟動、多記一行
-    （`MARKER_LEFT`），標記留著、下次開機再試。沒有還原的開機只多查幾個名稱，什麼都不寫。
-  - 看不到的部分（只在磁碟上有帳號資料時動作，今天沒有安裝有）見第 4.1 節。
-  - CHANGELOG 建議句（HM-18 補寫，照契約第 1.2、1.3 節與 `restore_lock.py` 的原文；英文最後由發版片定）：
+- 已發：A8（HM-13b 開機守門，#108）、A9（HM-13c 單帳號還原後的面板提示，#112）：Odoo 0.5.0／0.5.1 與 LiteLLM、Nextcloud、EMQX 0.5.0（開通的版本，和第 7 節的還原那一點寫在一起），
+  2026-11-25 維修版的 n8n、Hermes 0.4.15、Headscale 0.4.20 與 OpenDesign 的來源版本 0.4.15（寫成「applies to its source too」）。A10（HA Core 2026.11.3 與已審查月份後續修補版自動放行，
+  DQ-35）：8 個產品都在維修版（Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、n8n／Hermes 0.4.15、Headscale 0.4.20、OpenDesign 來源 0.4.15）；升版 commit 合併後補。
+  A10 放進維修版的條件（負責人：先做獨立安全審查）已滿足：2026-11-25 獨立審查修正後通過，並用真的 Core 2026.11.3（67／67）、2026.11.2（30／30）、2026.11.0（30／30）驗過 `ha_role`（官方套件加 Supervisor 代理替身；沒有真的 2026.11.4 以上的 Core）；規則對每個已審查月份都成立，但 HA 已不再出舊月份的修補版，實際效果只在 2026.11.4 起。見 `docs/provenance/ha-core-later-patch-review-20261125.md`。
+- 刪掉的項目：A8 HM-13b 開機守門（#108，`f5e296f`）、A9 HM-13c 單帳號還原後的面板提示（#112，`e108a12`）、A10 管理員驗證接受 HA Core 2026.11.3 並自動放行已審查月份的後續修補版
+  （維修版分支，DQ-35）。原來的句子、看得到的變化與出處見 `3bcfa1f` 的本檔。n8n、Hermes、Headscale 的 A8、A9 照原來的建議句寫，A8 另外補上「上一版留下標記並一直保留、這一版才讀它並刪掉」與 log 開頭的文字，
+  和 0.4.14 的 A3 那句（「之後的版本會讀並刪掉它」）對得起來。
+- 維修版寫 CHANGELOG 時，對 n8n、Hermes、Headscale 核對了 `24de6ec`（0.4.14／0.4.19 映像的來源）到 `092b1b5` 之間動到共用執行期程式的 53 個非合併 commit（`packages/mcp-admin-core`、`packages/mcp-admin-ui/src`、`apps/runtime`、`apps/<產品>`；`packaging/entrypoint.py`、`management_launcher.py` 沒有動；分屬 #108、#112、#116、#137 與 #136）：開關關時看得到的變化只有 A8、A9；其餘都在開關後面、只對 Odoo 或火車 A 的產品起作用，或預設值與以前相同（連線池參數、選用的 `WOOW_CAPACITY_METRICS` 診斷）。唯一的邊界是 `gateway.py` 的 owner-defaults 提示動作（`owner-defaults/restore`、`dismiss`）：回應的 `configuration` 改在子程式重啟之後才重算（`cb94cf0`，火車 A 的 Nextcloud）；n8n、Hermes 這條路不重啟子程式，回應相同，Headscale 沒有舊版狀態（`owner_defaults.apply_legacy_upgrade` 對它直接拒絕），不會有這個提示，所以沒有寫進 CHANGELOG。JSON 結構守門的掃描換了寫法（HM-19c 的效能修正，#137），用 60,630 個輸入、7 組上限對照改寫前後，答案逐一相同。沒有漏掉的項目。
+- 之後不受開關管的共用變更照檔頭第 1 點加在這一節，從 A12 編起（A1～A11 已用在各 PR 與發版紀錄裡）。
+
+- **A11　面板在前面有會壓縮的代理（例如 Cloudflare）時也讀得到版本：「瀏覽器來源檢查」卡片不再唯讀，帳號清單用同一個讀法（F2；維修版分支 `release/maintenance-20261125`；改的是共用面板，受開關管：只有開通多帳號的產品看得到）**
+  - 已發：Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1（維修版）。n8n、Hermes、Headscale 開通多帳號的那一版才寫（它們開關關著，面板沒有這兩處）；寫的時候照下面這句。
+  - 看得到的變化（Odoo、EMQX、LiteLLM、Nextcloud；Hermes、Headscale、n8n 開通時一樣；沒開通的產品面板沒有這兩處）：HA 前面多一層會壓縮回應的代理（例如 Cloudflare）時，add-on 回的
+    強 ETag（`"o1-…"`、`"p1-…"`）可能被改成弱 ETag（`W/"o1-…"`），面板原本只認強的。2026-11-25 在真的 HA 加 Cloudflare 上量過（瀏覽器的 `Accept-Encoding: gzip, deflate, br, zstd`）：
+    - `api/origin-policy`（94 位元組）被 Cloudflare 壓成 br、ETag 變弱 → 「瀏覽器來源檢查」卡片的儲存鈕停用（Odoo 0.5.1 驗收時發現，F2）；
+    - `api/profiles`（161 位元組）由 Home Assistant 自己先壓 gzip，ETag 維持強 → **帳號清單在這條路上不受影響**；只有當前面的代理改寫 HA 沒壓縮的回應時才可能變弱
+      （例如用戶端不收壓縮時量到弱）。帳號清單讀 ETag 的地方（檢查所有讀 ETag 標頭的地方時發現）和卡片是同一個函式，一起修。
+    現在面板兩種形式都取出同一個版本；送出時照舊送強的 `If-Match`（內容和以前逐位元相同），add-on 的比對沒有放寬（只認強的）。其他怪值（別的種類、前後多字、小寫 `w/`、多個值）仍當成沒有版本、唯讀。
+  - 要一起改的文件：已寫進 `docs/operations/` 的 F2 已知限制各處加了一行後續說明（維修版升版時照這裡的事實改正過）、`packages/mcp-admin-ui/README.md`；各產品 `addons/<產品>/` 沒有寫這個限制，不用改。
+  - CHANGELOG 建議句（英文；只寫在開通多帳號的產品；維修版寫在 Odoo、EMQX、LiteLLM、Nextcloud）：
 
     ```text
-    - Restore guard (groundwork for multiple profiles; PR #108): after Home Assistant restores this add-on's backup, the next start now reads the restore marker `.restore-detected` before any listener or MCP child starts, logs one warning that the MCP token is back to its value at the time of that backup (nothing is revoked without multi-profile data; rotate the token in the panel if it may have leaked since), saves the panel's restore notice (`restore-notice.json`, next entry) and removes the marker. Apart from that notice file, nothing else in `/data/mcp` changes. If the notice cannot be saved or the marker cannot be removed, the add-on still starts, logs one more line and tries again at the next start. A start without a restore only checks a few file names and writes nothing.
+    - Behind a proxy that compresses the panel's answers (Cloudflare does), the add-on's strong ETag of the browser origin policy (`"o1-…"`) arrives as a weak ETag (`W/"o1-…"`), which the panel did not take as a revision: the "browser origin check" card could not be saved. The panel now reads the same revision from the weak form; it still sends the strong `If-Match` as before, and the add-on's comparison is unchanged. The profile list's ETag (`"p1-…"`) is read by the same function and was fixed with it; measured on a real Home Assistant behind Cloudflare (2026-11-25, browser `Accept-Encoding: gzip, deflate, br, zstd`) it was not affected there, because Home Assistant itself compresses that answer with gzip first and its ETag stays strong. It could only turn weak when a proxy rewrites an answer that Home Assistant sent uncompressed, for example when the client does not accept compression.
     ```
-  - 出處：`docs/provenance/ha-multiprofile-HM-13b-20261116.md` 第 13 節（「各產品 CHANGELOG 的「還原標記」段落改成新行為」）；契約第 1.3 節。
-
-- **A9　HM-13c 單帳號還原後的面板提示（#112，合併 `e108a12`；不受開關管；使用者 2026-11-16 核准的代價）**
-  - 看得到的變化：還原而且預設帳號的權杖沒撤銷時（今天的每個安裝都是），A8 那次開機在刪標記之前另存 `/data/mcp/restore-notice.json`
-    （只有時間、不含秘密），面板顯示還原提示，bootstrap 多一個鍵 `restore_notice`，到預設帳號重新產生或撤銷權杖為止。沒有還原過的安裝逐位元照舊。
-  - CHANGELOG 建議句（HM-13c 筆記第 15 節原文）：
-
-    ```text
-    - After a backup restore that keeps the MCP token (no multi-profile data on disk: nothing is revoked, as before), the admin panel now also shows "偵測到還原；權杖已回到備份當時的值。若備份後曾輪替或撤銷，請立即重新產生" until the token is rotated or revoked. Meanwhile the bootstrap carries one more field, `restore_notice` (`{"at"}`), and `/data/mcp` holds `restore-notice.json` (its time only, no secret). An installation that was never restored answers byte for byte as before; no management route is added.
-    ```
-  - 出處：`docs/provenance/ha-multiprofile-HM-13c-20261116.md` 第 15 節；契約第 1.2 節「HM-13c 的不受開關管變更」。`upgrade-notes.yaml` 要不要列，
-    照升版比對的報告定（只多一個欄位，不是破壞性變更）。
+  - 出處：`packages/mcp-admin-ui/src/api.js`（`headerRevision`）、`packages/mcp-admin-ui/tests/origin-policy.test.mjs`、`profiles.test.mjs`、`tests/browser/origin-policy.spec.mjs`、`profiles.spec.mjs`（`weakEtag` 是 `fixtures/server.mjs` 的新選項）；
+    量測：2026-11-25 主對話在真的 HA 加 Cloudflare 上的實測（兩條路的位元組數與壓縮方式如上）。`profiles.test.mjs`、`profiles.spec.mjs`、`fixtures/server.mjs` 裡原本把「清單變弱」歸因於 Cloudflare 的註解已改成「模擬代理」；測試的情境（代理把清單的 ETag 變弱）本身仍成立。
 
 ## 2. 0.4.13 這條線共通（B：Headscale 以外的 7 個產品）
 
@@ -110,17 +124,17 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 ### 3.1 Odoo
 
 - 版號註記（2026-11-23）：0.5.0 已推 GHCR 但從未上架，負責人決定修好 F1（GET 串流不占回覆票券）再發 0.5.1；0.5.1 是第一個上架的多帳號版，下面「0.5.0」都讀成 0.5.1。
-- 上次發版：0.5.0（HM-19a 升版 PR，2026-11-19 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.14（升版 commit `7252d9e`；映像來源
+- 上次發版：0.5.2（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.1（2026-11-24 上架，#137；映像來源 `403e4c8`）與 0.4.14（升版 commit `7252d9e`；映像來源
   `24de6ec`；#119 在 2026-11-18 合併）。
-- 要寫：沒有。A8、A9 與第 7 節（開通）已寫進 0.5.0；A1～A7、B1 已寫進 0.4.14。
+- 要寫：沒有（A10、A11 已寫進 0.5.2）。A8、A9 與第 7 節（開通）已寫進 0.5.0／0.5.1；A1～A7、B1 已寫進 0.4.14。
 - 自己的修正：沒有。`apps/odoo` 在 0.4.13 之後沒改；`addons/odoo` 只改了 0.5.0 的版號、CHANGELOG、DOCS、README，並加 `upgrade-check/`（HM-16 的
   hook，從 `packaging/hooks/` 搬來）。Odoo 專屬的 HM-12（#110、#114：換身分換 token、新來源重填秘密）受開關管，0.5.0 開通後看得到，已寫進 CHANGELOG。
-- 發版時另外驗：第 5 節，加上計畫 §10.6（Odoo 首發標準，HM-19b）；`docs/operations/release-decision-odoo-0.5.0.md` 的驗收清單。
+- 發版時另外驗：第 5 節；`docs/operations/release-decision-odoo-0.5.2.md` 的驗收計畫。計畫 §10.6（Odoo 首發標準，HM-19b）已在 0.5.1 做過。
 
 ### 3.2 n8n
 
-- 上次發版：0.4.14（同 Odoo）。
-- 要寫：A8、A9（第 1 節）。A1、A3、A4、A5 含 n8n 那一句、A6、A7、B1 已寫進 0.4.14；A2 不適用。
+- 上次發版：0.4.15（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
+- 要寫：沒有（A8、A9、A10 已寫進 0.4.15；A11 到開通多帳號的那一版才寫）。A1、A3、A4、A5 含 n8n 那一句、A6、A7、B1 已寫進 0.4.14；A2 不適用。
 - 自己的修正：沒有。`apps/n8n` 的兩次改動都沒有可見變化：HM-04（#91，port 參數化，預設 3000 時 `PORT` 照舊）、HM-20（#102，開通後才拒絕
   loopback 與檢查存檔）。
 - 發版時另外驗：第 5 節。另外，n8n 若自己升版號（不跟預設版號一起升），`apps/n8n/run.py` 沒傳 `product_version`，`serverInfo` 與面板會報
@@ -128,23 +142,25 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 ### 3.3 Hermes
 
-- 上次發版：0.4.14（同 Odoo）。
-- 要寫：A8、A9（第 1 節）。A1～A7、B1、H1 #85、H2 HM-33 #115 已寫進 0.4.14；H1、H2 照檔頭第 3 點刪除。
+- 上次發版：0.4.15（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
+- 要寫：沒有（A8、A9、A10 已寫進 0.4.15；A11 到開通多帳號的那一版才寫）。A1～A7、B1、H1 #85、H2 HM-33 #115 已寫進 0.4.14；H1、H2 照檔頭第 3 點刪除。
 - 發版時另外驗：第 5 節。HM-33 筆記交發版片定的兩件，0.4.14 這樣處理：`addons/hermes/README.md`、`DOCS.md` 沒補「Hermes Agent v0.17.0
   or v0.22.x」那句（這兩個檔沒有安裝前提的段落，HA 也沒在 v0.22.x 上實測；要補另開文件 PR）；trigger 會把停用的排程改回啟用寫在 H2 的
   CHANGELOG 句子裡（Hermes 自己的行為，PaaS 在 Hermes Agent v0.22.5 量過），HA 沒有實測。
 
 ### 3.4 EMQX
 
-- 上次發版：0.5.0（火車 A 升版，2026-11-23 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
-- 要寫：沒有。A8、A9、第 7 節（開通）、E3（#153 三句）與子程式政策（2026-11-20 候選，含火車 A 審查 F-1 的修正）已寫進 0.5.0；A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14。
-- 發版時另外驗：第 5 節，加上展示機的真 broker 驗收（`docs/operations/release-decision-emqx-0.5.0.md`）。
+- 上次發版：0.5.1（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.0（火車 A，2026-11-24 發佈到 GHCR，#136；映像來源 `84483b7`）與 0.4.14（同 Odoo）。
+- 要寫：沒有（A10、A11、E4 已寫進 0.5.1）。A8、A9、第 7 節（開通）、E3（#153 三句）與子程式政策（2026-11-20 候選，含火車 A 審查 F-1 的修正）已寫進 0.5.0；A1～A7、B1、B2、E1 #87、E2 HM-32 #113 已寫進 0.4.14。
+- 發版時另外驗：第 5 節，加上展示機的真 broker 驗收（`docs/operations/release-decision-emqx-0.5.1.md`；0.5.0 的驗收在 `release-decision-emqx-0.5.0.md`）。
+- E4（`emqx_list_topics` 的說明對齊 PaaS #160，2026-11-25）與 EMQX 5.9 以前的開源版不強制 `viewer` 角色（展示機驗收發現，DOCS 與 CHANGELOG 已補）已寫進 0.5.1，照檔頭第 3 點刪除；
+  E4 原來的句子、看得到的變化與出處見 `3bcfa1f` 的本檔與 `docs/provenance/emqx-topics-wording-20261125.md`。
 
 ### 3.5 LiteLLM
 
-- 上次發版：0.5.0（火車 A 升版，2026-11-23 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
-- 要寫：沒有。A8、A9、第 7 節（開通）與下面 L2～L6（照整合分支的行為更新：L5 的連線池是 50、健康探測獨立；另加 URL 正規化與三個工具改要 `create` 權限）已寫進 0.5.0；A1～A7、B1、B2、L1 HM-32 #113 已寫進 0.4.14。
-- 發版時另外驗：第 5 節，加上展示機的真 LiteLLM 驗收（`docs/operations/release-decision-litellm-0.5.0.md`）。
+- 上次發版：0.5.1（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.0（火車 A，2026-11-24 發佈到 GHCR，#136；映像來源 `84483b7`）與 0.4.14（同 Odoo）。
+- 要寫：沒有（A10、A11 已寫進 0.5.1）。A8、A9、第 7 節（開通）與下面 L2～L6（照整合分支的行為更新：L5 的連線池是 50、健康探測獨立；另加 URL 正規化與三個工具改要 `create` 權限）已寫進 0.5.0；A1～A7、B1、B2、L1 HM-32 #113 已寫進 0.4.14。
+- 發版時另外驗：第 5 節（`docs/operations/release-decision-litellm-0.5.1.md`）；0.5.0 的真 LiteLLM 驗收在 `release-decision-litellm-0.5.0.md`。
 - **（歷史，已寫進 0.5.0）開通時要寫（HM-21 交，PR 號合併後補）**：HM-21 是 LiteLLM 開通的功能 PR，沒有程式（計畫 §9：LiteLLM 不需要產品專屬程式），開關關時
   沒有任何變化（第 4.2 節）。LiteLLM 的升版 PR 把 `litellm` 加進 `features.MULTI_PROFILE_PRODUCTS`、升 0.5.0 時，L2～L6 是 **LiteLLM 自己的**
   句子，一行一個變化（檔頭第 2 點的例外；DOCS 與 `upgrade-notes.yaml` 要寫的見 `docs/provenance/ha-multiprofile-HM-21-20261119.md` 第 12 節）。
@@ -160,32 +176,32 @@ B1（#81：管理員驗證接受 HA Core 2026.11.0、2026.11.1）與 B2（#77：
 
 ### 3.6 Nextcloud
 
-- 上次發版：0.5.0（火車 A 升版，2026-11-23 準備；升版 commit、PR 號與合併 commit 合併後補）。之前是 0.4.14（同 Odoo）。
-- 要寫：沒有。A8、A9、NC1、第 7 節（開通）與 HM-22 筆記第 9.5 節的句子（照 11/20 的 PaaS 對齊更新）已寫進 0.5.0；A1～A7、B1、B2 已寫進 0.4.14。
+- 上次發版：0.5.1（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.5.0（火車 A，2026-11-24 發佈到 GHCR，#136；映像來源 `84483b7`）與 0.4.14（同 Odoo）。
+- 要寫：沒有（A10、A11 已寫進 0.5.1；UC-12 已確認，0.5.0 CHANGELOG 的「presumed」改寫、DOCS 補上）。A8、A9、NC1、第 7 節（開通）與 HM-22 筆記第 9.5 節的句子（照 11/20 的 PaaS 對齊更新）已寫進 0.5.0；A1～A7、B1、B2 已寫進 0.4.14。
 - **NC1：Nextcloud PaaS 正規化與政策重啟對齊**（候選，PR／合併 commit 待補；不受多帳號開關管）：存檔正規化貼上的頁面網址與帳密空白；政策收緊或不變不重啟，放寬且子程式執行中才重啟，停著不啟動。換身分換 token 仍只在開通後生效。HA 保留目的地與跨來源秘密檢查。建議 CHANGELOG：
 
   `Nextcloud connection saves normalize pasted page URLs and credentials; policy restrictions apply without restarting, while enabling tools restarts only a running child.`
 
   出處：`docs/multi-profile/nextcloud-paas-parity-20261120.md`；實機 HAOS 驗收另行完成。Nextcloud 專屬的 HM-22 換身分換 token 受開關管（第 4.2 節）。
-- 發版時另外驗：第 5 節，加上展示機的真 Nextcloud 驗收（`docs/operations/release-decision-nextcloud-0.5.0.md`）。
+- 發版時另外驗：第 5 節（`docs/operations/release-decision-nextcloud-0.5.1.md`）；0.5.0 的真 Nextcloud 驗收在 `release-decision-nextcloud-0.5.0.md`。
 - **（歷史，已寫進 0.5.0）** 開通那一版（Nextcloud 的升版 PR，把 `nextcloud` 加進 `MULTI_PROFILE_PRODUCTS`）才寫：Nextcloud 自己的 CHANGELOG 句子與同一個 PR
   另外要改的檔在 HM-22 筆記第 9.5 節（`docs/provenance/ha-multiprofile-HM-22-20261119.md`；HM-22 審查 S-5，照檔頭第 2 點，同 HM-24
   審查 S-7 的做法）。HM-22 受開關管，還沒開通的版本不寫、也不刪這一行；開通那一版寫進 CHANGELOG 之後照第 3 點刪。
 
 ### 3.7 OpenDesign（商店停用，只升來源版本）
 
-- 上次發版：0.4.14 只升來源版本（升版 commit `7252d9e`），沒有建映像，也沒有 HAOS 驗收；CHANGELOG 照前例寫「source only (disabled)」，
-  共通項目寫成一行「applies to its source too」。
-- 要寫：A8、A9（第 1 節，寫成一行「applies to its source too」）。A1～A7、B1、D1 #86 已寫進 0.4.14；D1 照檔頭第 3 點刪除。
+- 上次發版：0.4.15 只升來源版本（2026-11-25 維修版；升版 commit 合併後補），沒有建映像，也沒有 HAOS 驗收；CHANGELOG 照前例寫「source only (disabled)」，
+  共通項目寫成一行「applies to its source too」。之前是 0.4.14 只升來源版本（升版 commit `7252d9e`）。
+- 要寫：沒有（A8、A9、A10 已寫成「applies to its source too」，在 0.4.15）。A1～A7、B1、D1 #86 已寫進 0.4.14；D1 照檔頭第 3 點刪除。
 - 發版時另外驗：沒有映像，第 5 節的映像項目不適用；商店開放它的那一版才全部適用。
 
 ### 3.8 Headscale
 
-- 上次發版：0.4.19（升版 commit `5a7c191`；映像來源 `24de6ec`；和 0.4.14 同一個 PR #119，2026-11-18 合併）。
-- 要寫：A8、A9（第 1 節）。A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內。
+- 上次發版：0.4.20（2026-11-25 維修版，PR #138；升版 commit 與合併 commit 合併後補）。之前是 0.4.19（升版 commit `5a7c191`；映像來源 `24de6ec`；和 0.4.14 同一個 PR #119，2026-11-18 合併）。
+- 要寫：沒有（A8、A9、A10 已寫進 0.4.20；A11 到開通多帳號的那一版才寫）。A1～A7 已寫進 0.4.19；0.4.18 的來源 `55f3528` 已含 #77～#88，B1、B2 也在內。
 - 自己的修正：沒有（`apps/headscale`、`addons/headscale` 在 `55f3528` 之後只改了 0.4.19 的版號、CHANGELOG 與文件）。
-- 發版時另外驗：第 5 節。Headscale 第一次走 GitHub 發版流程（之前每一版都是 builder VM 推的）：觸發前負責人要先給 `amd64-mcp-headscale`
-  套件設 Actions 權限（`docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
+- 發版時另外驗：第 5 節（`docs/operations/release-decision-headscale-0.4.20.md`）。Headscale 0.4.19 起走 GitHub 發版流程（`amd64-mcp-headscale` 套件的 Actions 權限，
+  `docs/operations/release.md`「負責人要在 GitHub 設定的項目」第 4 項）。
 
 ## 4. 沒有可見變化的片（不用逐項寫 CHANGELOG）
 
@@ -229,7 +245,7 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
 - This image also carries the groundwork for multiple profiles per add-on (PRs #91, #93, #95, #99, #101–#104, #107, #110, #111 and #114). It stays switched off for this add-on: requests, responses, the admin panel and the files in `/data/mcp` are unchanged apart from the changes listed above.
 ```
 
-0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 不寫（開通之後這些片都看得到，照第 7 節逐項寫；HM-19a）。其他產品的下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
+0.4.14 的六個產品與 Headscale 0.4.19 的 CHANGELOG 都寫了這一句；Odoo、LiteLLM、Nextcloud、EMQX 的 0.5.0 不寫（開通之後這些片都看得到，照第 7 節逐項寫；HM-19a）。n8n、Hermes（0.4.15）與 Headscale（0.4.20）寫了下面第二句（2026-11-25 維修版），PR 清單改成 #108、#112、#116 加上「Odoo、EMQX、LiteLLM 與 Nextcloud 在 #136、#137 合併的多帳號工作」。其他產品的下一版只交代那之後合併的片：映像裡多帶、開關關時看不到的是 #108（A8 以外；
 不受開關管，第 4.1 節）、#112（A9 以外）、#116（#109 不在映像裡）；HM-22 合併後也在其中（第 4.2 節；PR 號合併後補，建議句的 PR 清單跟著加）。建議句（HM-18 補寫）：
 
 ```text
@@ -247,8 +263,8 @@ bootstrap 不變、兩條 MCP 網址同一把 token 同一組錯誤碼、名額�
      第 1a、1b 項）。之後 HM-13b、HM-13c、HM-16 改了還原階段的檢查：守門刪掉標記、留下還原提示（A8、A9），log 裡 `re-owned N` 與守門的
      `KEPT_NOTICE` 各剛好一行、守門沒有別的行（`docs/operations/acceptance.md`）。下一版的 candidate 是第一次在真容器跑這些新檢查；失敗時先查
      探針、entrypoint 與守門（HM-06 筆記第 12.3 節、HM-13a 筆記第 11 節、HM-16 筆記），不要放寬。（2026-11-19 HM-18 改寫：原本寫「還沒在真容器跑過」）
-4. HA Core 版本：管理員驗證只認到 2026.11.2（#81、#120）。目標 HAOS 的 Core 比它新，要先補審（計畫 §11.3 的升版 PR 清單：`Hc/ha_role.py` 與
-   `docs/ha-role-core-contract.md`），不然面板拒絕每個請求。
+4. HA Core 版本：管理員驗證逐版審過到 2026.11.3（#81、#120、A10），並自動放行已審查月份的後續修補版（2026.11.4 起；A10）。目標 HAOS 的 Core 是新月份的版本（例如 2026.12.x）
+   或預覽版時，要先補審（計畫 §11.3 的升版 PR 清單：`Hc/ha_role.py` 與 `docs/ha-role-core-contract.md`），不然面板拒絕每個請求。
 5. HM-31 的預算常數是暫定（契約第 5 節）。那裡的「HM-19c 放行條件」（在目標硬體量閘道＋子程式的放大倍數與 MemAvailable，不過就不能發版）
    是為 Odoo 首發寫的，但 A5（HM-31，#105）不受開關管，任何產品下一版都會帶出去。HM-19c 量測之前要發版，先請負責人決定要不要先量。
 6. 版號資料 7 處照 `docs/operations/release.md`「升版時要改的版號資料」；readiness 只認該產品自己的

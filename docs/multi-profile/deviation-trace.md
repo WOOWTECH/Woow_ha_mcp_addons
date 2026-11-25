@@ -214,7 +214,7 @@
 | FM-121 | 同 uid 信任邊界 | 照 PaaS | DQ-37 採 (a)；HA 另寫事故處理（`threat-model.md` 第 4 節，文件） |
 | FM-122 | serverInfo 不帶帳號 | 照 PaaS | DQ-45 已定（2026-11-17 13:5x 使用者採用建議）：不改；DOCS 建議一個代理只接一個帳號、用戶端名稱帶 id（`docs/operations/clients.md`） |
 | FM-123 | Claude.ai 的 Origin | §8.8 #10 | Bearer 帶 Origin 403；DQ-11 第二問等 S14 實測 |
-| FM-128 | Core 白名單維護節奏 | §8.8 #30 | DQ-35 已定（2026-11-17 14:0x 使用者選「不承諾天數」） |
+| FM-128 | Core 白名單維護節奏 | §8.8 #30 | DQ-35 已定（2026-11-17 14:0x 使用者選「不承諾天數」；2026-11-25 補：同月份修補版自動放行） |
 | FM-130 | 健康檢查連兩次失敗才判壞 | §8.8 #18；`tests/test_health_tolerance.py`（HM-30） | PaaS 沒有定期後端監看 |
 | FM-134 | FD 上限 | §8.8 #15、#87；`tests/test_extra_child_resources.py`（HM-09） | 開通後把 soft `RLIMIT_NOFILE` 提到需要量＋25%（契約第 5 節）；名額模型的不同見 #15；讀不到、不夠或設不上時只服務預設帳號見 #87 |
 | FM-137 | 看門狗退避 | §8.8 #14；`tests/test_profile_lifecycle.py`（HM-09） | DQ-20 採 (b) |
@@ -259,7 +259,7 @@
 | 27 | endpoint | FM-12 | — |
 | 28 | 沒填連線的子程式 | FM-45、FM-140 | — |
 | 29 | 日誌 | FM-65、FM-138、T-18 | — |
-| 30 | 面板 403（Core 未審） | FM-70、FM-127、FM-128 | — |
+| 30 | 面板 403（Core 版本未放行） | FM-70、FM-127、FM-128 | — |
 | 31 | 管理 API 沒帶帳號 | FM-53、T-06 | — |
 | 32 | `X-MCP-Profile` 格式錯 | FM-53、T-06 | — |
 | 33 | 管理回應帶帳號回聲 | — | 計畫 §8.8 原表的列（管理回應帶帳號回聲，DQ-40 ②）；FEATURE-MATRIX 與 G6 §5 沒有列以它為差異 |

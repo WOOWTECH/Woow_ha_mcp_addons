@@ -54,6 +54,7 @@ swap 增量、別條線的 Supervisor 工作）不過就停。03:30–05:00 不�
 - **經 Cloudflare 開 HA 時，面板不能儲存「瀏覽器來源檢查」設定**（F2）：這個設定的回應很小，Cloudflare 壓縮時把 ETag 改成弱 ETag，面板只接受強 ETag，
   儲存鈕因此停用。只有這一張卡片受影響；帳號、token、MCP 連線都不受影響，預設值（只記錄、清單只有 `https://claude.ai`）照常運作，而且 Claude.ai 不送 Origin。
   替代做法：從區網直接開 HA 儲存。下一版修（面板接受弱 ETag）。負責人 2026-11-24 決定先發。
+- 後續（2026-11-25）：F2 在維修版修好了：面板也把 Cloudflare 這類代理改成的弱 ETag（`W/"…"`）當成同一個版本，送出時照舊送強的 `If-Match`，add-on 的比對沒有放寬；帳號清單的 ETag 用同一個讀法，一起修；但在 Cloudflare 上量到不受影響（2026-11-25 在真的 HA 加 Cloudflare 上量，瀏覽器的 `Accept-Encoding: gzip, deflate, br, zstd`）：`api/origin-policy`（94 位元組）被 Cloudflare 壓成 br、ETag 變弱，所以卡片不能存；`api/profiles`（161 位元組）由 Home Assistant 自己先壓 gzip、ETag 維持強；只有前面的代理改寫 HA 沒壓縮的回應時才可能變弱，例如用戶端不收壓縮（`docs/multi-profile/unreleased-changes.md` A11）。上面寫的是這一版映像的行為，沒有改。
 - 額外帳號只有 1 張回覆票券（已接受的設計）：Claude.ai 會把獨立的工具呼叫並行送出，兩個重疊的呼叫有一個會回 `-32003`（忙碌），Claude 會自動重試成功。
 - HA 的 Ingress 工作階段在分頁放在背景久了會過期，面板會顯示「管理身分已失效，請從服務入口重新開啟」，重新載入 HA 頁面即恢復（HA 行為）。
 

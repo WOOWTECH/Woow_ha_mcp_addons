@@ -73,7 +73,9 @@
     "product": "emqx",
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/registry.py",
-    "upstream_sha256": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652"
+    "upstream_sha256": "c440d204de9091952ffbd6784d81cd7fd78184e266701f86cf051da332191652",
+    "local_sha256": "30d439ba0363a3caa9aa692260b88605d9970843d87ef80d3b8b765265d9f625",
+    "modification": "2026-11-25 (PaaS #160, woow-mcp-server fb7571c): the one-line description of emqx_list_topics reads \"Routes currently present in the cluster. A wildcard subscription shows as its filter, so a missing concrete topic does not mean nobody is subscribed.\", word for word as PaaS fb7571c; that string is the only change (compiled, only that constant differs). The add-on's own panel does not read this registry."
   },
   {
     "product": "emqx",
@@ -126,8 +128,8 @@
     "source": "WOOWTECH/Woow_emqx_mcp_server/1be17bad5aef6c7b7519686ccbfe1d80762bc10e",
     "path": "emqx_mcp_server/tools/topics.py",
     "upstream_sha256": "fb95c8cfcf2279e3b8b2545079bda8276a24210440123c5ac38624c372f1e353",
-    "local_sha256": "d85843f135595d61abde92f7d8b0792df43d78e802149770fca93ed3853ba8cc",
-    "modification": "2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): emqx_list_subscriptions: the match_topic parameter description and the tool description say what the broker does (a wildcard search over the stored subscription filters, not a delivery lookup), word for word as PaaS cd1ed89; text only, the parameter and the result are unchanged."
+    "local_sha256": "7e9e3704f60717a5b1cca317c0ae3d2d78ff0d0e1eac22e71d0a3fc3feec412b",
+    "modification": "2026-11-19 (HM-23; PaaS #153, woow-mcp-server 5b84b5d: cd1ed89, 4b4fd16, 574c805, the EMQX 5.8.9 field-test fixes): emqx_list_subscriptions: the match_topic parameter description and the tool description say what the broker does (a wildcard search over the stored subscription filters, not a delivery lookup), word for word as PaaS cd1ed89; text only, the parameter and the result are unchanged. 2026-11-25 (PaaS #160, woow-mcp-server fb7571c): emqx_list_topics: the tool description (the docstring) no longer says that a topic missing from the list means nobody is subscribed; it says the tool lists routes (topics or topic filters), that a wildcard subscription appears under its filter, and that emqx_list_subscriptions answers who receives a topic, word for word as PaaS fb7571c, line breaks included. Text only: without docstrings the syntax tree is the one before, and the compiled code differs only in that docstring constant."
   },
   {
     "product": "emqx",

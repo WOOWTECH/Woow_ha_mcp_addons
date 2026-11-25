@@ -12,6 +12,7 @@ test('an unreviewed HA Core version is named in the denial; nothing else from th
     await assert.rejects(() => api.bootstrap(), error => error instanceof ApiError && error.status === 403
       && error.code === 'core_version_unreviewed' && error.haVersion === version
       && error.message.startsWith(`這個 HA Core 版本尚未審核：${version}。`) && error.message.includes('MCP 端點')
+      && error.message.includes('後續修補版') && error.message.includes('自動放行')  // the rule of 2026-11-25 (ha_role._later_patch)
       && !error.message.includes('PRIVATE_CANARY'));
   }
 });

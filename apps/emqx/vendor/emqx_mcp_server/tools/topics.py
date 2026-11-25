@@ -31,10 +31,14 @@ def register(mcp: FastMCP, gate: ToolGate) -> None:
                 description="Rows per page.", ge=1, le=200)] = settings.default_limit,
             emqx: httpx.AsyncClient = Depends(emqx_client),
         ) -> dict[str, Any]:
-            """Topics that currently have a route (i.e. at least one subscriber).
+            """Routes currently present in the cluster (topics or topic filters).
 
-            A topic missing here means nobody is subscribed — which is the usual
-            reason a published message appears to vanish.
+            A wildcard subscription such as 'a/#' appears under the filter
+            itself, not under the concrete topics it covers, and shared or
+            persisted-session subscriptions may not appear either. So a
+            concrete topic missing here does not mean that nobody is
+            subscribed. To work out who receives messages published to a
+            topic, use emqx_list_subscriptions.
             """
             params: dict[str, Any] = {
                 "page": page, "limit": min(limit, settings.max_limit)
