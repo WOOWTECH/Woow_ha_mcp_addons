@@ -83,5 +83,5 @@ n8n 的 `npm ci` 加 `apps/n8n/patches/*.py` 與 better-sqlite3 預建檔、面�
 - n8n 的子程式（Node）對重複 id 的行為沒實測；沒在 HAOS 實機與 Cloudflare 隧道後面驗；沒用 Claude、ChatGPT 等真用戶端驗（它們都不重複使用 id）。
 - 登記在拿到轉送名額之後：名額全滿、排隊也滿時，重複的請求先拿到 `-32003`（在它的 id 底下），不是 400。要在名額之前就擋，得在 `take_slot` 前另加一次不登記的檢查；這次沒做。
 - 回 HTTP 400：MCP Python SDK 1.x 的用戶端遇到非 2xx 會結束 session（`busy_reply` 的註解）。這是 PaaS 的選擇（違規的用戶端），HA 照做。
-- 列號 #145 暫定（原稿 #134）。`deviation-trace.md`、`acceptance-matrix.md`、`paas-test-mapping.md` 是 repo 外的產生器重產的，這次沒改；重產後 #145 與新測試的對照才會進去。
-- 產品 DOCS、`docs/operations/*` 與各產品 CHANGELOG 沒寫（交升版片；句子在 `unreleased-changes.md` 的 A12，原稿叫 A10）。
+- 列號 #145 暫定（原稿 #134）。`deviation-trace.md`、`acceptance-matrix.md`、`paas-test-mapping.md` 是 repo 外的產生器重產的，這次沒改；重產後 #145 與新測試的對照才會進去。（火車 B 升版併入時，`deviation-trace.md` 與 `acceptance-matrix.md` 已手改：差異表加第 145 列、只寫出處，計數改成 145 列、對到 133 列、其餘 12 列，測試登記表加 `tests/test_inflight_ids.py`；`paas-test-mapping.md` 仍沒重產，下次重產要加 #145 的對照。）
+- 產品 DOCS、`docs/operations/*` 與各產品 CHANGELOG 沒寫（交升版片；句子在 `unreleased-changes.md` 的 A12，原稿叫 A10）。（火車 B 升版時已寫進 Hermes、n8n、Headscale 的 0.5.0 CHANGELOG；其餘產品與 OpenDesign 的來源下一次發版寫，見 `unreleased-changes.md` 第 1 節 A12。）
