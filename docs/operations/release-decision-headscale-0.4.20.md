@@ -1,0 +1,87 @@
+# Headscale 0.4.20（2026-11-25 維修版）發佈紀錄（草稿）
+
+狀態：**草稿：映像尚未建置、尚未推 GHCR、尚未驗收**（待補：run、digest、展示機結果）。這是 `woow_mcp_headscale` 一個產品的發版：版號 0.4.19 → 0.4.20，與 Odoo 0.5.2、EMQX 0.5.1、LiteLLM 0.5.1、Nextcloud 0.5.1、n8n 0.4.15、Hermes 0.4.15 同一批 2026-11-25 維修版（一個升版 PR、各產品各自的 `release.yaml` run）；OpenDesign 只升來源版本，沒有映像。
+合併升版 PR 即上架 WOOW App Store；合併前只補這份紀錄與驗收紀錄（只改 `docs/`）。
+
+## 為什麼發這一版
+
+Headscale 0.4.19 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA 穩定頻道 2026-11-25 的預設版）上管理面板拒絕每個請求（MCP 端點不經這項檢查，不受影響）。這一版審過 2026.11.3（25 個契約與相鄰檔和 2026.11.2 逐位元相同；`docs/ha-role-core-contract.md`），並自動放行已審查月份（2026.7 到 2026.11）的後續修補版：版本字串要剛好是 `年.月.修補`，該年該月已有審過的版本，修補號大於該月審過的最大修補號；新的月份、預覽版與其他格式照舊 403（DQ-35；不受開關管；八個產品，OpenDesign 的來源也算，用同一份驗證器）。另外帶出 0.4.14／0.4.19 之後合併、開關關時看得到的共用變更：還原後的開機守門（A8，#108）與單帳號還原後的面板提示（A9，#112）。
+
+負責人 2026-11-25 的決定：選「今天發維修版」、「同月份修補版自動放行」，火車 B（Hermes、Headscale、n8n 一起開通多帳號）選「三個一起，照建議做」；發佈核准與合併沿用 2026-11-23「整套一次授權」（每個產品過完所有關卡才發佈；GitHub 的發佈核准以 API 代按，改版號 PR 也代為合併，每一步回報）。火車 B 的多帳號開通不在這一批，各自另有版號與發佈紀錄。
+
+## 範圍
+
+- **只有 Headscale**（`woow_mcp_headscale`）：Headscale 走自己的版號線（`VERSION_OVERRIDES`）：0.4.19 → 0.4.20；共用預設版號 `VERSION` 這一批從 0.4.14 升到 0.4.15（n8n、Hermes，以及 OpenDesign 的來源版本）。
+- 不在範圍：Hermes、Headscale、n8n 的多帳號開通（火車 B）；`features.MULTI_PROFILE_PRODUCTS` 這一批不動（維持 `{'odoo', 'emqx', 'litellm', 'nextcloud'}`）；OpenDesign 與 Odoo Manage 不開放多帳號（DQ-28）。
+- 路線：這條線只用 GitHub（`.github/workflows/release.yaml`：gate → candidate → publish，publish 在 `public-release` environment 核准，只收 `release/*` 分支）。
+
+## 來源
+
+- 分支 `release/maintenance-20261125`（基準 `claude-delivery` `092b1b5`，#136 合併之後），PR #138（主對話推上去時的 head 是 `3bcfa1f`；升版 commit 與這些紀錄之後另外推）。分支上依序有：HA Core 2026.11.3 審查與同月份修補版放行（`529c8c0`、`131d1a9`）、面板讀弱 ETag（`635f800`、`40574ce`）、EMQX 說明對齊 PaaS #160（`806df82`、`d214e2b`、`48c2e2e`、`3bcfa1f`），再來是升版 commit（版號資料與測試釘選、CHANGELOG、DOCS／README、未發佈清單與這七份發佈紀錄草稿；commit 號合併後補）。
+- 映像來源：觸發 `release.yaml` 時這個分支的 head（`source_sha`，待補）。**七支都推完之前，不准再往分支推任何 commit（紀錄檔也不行）**：`workflow_dispatch` 永遠跑在分支 head，`source_sha` 又必須等於它（[release](release.md)「部分失敗怎麼辦」）。都推完之後的證據 commit 只加紀錄檔。
+- 發版鎖：同一時間只有一個凍結中的升版 PR（計畫 §11.5）；觸發前要再查一次有沒有別的開著的升版 PR（例如火車 B）。
+
+## 版號資料（[release](release.md)「升版時要改的版號資料」）
+
+| # | 檔 | 改成 |
+|---|---|---|
+| 1 | `packaging/validate.py` 的 `VERSION`、`VERSION_OVERRIDES` | `VERSION` 0.4.15；`{'odoo': '0.5.2', 'emqx': '0.5.1', 'litellm': '0.5.1', 'nextcloud': '0.5.1', 'headscale': '0.4.20'}` |
+| 2 | `packaging/inputs.json` 的 `version`、`version_overrides` | 同上 |
+| 3 | `packages/mcp-admin-core/mcp_admin_core/__init__.py` 的 `VERSION`、`PRODUCT_VERSIONS` | 同上；帳本 `runtime-patches.json` 的摘要與 `change` 同步（`scripts/ledger_precheck.py` 0 漂移） |
+| 4 | `addons/headscale/config.yaml` 的 `version` | `0.4.20` |
+| 5 | `apps/headscale/Dockerfile` 的 `ARG BUILD_VERSION` | `0.4.20` |
+| 6 | `.github/workflows/ci.yaml` 2 處、`release.yaml` 4 處 | `validate.py` 產生的六路運算式：`<app> == 'odoo' && '0.5.2' || <app> == 'emqx' && '0.5.1' || <app> == 'litellm' && '0.5.1' || <app> == 'nextcloud' && '0.5.1' || <app> == 'headscale' && '0.4.20' || '0.4.15'` |
+| 7 | `docs/operations/release-decision-headscale-0.4.20.md` | 本檔（推 GHCR、展示機驗收之後補證據） |
+
+- **運算式本機求值**（`packaging/test_validate.py` 的規則，`&&` 先於 `||`）：`odoo`→0.5.2、`emqx`／`litellm`／`nextcloud`→0.5.1、`headscale`→0.4.20、`n8n`／`hermes`／`opendesign`→0.4.15，`ci.yaml` 與 `release.yaml` 兩組結果相同；`packaging/validate.py` 通過。六路形式在火車 A（2026-11-24）的候選建置（emqx、litellm、nextcloud 各一次）已被 GitHub 算對（tag 檢查通過）；這一批的形式相同、只有值不同，但 odoo、headscale 那兩路與落到預設值的 n8n、hermes 沒有在六路形式下實跑過，候選建置的 tag 檢查就是驗證（算錯時 `supply_chain.py candidate` 在推送前停，不燒版號）。
+- 測試釘選：`tests/test_output_schemas.py` 的 n8n `Dockerfile` 位元組釘選換成新的 SHA-256（只有 `ARG BUILD_VERSION` 的預設值不同）；`packaging/test_validate.py` 沒有釘選要改。
+
+## 內容（寫進 CHANGELOG 的項目）
+
+項目編號（A8～A11、E4）是 [未發佈清單](../multi-profile/unreleased-changes.md) 的編號；這一批寫進 CHANGELOG 之後，那份清單把它們移掉，原來的建議句、看得到的變化與出處見 `3bcfa1f` 的那份（A11 的事實已照 2026-11-25 的實測改正，留在清單裡）。
+
+- **A10**：同 Odoo。
+- **A8**：同 n8n（還原後的開機守門，#108）。
+- **A9**：同 n8n（單帳號還原後的面板提示，#112）。
+- 其餘（工具、請求、回應與 `/data/mcp` 的檔案）和上一版相同：核對了 `24de6ec`（0.4.14／0.4.19 映像的來源）到 `092b1b5` 之間 53 個動到共用執行期程式的 commit，開關關時看得到的變化只有 A8、A9；多帳號程式隨映像帶著、開關關著。
+
+## 驗收計畫
+
+| # | 步驟 | 結果 |
+|---|---|---|
+| 1 | 推送分支、開 PR | PR #138 已開（head `3bcfa1f`）；升版 commit 推上之後的 head 待補 |
+| 2 | 獨立安全審查（DQ-35 的條件，見下面「關卡」第 1 項） | 待補 |
+| 3 | CI：`checks`、`Release train`、`Upgrade comparison`（`compare`、`runtime`） | 待補 |
+| 4 | 候選建置與容器驗收（`release.yaml` 的 gate → candidate：容器驗收含子程式 bearer 401 與 HM-13a 還原樹；source／history／全部 layer 的 Gitleaks、SBOM、Grype、授權） | 待補（run、`image.tar` SHA-256、image ID） |
+| 5 | J1900 指令集檢查（candidate job 內建，QEMU `-cpu Nehalem`） | 待補 |
+| 6 | Store 升級乾跑（展示機，0.4.19 → 候選 `image.tar`；兩個 phase 都要撐過 60 秒、不退出、不重啟） | 待補 |
+| 7 | 推 GHCR（`public-release` 核准後的 publish） | 待補（run、manifest digest、image ID） |
+| 8 | PR 檢查：映像發佈後重跑 `readiness` 與 `Upgrade comparison` | 待補 |
+| 9 | 展示機 HAOS 升級測試（Store 上的 0.4.19 → 發佈的映像；升級後設定與權杖保持、管理面板可用；展示機的 Core 若維持 2026.7.2，只驗沒有退步，2026.11.3 與後續修補版的放行由單元測試涵蓋） | 待補 |
+| 10 | 合併上架 | 待補 |
+
+待補：run、digest、展示機結果。
+
+## 已知限制與事實
+
+- **展示機的 Core 版本**：維持 2026.7.2 時，這一版對 2026.11.3 與之後修補版的放行只由單元測試（`tests/test_ha_role.py`，含窮舉 2025～2027 年的版本字串）涵蓋，沒有在真的 Core 2026.11.x 上跑過這個 add-on 映像；要驗證需另外的 Core 2026.11.3 環境，由負責人決定。
+- **A10 是權限檢查的改動**：放行的版本沒有逐版審查，add-on 紀錄每個版本每個程序記一行；下一次發版再補審並列入清單。風險與不變的防線見 [ha-role-core-contract](../ha-role-core-contract.md)「Later patch releases of a reviewed month」。
+
+## 發版前的關卡（草稿時列的阻擋事項）
+
+1. **A10 的獨立安全審查（DQ-35 的條件）**：負責人選「同月份修補版自動放行」時的條件是放進維修版之前先做獨立安全審查；`docs/multi-profile/decisions.md` DQ-35 目前寫「尚未做」。審查結果出來之前，不觸發 `release.yaml`。結果：待補。
+2. **映像尚未建置**：這份草稿寫成時，沒有建置、沒有推 GHCR、沒有展示機驗收；上面的表每一格都要等實際執行後補。
+3. **`upgrade-notes.yaml`**：這一批沒有加；`Upgrade comparison / compare` 要求時照 `AGENTS.md` 第 3 點補。
+4. **發版鎖與 PR head 凍結**：七支（或當批要發的各支）候選都通過之後才批准任何一支的 publish；之後的 commit 只加紀錄檔。
+5. **開關關的還原階段第一次在真容器跑**：HM-13b、HM-13c 之後，容器驗收的還原階段改成守門刪掉標記、留下還原提示（log 的 `re-owned N` 與守門的 `KEPT_NOTICE` 各剛好一行，守門沒有別的行；見 `docs/operations/acceptance.md`）。火車 A 的候選都是開通的產品（走守門的另一條路），到目前為止沒有開關關著的產品在真容器跑過這個階段，n8n、Hermes、Headscale 這一批是第一次。失敗時先查探針、entrypoint 與守門，不要放寬（`docs/multi-profile/unreleased-changes.md` 第 5 節第 3 點）。
+
+## 本機檢查（一般使用者；以 GitHub CI 為準）
+
+- 2026-11-25，分支 head `72dcdc9`（版號資料、CHANGELOG、DOCS／README 都已在內；之後的 commit 只動根 CHANGELOG 的一句、未發佈清單與這些紀錄），一般使用者、Python 3.13、Node 26.12.1、`/tmp/ha-mp-*` 短 TMPDIR（用完刪除）。這台機器同時有別的對話在跑測試（負載 6～8、可用記憶體約 3 GB，共用測試鎖要排隊），計時的案例不可靠，沿用火車 A 紀錄的寫法，以 GitHub CI 為準。
+- 沒有失敗的：`packaging/validate.py` 通過；packaging 單元測試 378 案過（5 skip，都是 `test_entrypoint` 要 root 的案例）；`scripts/ledger_precheck.py` OK（三份帳本 0 漂移；所有產品相依與 n8n 的 `node_modules` 都裝好，沒有「需要 CI 安裝」的項目）；`scripts/secret_precheck.py`（gitleaks 8.28.0，釘版）0 命中；面板 Node 測試 122 過。
+- pytest 24 個檔（有釘版號或讀文件的檔、還原守門與還原提示、請求限制、真子程式與真 n8n）共 1,671 案：1,651 過、20 失敗。20 個失敗都不是這次修改造成的，這次只動版號、文件與一個測試釘選：
+  - 5 案要 root：`test_restore_detection` 的 `test_root_*`（CI 以 root 跑，非 root 會故意失敗）。
+  - 10 案是這台機器的兩個主機事實，測試的寫法決定了它們在這裡過不了，CI 的 runner 兩項都沒有問題。其一是主機名稱解析到 `127.0.1.1`：`test_real_products` 把假後端綁在 `socket.gethostbyname(socket.gethostname())`（Headscale 與開通多帳號的產品的 child 拒絕回圈位址，所以要綁私有位址），這裡拿到的是回圈位址；EMQX、LiteLLM、Nextcloud 回 `*_DESTINATION_DENIED`，Headscale 回 `executable listener not proved`（4 案）。其二是 Node 不在測試寫死的 `PATH=/usr/bin:/bin`：`test_ha_role` 的真 n8n 1 案、`test_real_n8n` 3 案、`test_unconfigured_connect` 的 n8n 2 案（6 案）。
+  - 4 案是 CPU 計時：`test_request_structure` 的 `test_the_scan_costs_what_the_limit_allows_not_what_the_body_holds`、`test_closers_after_balanced_structure_are_bounded_too`，以及 `test_a_closing_bracket_flood_does_not_stall_the_scan` 的其中兩個參數（兩輪失敗的組合不同）。16 MiB 輸入的掃描在這台機器上單獨量是 0.27～0.30 秒（門檻 0.3），「balanced then closers」穩定 0.38 秒。`request_limits.py` 與這個測試檔都和 `092b1b5` 逐位元相同，這次修改沒有碰。
+  - 1 案偶發：`test_restore_review` 的 `test_revoke_all_revokes_every_profile_and_starts_every_child_again`（記憶體吃緊時額外帳號因 `memory_capacity` 沒起；單獨重跑通過）。
+- 沒跑的：全套 pytest（約 40 分鐘，交給 CI）、Playwright 瀏覽器測試（本機沒有 Chromium；`3bcfa1f` 的 CI 是 168 過，這次沒有動面板程式）、需要 root 的 `packaging` 測試案例（上面的 5 skip）。
