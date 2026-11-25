@@ -67,9 +67,10 @@ CURRENT_POST_SOURCE_BYTES = {
     # handler change.
     'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
-    # 0.4.14 and 0.4.15 releases: only the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14 -> 0.4.15); no tool, schema or
-    # handler change.
-    'apps/n8n/Dockerfile': ('n8n', 'cfef837968978c16a375c4c574a08c8ff7e72faf385a4d3432bb0461b87940b8'),
+    # 0.4.14 and 0.4.15 releases: the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14 -> 0.4.15); 0.4.15 also moves the Node
+    # base image 26.12.1 -> 26.13.1 (both FROM lines and the node version check; Node CVEs fixed in 26.13.1). No tool, schema
+    # or handler change.
+    'apps/n8n/Dockerfile': ('n8n', 'b4d793cce1e3797bcfd0aba2ce82e031827810aa34c1956704ee417ab2009eea'),
     # 0.4.14 and Headscale 0.4.19 releases: only dnspython 2.9.0 -> 2.9.2 in the child's lock (GHSA-vvf4-9x63-8xvv, a fixable
     # High the release scanner blocks; email-validator's dependency). No tool, schema or handler change.
     'apps/emqx/uv.lock': ('emqx', '297392a4f80abe5723b9518b1f7379ad64a1b638931e328577caf1e9f4fce16a'),

@@ -167,7 +167,7 @@ class FakeImage:
         self.smoke_qemu, self.smoke_qemu_rc, self.smoke_qemu_stderr = smoke_qemu, smoke_qemu_rc, smoke_qemu_stderr
         self.node_qemu, self.node_rc, self.list_rc, self.native_rc = node_qemu, node_rc, list_rc, native_rc
         self.native_stdout = native_stdout
-        self.node = {'node': 'v26.12.1', 'fts5': 1, 'sha256': 'a' * 64, 'zlib': 5000}
+        self.node = {'node': 'v26.13.1', 'fts5': 1, 'sha256': 'a' * 64, 'zlib': 5000}
 
     def __call__(self, image_id, entrypoint, args, label, timeout, work):
         self.calls.append((image_id, entrypoint, list(args), label, timeout))
@@ -514,7 +514,7 @@ class J1900Test(unittest.TestCase):
     def test_n8n_node_smoke_natively_and_under_qemu(self):
         self.assertEqual(j.check_node(IMAGE, self.work, FakeImage())['fts5'], 1)
         for fake, message in ((FakeImage(qemu_rc=132), 'ILLEGAL INSTRUCTION'),
-                              (FakeImage(node_qemu={'node': 'v26.12.1', 'fts5': 0, 'sha256': 'a' * 64, 'zlib': 5000}),
+                              (FakeImage(node_qemu={'node': 'v26.13.1', 'fts5': 0, 'sha256': 'a' * 64, 'zlib': 5000}),
                                'node smoke differs'),
                               (FakeImage(node_rc=1), 'native node smoke failed')):
             with self.subTest(message=message), self.assertRaisesRegex(j.Closed, message):

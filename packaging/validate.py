@@ -300,14 +300,14 @@ PUBLISHED_EVIDENCE = (*(DOWNLOADED + name for name in CANDIDATE_EVIDENCE),
                       'publish-evidence/approval.json', 'publish-evidence/hosted-runner.json')
 # The gate's Node pin, the same script as ci.yaml's unit job and the PR checks job (release.md, "PR/main CI", item 3).
 NODE_PATH_PIN = '\n'.join([
-    'test "$(node --version)" = v26.12.1',
+    'test "$(node --version)" = v26.13.1',
     'NODE_BIN="$(readlink -f "$(command -v node)")"',
     'if [ "$NODE_BIN" != /usr/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/bin/node; fi',
-    'test "$(/usr/bin/node --version)" = v26.12.1',
+    'test "$(/usr/bin/node --version)" = v26.13.1',
     "# 0.4.0: unit.sh runs pytest under sudo, whose secure PATH finds the runner's own /usr/local/bin/node (v22) first,",
     '# and the n8n child takes node from that PATH (as in the image, /usr/local/bin/node): pin it to the same binary.',
     'if [ "$NODE_BIN" != /usr/local/bin/node ]; then sudo ln -sfn "$NODE_BIN" /usr/local/bin/node; fi',
-    'test "$(sudo -n -- node --version)" = v26.12.1'])
+    'test "$(sudo -n -- node --version)" = v26.13.1'])
 
 
 def runner_paths(names):
@@ -333,7 +333,7 @@ def release_recipe():
             {'env': {'APP': '${{ inputs.app }}', **source_sha}, 'run': 'python packaging/check_release.py "$APP"'},
             {'env': {'GH_TOKEN': RELEASE_TOKEN}, 'run': 'python packaging/environment_gate.py gate'},
             {'run': 'python packaging/validate.py'},
-            {'uses': 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020', 'with': {'node-version': '26.12.1'}},
+            {'uses': 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020', 'with': {'node-version': '26.13.1'}},
             {'uses': 'astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78',
              'with': {'version': '0.12.10', 'enable-cache': False}},
             {'run': '\n'.join(['uv sync --frozen --no-dev --python python3.13',
