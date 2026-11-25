@@ -18,6 +18,13 @@ import json
 
 from test_real_products import rpc
 from test_six_hardening import Quiet, call, runtime, serve
+import pytest
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (Hermes switched on with its 0.5.0): written for the switched-off add-on, with a loopback fake backend (or
+# the order of a switched-off pipeline) that a switched-on product refuses or answers differently (HM-20, the
+# switched-on pipeline); the tests keep testing the same thing with the switch off (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 # The old list, unchanged.
 BLOCKED_MCP_URLS = ['stdio:/bin/true', 'STDIO:/bin/true', ' stdio:/bin/true', '\tStdIo:/bin/true', 'command:/bin/true',

@@ -14,7 +14,7 @@
     "headscale"
   ],
   "version": "0.4.15",
-  "version_overrides": {"odoo": "0.5.2", "emqx": "0.5.1", "litellm": "0.5.1", "nextcloud": "0.5.1", "headscale": "0.4.20"},
+  "version_overrides": {"odoo": "0.5.2", "emqx": "0.5.1", "litellm": "0.5.1", "nextcloud": "0.5.1", "headscale": "0.5.0", "hermes": "0.5.0", "n8n": "0.5.0"},
   "os_security_upgrades": {
     "snapshot": "20261104T124343Z",
     "suite": "bookworm-security",

@@ -71,7 +71,10 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     admin_port, mcp_port = draw_public_ports(2)
     env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + ":" + str(ROOT / "apps/n8n")}
     runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
-    code = 'import run; ' + runner.code('run') + 'run.main()'
+    # Train B: the subprocess reads the repository's switch, not a fixture's, so it sets the switched-off mode this test is
+    # about itself (a switched-on n8n refuses the loopback fake workflow API below: HM-20; tests/switch_modes.py).
+    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset()\n'
+            'import run; ' + runner.code('run') + 'run.main()')
     runner.release()
     process = await asyncio.create_subprocess_exec(sys.executable, '-c', code,
         "--data", str(data), "--host", "127.0.0.1", "--admin-port", str(admin_port), "--mcp-port", str(mcp_port),

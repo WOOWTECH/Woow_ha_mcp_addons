@@ -45,6 +45,7 @@ from multi_profile_runtime import (Children, all_tokens, create_profile, free_po
 from mcp_admin_core import features, gateway, identity_fields, products, profile_router, profiles, restore_lock
 from mcp_admin_core.access import masked_token
 from mcp_admin_core.products import ProductStore, child_spec
+from switch_modes import switched_off  # noqa: F401  (fixture: the three tests that run the switched-off runtime pin the switch)
 from switched_gateway import GatewayChild, session_of, sse_messages, until
 from test_odoo_identity_rotation import (Journal as OdooJournal, opened_by, record_writes,
                                          refused_everywhere, routed_to, save)
@@ -264,8 +265,9 @@ async def test_a_secret_change_or_the_first_setup_keeps_the_hermes_token(tmp_pat
         assert await refused_everywhere(runtime, token)
 
 
-async def test_switched_off_a_hermes_identity_change_keeps_todays_answer_order_and_token(tmp_path, log_scan):
-    """Hermes not switched on (as the repository ships it) keeps today's behaviour for its only profile although it is
+async def test_switched_off_a_hermes_identity_change_keeps_todays_answer_order_and_token(tmp_path, log_scan, switched_off):
+    """Hermes not switched on (the switched_off fixture pins it: the repository switches Hermes on from 0.5.0, and this is
+    what a switch-off emergency release goes back to) keeps today's behaviour for its only profile although it is
     outside IDENTITY_BOUND: a new Dashboard user (backend/patch), a new Gateway URL (PUT backend), a Dashboard URL on
     another origin without its password (saved as today: DQ-40 ⑨ is behind the switch too) and the Dashboard cleared
     are each written first, then the child restarts (the state on disk already holds the new identity when the child
@@ -422,8 +424,8 @@ async def test_each_profiles_token_reaches_only_its_own_child_and_every_other_to
             assert await opened_by(runtime, runtime.token(profile_id), child[profile_id]), profile_id
 
 
-async def test_switched_off_only_the_default_profiles_token_is_served(tmp_path, log_scan):
-    """Switched off (as the repository ships Hermes) with a profile on disk: it is dormant, and the start revoked its
+async def test_switched_off_only_the_default_profiles_token_is_served(tmp_path, log_scan, switched_off):
+    """Switched off (pinned by the switched_off fixture; the repository switches Hermes on from 0.5.0) with a profile on disk: it is dormant, and the start revoked its
     token before anything was served (HM-13b). The default profile's token opens a session with its child on both
     paths; the dormant profile's token from before the start, a token no profile has, the default profile's child
     token and C x43 are refused on both paths with an unknown token's bytes."""
@@ -664,7 +666,7 @@ async def test_saving_one_profiles_policy_changes_only_its_tools_and_restarts_no
                     for profile_id in ('default', C)} == others
 
 
-async def test_switched_off_a_policy_save_restarts_no_hermes_child(tmp_path, log_scan):
+async def test_switched_off_a_policy_save_restarts_no_hermes_child(tmp_path, log_scan, switched_off):
     """Switched off, the same as today: the policy saved on the only profile changes its tools and restarts no child."""
     data = tmp_path / 'data'
     update_profile(data, PRODUCT, 'default', connection=hermes('alpha'))

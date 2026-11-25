@@ -15,6 +15,12 @@ import pytest
 from test_batch2_n8n_public_errors import KEY, PRIVATE, runtime
 from test_expansion_policy import call
 from test_real_products import rpc
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (n8n switched on with its 0.5.0): written for the switched-off add-on, with a loopback fake backend (or
+# the order of a switched-off pipeline) that a switched-on product refuses or answers differently (HM-20, the
+# switched-on pipeline); the tests keep testing the same thing with the switch off (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('n8n_patch', ROOT / 'apps/n8n/patches/fix_test_run_error_messages.py')

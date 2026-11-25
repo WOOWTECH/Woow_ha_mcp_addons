@@ -11,6 +11,7 @@ from mcp_admin_core.config import ConfigError, Store
 from mcp_admin_core.gateway import make_apps
 from n8n_adapter import TOOLS, child_spec
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from switch_modes import switched_off  # noqa: F401  (fixture: the one test that pins the switch)
 
 
 def rpc(method="tools/call", **params):
@@ -179,6 +180,10 @@ async def test_read_call_filter_policy_rotation_and_separate_child_secret(harnes
     assert (await m.get("/mcp", headers={"Authorization": "Bearer " + rotated.json()["token"]})).status_code == 401
 
 
+# Train B (n8n switched on with its 0.5.0): it saves a loopback fake n8n (http://127.0.0.1:4567) through the admin API, which a
+# switched-on n8n refuses with 400 (HM-20); with the switch off it keeps testing the write toggles and the secret masking
+# (tests/switch_modes.py).
+@pytest.mark.usefixtures('switched_off')
 async def test_admin_write_enable_disable_and_no_generic_secrets(harness, store):
     a, m, calls = harness
     headers = {"X-Remote-User-Id": "admin-test"}

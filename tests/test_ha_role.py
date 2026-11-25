@@ -20,6 +20,7 @@ from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS as PRODUCT_TOOLS
 from mcp_admin_core.surface import listing
 from n8n_adapter import TOOLS, child_spec
+from switch_modes import switched_off  # noqa: F401  (fixture: the one test that pins the switch)
 
 DUMMY = "DUMMY-machine-token"
 IDENTITY = {"X-Remote-User-Id": "human"}
@@ -631,6 +632,10 @@ async def test_identity_ambiguity_never_queries(tmp_path, monkeypatch, headers):
     ("endpoint", "PUT", {"endpoint": "http://example.test/mcp"}),
     ("bootstrap", "GET", None),
 ])
+# Train B (n8n switched on with its 0.5.0): one of the saved backends is a loopback URL, which a switched-on n8n refuses
+# with 400 before the fresh role query (validation precedes it: test_body_and_validation_precede_fresh_query); the
+# test is about the single-profile pipeline as shipped before, so it pins the switch off (tests/switch_modes.py).
+@pytest.mark.usefixtures('switched_off')
 async def test_denied_fresh_action_no_mutation_or_disclosure(tmp_path, monkeypatch, operation, method, payload):
     async with owned_provider(monkeypatch) as (verify, seen, _):
         async with gateway(tmp_path, verify) as (store, client, _, __):
@@ -768,7 +773,10 @@ profile_runtime.make_apps = ingress_simulation
 run.main()
 '''
         runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
-        code = 'import run; ' + runner.code('run') + '\n' + code
+        # Train B: the subprocess reads the repository's switch, not a fixture's: it sets the switched-off mode this test is
+        # about itself (an n8n switched on has the multi-profile admin pipeline and refuses the fake's loopback address).
+        code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset()\n'
+                'import run; ' + runner.code('run') + '\n' + code)
         runner.release()
         process = await asyncio.create_subprocess_exec(sys.executable, "-c", code,
             "--data", str(tmp_path / "runtime"), "--host", "127.0.0.1",

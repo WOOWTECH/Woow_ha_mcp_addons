@@ -21,6 +21,7 @@ from mcp_admin_core.products import PROBES, ProductState, ProductStore, TOOLS, c
 from test_backend_policy_python import policy
 from test_real_products import rpc
 from test_six_hardening import Quiet, call, runtime, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: the two Hermes tests that pin the switch)
 
 
 @pytest.mark.parametrize('kind', ['sync', 'async', 'xmlrpc'])
@@ -156,6 +157,10 @@ async def test_dns_and_all_connect_attempts_share_deadline(monkeypatch, kind):
 # 0.1.4: OpenDesign 0.21.1 answers {"ok": true, "version"} (0.1.3 HA regression: readiness was 503 with working reads).
 @pytest.mark.parametrize('product,answer', [('opendesign', {'status': 'ok'}), ('opendesign', {'ok': True, 'version': '0.21.1'}),
                                             ('hermes', {'status': 'ok'})])
+# Train B: Hermes is switched on in the repository, and a switched-on product's child refuses a backend that is, or
+# resolves to, a loopback address (HM-20: WOOW_MCP_DENY_LOOPBACK=1); this test reaches its fake through one, so it pins
+# the switch off. What it proves (the answers, the resolver bound) is the same in both modes.
+@pytest.mark.usefixtures('switched_off')
 async def test_real_localhost_health_and_readiness(tmp_path, product, answer):
     class Backend(Quiet):
         def do_GET(self): self.reply(answer)
@@ -190,6 +195,10 @@ runpy.run_path(launch, run_name='__main__')
 '''
 
 
+# Train B: Hermes is switched on in the repository, and a switched-on product's child refuses a backend that is, or
+# resolves to, a loopback address (HM-20: WOOW_MCP_DENY_LOOPBACK=1); this test reaches its fake through one, so it pins
+# the switch off. What it proves (the answers, the resolver bound) is the same in both modes.
+@pytest.mark.usefixtures('switched_off')
 async def test_gateway_cancellation_waves_bound_dns_and_reap(tmp_path):
     active = peak = entered = 0
     release = threading.Event()

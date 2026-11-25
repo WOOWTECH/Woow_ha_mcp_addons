@@ -12,6 +12,12 @@ import test_six_hardening as harness
 from test_hermes_dashboard_error_guidance import ACCEPT, INIT
 from test_real_products import rpc
 from test_six_hardening import Quiet, call, runtime, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (Hermes switched on with its 0.5.0): written for the switched-off add-on, with a loopback fake backend (or
+# the order of a switched-off pipeline) that a switched-on product refuses or answers differently (HM-20, the
+# switched-on pipeline); the tests keep testing the same thing with the switch off (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 AUTH_403 = (
     "BACKEND_AUTH_REJECTED status=403: Hermes Dashboard 憑證被拒 "

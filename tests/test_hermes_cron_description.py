@@ -29,8 +29,9 @@ from log_scan import log_scan  # noqa: F401  (fixture)
 from mcp_admin_core.tool_snapshot import LISTED
 from test_hermes_safe_public_errors import _direct_call
 from test_six_hardening import Quiet, runtime, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
 
-pytestmark = pytest.mark.usefixtures('log_scan')  # rule 3 of the slice rules: every new test runs under the log scan
+pytestmark = pytest.mark.usefixtures('log_scan', 'switched_off')  # rule 3 of the slice rules: every new test runs under the log scan
 ROOT = Path(__file__).resolve().parents[1]
 # The two sentences, unwrapped.
 SENTENCES = (

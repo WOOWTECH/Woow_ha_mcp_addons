@@ -9,6 +9,13 @@ from mcp_admin_core.products import ProductStore, child_spec
 from owned_runtime import Endpoint
 from test_real_products import rpc
 from test_six_hardening import call, runtime
+import pytest
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (Hermes switched on with its 0.5.0): written for the switched-off add-on, with a loopback fake backend (or
+# the order of a switched-off pipeline) that a switched-on product refuses or answers differently (HM-20, the
+# switched-on pipeline); the tests keep testing the same thing with the switch off (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 
 INIT = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {

@@ -17,6 +17,12 @@ from test_batch2_policy import GRAPH
 from test_expansion_policy import call
 from test_real_products import rpc
 from tool_refusal import refused  # 0.1.14: refused tools/call inside a session
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (n8n switched on with its 0.5.0): written for the switched-off add-on, against a loopback fake n8n, which a switched-on
+# product's child refuses (HM-20, WOOW_MCP_DENY_LOOPBACK); they keep testing the same thing with the switch off
+# (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 KEY = 'OWNED_N8N_READ_RECEIVED_DUMMY_KEY'
 PRIVATE = 'OWNED_N8N_PRIVATE_DIAGNOSTIC'

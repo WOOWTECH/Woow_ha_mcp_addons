@@ -166,8 +166,9 @@ def test_no_entry_point_imports_the_unwired_modules(entry):
 # change of the switch shows in this test's diff (HM-07's exact pin); a release that switches a product off again
 # (plan 7.4, docs/operations/update-backup-rollback.md: the emergency release template) takes it out of both. A feature
 # PR changes neither. HM-19a, the Odoo 0.5.0 release PR, switched Odoo on (R1); train A's release branch switched EMQX,
-# LiteLLM and Nextcloud on with their 0.5.0 (HM-23 review S-2: EMQX's exact pin is this line).
-SWITCHED_ON = frozenset({'odoo', 'emqx', 'litellm', 'nextcloud'})
+# LiteLLM and Nextcloud on with their 0.5.0 (HM-23 review S-2: EMQX's exact pin is this line); train B's release branch
+# switched Hermes, n8n and Headscale on with theirs.
+SWITCHED_ON = frozenset({'odoo', 'emqx', 'litellm', 'nextcloud', 'hermes', 'n8n', 'headscale'})
 
 
 def test_a_product_is_switched_on_only_by_its_release():
@@ -230,12 +231,13 @@ def test_the_switch_is_read_at_every_call(monkeypatch):
 
 
 def test_a_subprocess_preamble_switches_a_product_on():
-    # HM-19a: the repository switches Odoo (and, from train A's release, EMQX, LiteLLM and Nextcloud) on, so the preamble
-    # switches a product the repository leaves off (Hermes) on and Odoo off: it sets exactly the switch the subprocess
-    # needs, both ways.
-    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"hermes"}); '
+    # HM-19a: the repository switches Odoo (and, from train A's and train B's releases, every other product that can have
+    # profiles) on, so the preamble switches a product the repository leaves off (OpenDesign, which has none: DQ-28; the
+    # preamble sets the switch, it does not ask whether the product could use it) on and Odoo off: it sets exactly the
+    # switch the subprocess needs, both ways.
+    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset({"opendesign"}); '
             'import mcp_admin_core.run_product; '
-            'print("ENABLED", features.enabled("hermes"), features.enabled("odoo"))')
+            'print("ENABLED", features.enabled("opendesign"), features.enabled("odoo"))')
     result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, cwd=ROOT, timeout=120,
                             env={'PATH': '/usr/bin:/bin', 'PYTHONDONTWRITEBYTECODE': '1',
                                  'PYTHONPATH': str(ROOT / 'packages/mcp-admin-core')})

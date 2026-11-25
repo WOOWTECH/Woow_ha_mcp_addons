@@ -7,6 +7,12 @@ import pytest
 
 from mcp_admin_core.config import Store
 from n8n_adapter import child_spec
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (n8n switched on with its 0.5.0): written for the switched-off add-on, against a loopback fake n8n, which a switched-on
+# product's child refuses (HM-20, WOOW_MCP_DENY_LOOPBACK); they keep testing the same thing with the switch off
+# (tests/switch_modes.py). The switched-on refusal is tests/test_backend_loopback.py's.
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 
 async def node(store, code):
