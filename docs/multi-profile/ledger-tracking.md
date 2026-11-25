@@ -28,6 +28,7 @@
 | `packages/mcp-admin-core/mcp_admin_core/reply_worker.py` | HM-30 | — | 列管（HM-30 起） | — | 回覆處理的工作執行緒（全 add-on 一條）與依帳號輪流的佇列；`Lane`＝一個帳號的班次（`make_apps` 的 `reply_worker`） |
 | `packages/mcp-admin-core/mcp_admin_core/origin_policy.py` | HM-27 | —（合併 HM-13c 時檔名改取 `profiles.py` 的常數） | 列管（HM-27 起） | — | 密鑰網址的服務層級 Origin 清單（全部帳號共用、預設 report-only；`/data/mcp/origin-policy.json`、紀錄、ETag） |
 | `packages/mcp-admin-core/mcp_admin_core/child_identity.py` | HM-15（條件式） | — | 列管 | — | listener 身分檢查 |
+| `packages/mcp-admin-core/mcp_admin_core/inflight_ids.py` | PaaS #161（2026-11-25） | —（上限、文字改了要同時改契約第 2.8 節與 `tests/test_inflight_ids.py`） | 列管（PaaS #161 起） | — | 同一個 session 內進行中的 JSON-RPC id 登記表（全 add-on 一份、每帳號上限＝它的轉送名額；對齊 PaaS #161；不受開關管）；`gateway.make_apps` 的 `inflight`、`profile_runtime.ProfileManager.inflight` |
 | `packages/mcp-admin-ui/src/profiles.js` | HM-11 | HM-13c（沒改：核對卡等新卡片在 `app.js`、`restore.js`） | 列管 | — | 面板帳號選單、建立／改名／刪除對話框 |
 | `packages/mcp-admin-ui/src/restore.js` | HM-13c | — | 列管（HM-13c 起） | — | 面板讀 bootstrap 的還原與休眠通知、還原紀錄、清單的隔離目錄、全部撤銷的逐帳號結果並先驗格式（備份帶回的值只當文字）；匯出帳號清單（不含憑證） |
 | `apps/runtime/child_auth.py` | 不建：HM-06 把子程式 bearer 寫進已列管的 `apps/runtime/session_idle.py`，同一個 PR 更新帳本摘要、重產 tool-surface | — | — | — | 子程式 bearer 驗證 |
