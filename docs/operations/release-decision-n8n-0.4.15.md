@@ -1,6 +1,6 @@
-# n8n 0.4.15（2026-11-25 維修版）發佈紀錄（草稿）
+# n8n 0.4.15（2026-11-25 維修版）發佈紀錄
 
-狀態：**草稿：映像尚未建置、尚未推 GHCR、尚未驗收**（待補：run、digest、展示機結果）。這是 `woow_mcp_n8n` 一個產品的發版：版號 0.4.14 → 0.4.15，與 Odoo 0.5.2、EMQX 0.5.1、LiteLLM 0.5.1、Nextcloud 0.5.1、Hermes 0.4.15、Headscale 0.4.20 同一批 2026-11-25 維修版（一個升版 PR、各產品各自的 `release.yaml` run）；OpenDesign 只升來源版本，沒有映像。
+狀態：**映像已發佈到 GHCR，並通過展示機的商店乾跑（含官方 HA Core 2026.11.3），待合併上架**（2026-11-25）。這是 `woow_mcp_n8n` 一個產品的發版：版號 0.4.14 → 0.4.15，與 Odoo 0.5.2、EMQX 0.5.1、LiteLLM 0.5.1、Nextcloud 0.5.1、Hermes 0.4.15、Headscale 0.4.20 同一批 2026-11-25 維修版（一個升版 PR、各產品各自的 `release.yaml` run）；OpenDesign 只升來源版本，沒有映像。
 合併升版 PR 即上架 WOOW App Store；合併前只補這份紀錄與驗收紀錄（只改 `docs/`）。
 
 ## 為什麼發這一版
@@ -19,7 +19,7 @@ n8n 0.4.14 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA �
 
 - 分支 `release/maintenance-20261125`（基準 `claude-delivery` `092b1b5`，#136 合併之後），PR #138（主對話推上去時的 head 是 `3bcfa1f`；升版 commit 與這些紀錄之後另外推）。分支上依序有：HA Core 2026.11.3 審查與同月份修補版放行（`529c8c0`、`131d1a9`）、面板讀弱 ETag（`635f800`、`40574ce`）、EMQX 說明對齊 PaaS #160（`806df82`、`d214e2b`、`48c2e2e`、`3bcfa1f`），再來是升版 commit（版號資料與測試釘選、CHANGELOG、DOCS／README、未發佈清單與這七份發佈紀錄草稿；commit 號合併後補）。
 - Node 基底 26.12.1 → 26.13.1（`f988a5f`，在 `80ed536` 之後，上面那串 commit 寫成時還沒有它；文件與 CHANGELOG 的對應句在其後的 commit）：n8n 的候選映像在供應鏈關卡被 Node 26.12.1 執行檔的 7 個 High 漏洞擋下（CVE-2026-123863、123864、123865、123866、123872、123874、126051；26.13.1 修掉）。這是七支共同的建置輸入變更：映像要從含它的分支 head 建。
-- 映像來源：觸發 `release.yaml` 時這個分支的 head（`source_sha`，待補）。**七支都推完之前，不准再往分支推任何 commit（紀錄檔也不行）**：`workflow_dispatch` 永遠跑在分支 head，`source_sha` 又必須等於它（[release](release.md)「部分失敗怎麼辦」）。都推完之後的證據 commit 只加紀錄檔。
+- 映像來源：觸發 `release.yaml` 時這個分支的 head（`source_sha` `fec2e3ec292d76c22558497cea6499ef1a1dc7ae`）。**七支都推完之前，不准再往分支推任何 commit（紀錄檔也不行）**：`workflow_dispatch` 永遠跑在分支 head，`source_sha` 又必須等於它（[release](release.md)「部分失敗怎麼辦」）。都推完之後的證據 commit 只加紀錄檔。
 - 發版鎖：同一時間只有一個凍結中的升版 PR（計畫 §11.5）；觸發前要再查一次有沒有別的開著的升版 PR（例如火車 B）。
 
 ## 版號資料（[release](release.md)「升版時要改的版號資料」）
@@ -53,24 +53,24 @@ n8n 0.4.14 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA �
 
 | # | 步驟 | 結果 |
 |---|---|---|
-| 1 | 推送分支、開 PR | PR #138 已開（head `3bcfa1f`）；升版 commit 推上之後的 head 待補 |
+| 1 | 推送分支、開 PR | PR #138；發佈用的 head `fec2e3e`（`fec2e3ec292d76c22558497cea6499ef1a1dc7ae`）。發佈之後只加一個證據 commit，只改 `docs/`（這份紀錄與其餘六份） |
 | 2 | 獨立安全審查（DQ-35 的條件） | 已做：2026-11-25 修正後通過；必修 4 項（文字與紀錄）已處理，建議 2 項交負責人決定，見 [審查筆記](../provenance/ha-core-later-patch-review-20261125.md) |
-| 3 | CI：`checks`、`Release train`、`Upgrade comparison`（`compare`、`runtime`） | 待補 |
-| 4 | 候選建置與容器驗收（`release.yaml` 的 gate → candidate：容器驗收含子程式 bearer 401 與 HM-13a 還原樹；source／history／全部 layer 的 Gitleaks、SBOM、Grype、授權） | 待補（run、`image.tar` SHA-256、image ID） |
-| 5 | J1900 指令集檢查（candidate job 內建，QEMU `-cpu Nehalem`） | 待補 |
-| 6 | Store 升級乾跑（展示機，0.4.14 → 候選 `image.tar`；兩個 phase 都要撐過 60 秒、不退出、不重啟） | 待補 |
-| 7 | 推 GHCR（`public-release` 核准後的 publish） | 待補（run、manifest digest、image ID） |
-| 8 | PR 檢查：映像發佈後重跑 `readiness` 與 `Upgrade comparison` | 待補 |
-| 9 | 展示機 HAOS 升級測試（Store 上的 0.4.14 → 發佈的映像；升級後設定與權杖保持、管理面板可用；展示機的 Core 若維持 2026.7.2，只驗沒有退步，2026.11.3 與後續修補版的放行由單元測試涵蓋） | 待補 |
-| 10 | 合併上架 | 待補 |
+| 3 | CI：`checks`、`Release train`、`Upgrade comparison`（`compare`、`runtime`） | `checks`（head `fec2e3e`，GitHub 以 root 跑全套）成功；`Release train / wvt check` 成功；`readiness` 與 `Upgrade comparison` 在映像發佈前照設計失敗（映像還沒發佈），發佈後在證據 commit 的 head 重跑（見 PR #138 的檢查，合併前都要綠） |
+| 4 | 候選建置與容器驗收（`release.yaml` 的 gate → candidate：容器驗收含子程式 bearer 401 與 HM-13a 還原樹；source／history／全部 layer 的 Gitleaks、SBOM、Grype、授權） | `release.yaml` run 45547421522（`app=n8n`、`source_sha` fec2e3e）：gate（12:32–13:06 台北）、candidate（13:06–13:11 台北）成功；`image.tar` sha256 `1e465f8c78cd5da5b95cbde7cbe76bfeffe7024612f4896972560e1707dd4ab6`、470,499,328 位元組；映像 ID `sha256:7ffabbc2b11c666465f2f297d11bf2e9a3728ab8bcab58318d74bda96134543f` 由 tar 內 config 自行算出，與 handoff 一致 |
+| 5 | J1900 指令集檢查（candidate job 內建，QEMU `-cpu Nehalem`） | 通過（candidate job 內建的 J1900 指令集檢查，QEMU `-cpu Nehalem`） |
+| 6 | Store 升級乾跑（展示機，0.4.14 → 候選 `image.tar`；兩個 phase 都要撐過 60 秒、不退出、不重啟） | PASS（2026-11-25，展示機 J6412，商店 CI 同款的升級檢查程式 `c570c79`，拋棄式 dind）：標準模式——舊版 0.4.14 與新版 0.4.15 都從商店升級測試啟動並各撐過 60 秒、不退出、不重啟；接官方 HA Core 2026.11.3（`qemux86-64-homeassistant`，20 秒啟動）——舊版 0.4.14 的管理頁被拒（未審核的 Core 版本），新版 0.4.15 的管理頁打得開 |
+| 7 | 推 GHCR（`public-release` 核准後的 publish） | 以 API 核准 `public-release`，publish 成功（2026-11-25 16:11–16:12 台北）：manifest `sha256:b2099d86c979c85220735d7616c941a6046cd98ee7af6a4af46cab65629f305b`、映像 ID `sha256:7ffabbc2b11c666465f2f297d11bf2e9a3728ab8bcab58318d74bda96134543f`；匿名從 GHCR 取得的 config digest 與候選一致 |
+| 8 | PR 檢查：映像發佈後重跑 `readiness` 與 `Upgrade comparison` | 映像發佈後在證據 commit 的 head 重跑 `readiness` 與 `Upgrade comparison`（`compare`、`runtime`）：結果見 PR #138 的檢查（合併前五項必要檢查都要綠） |
+| 9 | 展示機 HAOS 升級測試（Store 上的 0.4.14 → 發佈的映像；升級後設定與權杖保持、管理面板可用；展示機的 Core 若維持 2026.7.2，只驗沒有退步，2026.11.3 與後續修補版的放行由單元測試涵蓋） | 合併上架後從商店更新驗證（展示機：舊版 → 新版，映像等於發佈值、設定與權杖不變），結果另補一份只改 `docs/` 的紀錄。展示機的 HA Core 是 2026.7.2，這項只驗沒有退步；2026.11.3 與後續修補版的放行由真 Core 驗證（67／67）與上面的商店乾跑（接官方 HA Core 2026.11.3）涵蓋 |
+| 10 | 合併上架 | 合併後補（合併 commit、GitHub Release、商店同步） |
 
-待補：run、digest、展示機結果。
+已補：run、digest、乾跑結果；合併、商店同步與商店更新驗證的結果在合併後補。
 
 ## 建置歷史（2026-11-25）
 
 - 第一次觸發：2026-11-25 11:04（台北），分支 head `80ed536`，七個產品各一個 `release.yaml` run；`80ed536` 之後分支又加了四個 commit（見下），所以這次觸發的結果都不用於發佈，每個產品都在新 head 重新觸發（`source_sha` 必須等於分支 head）。
 - 這個產品的第一次 run `45537379172`：gate 通過，candidate 在供應鏈關卡失敗（publish 略過）：映像裡的 Node.js 26.12.1 被 7 個新公開的 High 漏洞命中（CVE-2026-123863、123864、123865、123866、123872、123874、126051；都在 Node 的 TLS 或 HTTP/2 伺服器端程式碼，修復版本 26.13.1），這些是 0.4.14 在 2026-11-18 發佈之後才公開的。用同一套釘版掃描器在本機對已發佈的 0.4.14 映像重現；改用 Node 26.13.1 基底（commit `f988a5f`、`ecb747d`），基底的 `node` 執行檔在同一套流程是 0 個命中。
-- 第二次觸發：新 head（含 `f988a5f` 的 Node 26.13.1、`ecb747d` 的紀錄、`ec42592` 的 EMQX 測試修正與這個建置歷史的 commit）：待補（run、`source_sha`、結果）。
+- 第二次觸發（2026-11-25 12:32 台北）：新 head `fec2e3e`（含 `f988a5f` 的 Node 26.13.1、`ecb747d` 的紀錄、`ec42592` 的 EMQX 測試修正與 `fec2e3e` 的建置歷史）：run 45547421522，gate、candidate 都成功，用於發佈。
 
 ## 已知限制與事實
 
@@ -80,7 +80,7 @@ n8n 0.4.14 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA �
 ## 發版前的關卡（草稿時列的阻擋事項）
 
 1. **A10 的獨立安全審查（DQ-35 的條件）**：已做（2026-11-25，審查者不是作者），修正後通過：程式不用改，必修 4 項是文字與紀錄，已處理；建議 S4、S5 交負責人決定（規則要不要只對 2026.11 起生效、面板要不要顯示被規則放行的版本）。另外，主對話用真的 Core 2026.11.3、2026.11.2、2026.11.0 跑過 `ha_role`（維修版 67／67、30／30、30／30 全過）。見 [審查筆記](../provenance/ha-core-later-patch-review-20261125.md)。
-2. **映像尚未建置**：這份草稿寫成時，沒有建置、沒有推 GHCR、沒有展示機驗收；上面的表每一格都要等實際執行後補。
+2. **映像已建置、驗收並發佈**：七個 run 的 gate、candidate 都成功；展示機商店乾跑 14 項（七個產品各兩種）全過；以 API 核准後 publish 成功（2026-11-25 16:11–16:12 台北），GHCR 映像編號與候選自行算出的值一致；映像發佈之後沒有再重建。
 3. **`upgrade-notes.yaml`**：這一批沒有加；`Upgrade comparison / compare` 要求時照 `AGENTS.md` 第 3 點補。
 4. **發版鎖與 PR head 凍結**：七支（或當批要發的各支）候選都通過之後才批准任何一支的 publish；之後的 commit 只加紀錄檔。
 5. **開關關的還原階段第一次在真容器跑**：HM-13b、HM-13c 之後，容器驗收的還原階段改成守門刪掉標記、留下還原提示（log 的 `re-owned N` 與守門的 `KEPT_NOTICE` 各剛好一行，守門沒有別的行；見 `docs/operations/acceptance.md`）。火車 A 的候選都是開通的產品（走守門的另一條路），到目前為止沒有開關關著的產品在真容器跑過這個階段，n8n、Hermes、Headscale 這一批是第一次。失敗時先查探針、entrypoint 與守門，不要放寬（`docs/multi-profile/unreleased-changes.md` 第 5 節第 3 點）。
