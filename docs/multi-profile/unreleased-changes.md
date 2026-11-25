@@ -102,7 +102,7 @@ A8～A10 適用的產品都寫進 CHANGELOG 了，照檔頭「怎麼更新」第
     - Behind a proxy that compresses the panel's answers (Cloudflare does), the add-on's strong ETag of the browser origin policy (`"o1-…"`) arrives as a weak ETag (`W/"o1-…"`), which the panel did not take as a revision: the "browser origin check" card could not be saved. The panel now reads the same revision from the weak form; it still sends the strong `If-Match` as before, and the add-on's comparison is unchanged. The profile list's ETag (`"p1-…"`) is read by the same function and was fixed with it; measured on a real Home Assistant behind Cloudflare (2026-11-25, browser `Accept-Encoding: gzip, deflate, br, zstd`) it was not affected there, because Home Assistant itself compresses that answer with gzip first and its ETag stays strong. It could only turn weak when a proxy rewrites an answer that Home Assistant sent uncompressed, for example when the client does not accept compression.
     ```
   - 出處：`packages/mcp-admin-ui/src/api.js`（`headerRevision`）、`packages/mcp-admin-ui/tests/origin-policy.test.mjs`、`profiles.test.mjs`、`tests/browser/origin-policy.spec.mjs`、`profiles.spec.mjs`（`weakEtag` 是 `fixtures/server.mjs` 的新選項）；
-    量測：2026-11-25 主對話在真的 HA 加 Cloudflare 上的實測（兩條路的位元組數與壓縮方式如上）。這些測試與 fixture 裡有幾行註解還寫「Cloudflare 把帳號清單的 ETag 變弱」，那是改正之前的說法，測試的情境（代理把清單的 ETag 變弱）本身仍成立，註解沒有改。
+    量測：2026-11-25 主對話在真的 HA 加 Cloudflare 上的實測（兩條路的位元組數與壓縮方式如上）。`profiles.test.mjs`、`profiles.spec.mjs`、`fixtures/server.mjs` 裡原本把「清單變弱」歸因於 Cloudflare 的註解已改成「模擬代理」；測試的情境（代理把清單的 ETag 變弱）本身仍成立。
 
 ## 2. 0.4.13 這條線共通（B：Headscale 以外的 7 個產品）
 

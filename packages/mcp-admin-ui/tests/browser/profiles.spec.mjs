@@ -672,9 +672,10 @@ test('a list without its ETag is read-only but still shows a deletion; a product
   expect(await calls(request, call => call.method !== 'POST')).toEqual([]);
 });
 
-// F2: the list read behind a proxy that makes its ETag weak (Cloudflare), W/"p1-...": the revision is the same. The list used
-// to be read-only ("帳號清單缺少版本資訊"), with no create, rename or delete and "revoke all" off; now none of that, and the
-// strong If-Match goes out as before.
+// F2: the list read behind a proxy that makes its ETag weak, W/"p1-..." (the fixture's weakEtag simulates one; measured behind
+// Cloudflare on 2026-11-25, the list's ETag stayed strong and only /api/origin-policy turned weak): the revision is the same.
+// The list used to be read-only ("帳號清單缺少版本資訊"), with no create, rename or delete and "revoke all" off; now none of
+// that, and the strong If-Match goes out as before.
 test('F2: a weak ETag on the profile list: not read-only, revoke all on, and a create sends the strong If-Match', async ({page, request}) => {
   await reset(request, {product: 'odoo', parity: true, profiles: {weakEtag: true, extra: [{id: B, label: '會計', configured: true, status: 'running'}]}});
   const lists = [];

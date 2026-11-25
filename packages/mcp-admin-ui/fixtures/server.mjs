@@ -252,8 +252,9 @@ reset();
 const etag = profile => profile.id === DEFAULT ? `"c1-${profile.revision.toString(16).padStart(64, '0')}"`
   : `"c1-${profile.id}${profile.revision.toString(16).padStart(40, '0')}"`;
 const indexEtag = () => `"p1-${index.revision.toString(16).padStart(64, '0')}"`;
-// F2: weakEtag is a proxy in front of the Ingress that compresses the small JSON answers (Cloudflare does) and so turns every
-// strong ETag of the global routes into a weak one, W/"...". The mock still compares If-Match strictly, as the add-on does.
+// F2: weakEtag simulates a proxy in front of the Ingress that rewrites the small JSON answers and so turns every strong ETag
+// of the global routes into a weak one, W/"...". Measured behind Cloudflare (2026-11-25) only /api/origin-policy turned weak;
+// /api/profiles stayed strong. The mock still compares If-Match strictly, as the add-on does.
 const shown = etag => profileConfig().weakEtag ? `W/${etag}` : etag;
 // The unusable index file's own ETag (the default bootstrap's profile_index_etag): only the quarantine takes it.
 const rawEtag = () => `"p1-f${index.revision.toString(16).padStart(63, '0')}"`;

@@ -461,7 +461,7 @@ test('a row whose label this browser cannot show stays, by its id; orphans are r
   for (const broken of [[{id: E}, {id: E}], [{id: B}], [{id: DEFAULT_PROFILE}], [{id: E, label: 'x'}], 'x', [E]]) {
     assert.throws(() => orphanIds({orphans: broken}, shown), /帳號清單格式不符/);
   }
-  // F2: W/"p1-..." is not here any more: it is the strong ETag behind a proxy that compresses the answer, the same revision
+  // F2: W/"p1-..." is not here any more: it is the strong ETag after a proxy that rewrites the answer, the same revision
   // (the test below). What stays without a revision is a missing header and values that name no revision of the index.
   for (const etag of [null, indexRevision, '"p1-short"', `W/${indexRevision}`, `w/"${indexRevision}"`, `W/"o1-${'1'.repeat(64)}"`, `W/"${indexRevision}-gzip"`]) {
     const api = new AdminApi(mount, async (path, options = {}) => {
@@ -477,8 +477,10 @@ test('a row whose label this browser cannot show stays, by its id; orphans are r
   assert.deepEqual(indexState({profile_index_state: 'ok'}), {corrupt: false, etag: null});
 });
 
-// F2: a proxy in front of the Ingress that compresses the list (Cloudflare does) makes its ETag weak, W/"p1-...". It names
-// the same revision of the index, so the panel reads it; creating, renaming and deleting send the strong If-Match, as before.
+// F2: a proxy in front of the Ingress that rewrites the list's answer can make its ETag weak, W/"p1-...". It names the same
+// revision of the index, so the panel reads it; creating, renaming and deleting send the strong If-Match, as before. This
+// simulates such a proxy: measured behind Cloudflare on 2026-11-25, the list's ETag stayed strong (Home Assistant gzips that
+// answer itself) and only /api/origin-policy turned weak.
 test('F2: a weak ETag on the profile list is the same revision; the changes it unlocks send the strong If-Match', async () => {
   const base = server();
   const weakList = async (path, options = {}) => {
