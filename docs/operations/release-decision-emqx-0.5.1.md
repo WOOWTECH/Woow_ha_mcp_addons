@@ -65,6 +65,12 @@ EMQX 0.5.0 的管理員驗證只認到 HA Core 2026.11.2；Core 2026.11.3（HA �
 
 待補：run、digest、展示機結果。
 
+## 建置歷史（2026-11-25）
+
+- 第一次觸發：2026-11-25 11:04（台北），分支 head `80ed536`，七個產品各一個 `release.yaml` run；`80ed536` 之後分支又加了四個 commit（見下），所以這次觸發的結果都不用於發佈，每個產品都在新 head 重新觸發（`source_sha` 必須等於分支 head）。
+- 這個產品的第一次 run `45537357950`：gate 失敗（candidate、publish 略過）：7,026 個測試只有 `tests/test_emqx_multi_profile.py::test_switched_on_each_profile_has_its_own_child_broker_and_policy` 一個失敗（同一個 commit 在 PR 的 `checks`、另外六個產品的 gate 都過）。原因是測試的競態，不是產品缺陷：測試把狀態檔改成 0640 之後，閘道自己的健康監看（測試裡每 0.5 秒一次）剛好用 `config.Store.load()` 把權限收回 0600，子程式於是正常服務。本機重現（單次失敗率 1.2%～6%，滿載時較高），修正（呼叫期間持有健康監看的檢查鎖）0／2,100 次失敗，而且「子程式完全不看權限」的突變仍被抓到；commit `ec42592`。
+- 第二次觸發：新 head（含 `f988a5f` 的 Node 26.13.1、`ecb747d` 的紀錄、`ec42592` 的 EMQX 測試修正與這個建置歷史的 commit）：待補（run、`source_sha`、結果）。
+
 ## 已知限制與事實
 
 - **展示機的 Core 版本與真 Core 驗證**：`ha_role` 已用真的 Core 2026.11.3、2026.11.2、2026.11.0（PyPI 官方套件，前面接 Supervisor 代理替身）驗過（[審查筆記](../provenance/ha-core-later-patch-review-20261125.md)第 5 節）；沒有真的 2026.11.4 以上的 Core。這個 add-on 映像沒有在真的 Core 2026.11.x 的 HA 上跑過：展示機維持 2026.7.2 時只驗沒有退步，2026.11.3 與後續修補版的放行由單元測試（`tests/test_ha_role.py`，含窮舉 2025～2027 年的版本字串）與上面的真 Core 驗證涵蓋；要在 HA 上驗證需另外的 Core 2026.11.3 環境，由負責人決定。
