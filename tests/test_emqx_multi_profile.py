@@ -358,8 +358,12 @@ async def test_switched_on_each_profile_has_its_own_child_broker_and_policy(tmp_
                     _, denied = await direct_stats()
                     assert denied['isError'] and 'EMQX_POLICY_UNAVAILABLE' in str(denied)
                     replace_state(original)
-                    path.chmod(0o640)
-                    _, denied = await direct_stats()
+                    # The gateway's own health monitor reads this file with config.Store.load, which tightens a widened
+                    # mode back to 0600 (a tick every HEALTH_INTERVAL, 0.5 s here); a tick between the chmod and the
+                    # child's read leaves the child a file it rightly serves. The monitor's check lock keeps ticks out.
+                    async with running[C].health._check_lock:
+                        path.chmod(0o640)
+                        _, denied = await direct_stats()
                     assert denied['isError'] and 'EMQX_POLICY_UNAVAILABLE' in str(denied)
                     replace_state(original)
                     _, allowed = await direct_stats()
