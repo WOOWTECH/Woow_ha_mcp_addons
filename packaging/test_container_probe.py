@@ -862,5 +862,73 @@ class OutageWaitTests(unittest.TestCase):
         self.assertIn('asyncio.timeout(22)', ast.unparse(run))
 
 
+TRAIN_B = ('hermes', 'n8n', 'headscale')
+
+
+class TrainBProductsTests(unittest.TestCase):
+    """Train B's 0.5.0 switches Hermes, n8n and Headscale on, so their candidates take every switched-on branch of the probe
+    (the private mock address, the layout's tree, the restore check with the sentinel, the longer outage wait, the
+    multi-profile stage), as train A's EMQX, LiteLLM and Nextcloud did (container_probe.py and container_profiles.py ask
+    features.enabled(APP), never a list of products). Each branch is checked here for these three by name, with the switch
+    set by the test; without Docker."""
+
+    def test_the_probe_names_no_product_in_a_switched_on_branch(self):
+        """The only products the probe and the stage compare APP with are the ones whose single-profile path differs on
+        purpose: Odoo (its outage stage), Odoo Manage (no write grants to persist), Headscale (its mock address and its two
+        starts) and n8n (its documentation child runs without a backend; its catalogs). Hermes, EMQX, LiteLLM, Nextcloud
+        and OpenDesign are in no condition, so the three products of train B get the same stage as train A's, with no
+        list to extend."""
+        named = {}
+        for name in ('container_probe.py', 'container_profiles.py'):
+            tree = ast.parse((Path(probe.__file__).parent / name).read_text())
+            found = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Compare):
+                    for value in (node.left, *node.comparators):
+                        if isinstance(value, ast.Constant) and value.value in features.KNOWN_PRODUCTS:
+                            found.add(value.value)
+            named[name] = found
+        self.assertEqual(named['container_probe.py'], {'odoo', 'odoo-manage', 'headscale', 'n8n'})
+        self.assertEqual(named['container_profiles.py'], {'n8n'})
+
+    def test_the_mock_listens_on_the_private_address_and_the_fixture_is_the_layouts_tree(self):
+        for app in TRAIN_B:
+            with self.subTest(app=app), switched(app), patch.object(probe, 'APP', app), \
+                    tempfile.TemporaryDirectory() as directory, patch.object(probe, 'DATA', Path(directory)):
+                with patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                        patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+                    self.assertEqual(probe.mock_bind_host(app), '172.18.0.2')
+                with patch.object(probe.container_profiles, 'tree_snapshot', return_value={'x': 1}) as tree:
+                    self.assertEqual(probe.fixture_snapshot(), {'x': 1})
+                tree.assert_called_once_with(Path(directory))
+
+    def test_the_restore_check_wants_the_sentinel_its_record_the_restore_record_and_the_notice(self):
+        names = (probe.SENTINEL_NAME, probe.INSTANCE_RECORD_NAME, probe.RESTORE_RECORD_NAME, probe.RESTORE_NOTICE_NAME)
+        for app in TRAIN_B:
+            for present in (names, names[:-1]):  # the four, and without the notice
+                with self.subTest(app=app, files=len(present)), tempfile.TemporaryDirectory() as directory:
+                    data = Path(directory) / 'mcp'
+                    data.mkdir(mode=0o700)
+                    data.chmod(0o700)
+                    for name in ('state.json', '.writer.lock', *present):
+                        (data / name).write_bytes(b'{"fixture": true}' if name == 'state.json' else b'')
+                        (data / name).chmod(0o600)
+                    with patch.object(probe, 'APP', app), patch.object(probe, 'DATA', data), \
+                            patch.object(probe, 'os', Owners()), switched(app):
+                        if present == names:
+                            probe.check_restored_start(['state.json', '.writer.lock'], b'{"fixture": true}')
+                        else:
+                            with self.assertRaises(AssertionError):
+                                probe.check_restored_start(['state.json', '.writer.lock'], b'{"fixture": true}')
+
+    def test_a_product_that_is_not_switched_on_gets_none_of_them(self):
+        for app in TRAIN_B:
+            with self.subTest(app=app), switched(), patch.object(probe, 'APP', app):
+                self.assertFalse(features.enabled(app))
+                with patch.object(probe.socket, 'gethostname', return_value='candidate'), \
+                        patch.object(probe.socket, 'gethostbyname', return_value='172.18.0.2'):
+                    self.assertEqual(probe.mock_bind_host(app), '172.18.0.2' if app == 'headscale' else '127.0.0.1')
+
+
 if __name__ == '__main__':
     unittest.main()

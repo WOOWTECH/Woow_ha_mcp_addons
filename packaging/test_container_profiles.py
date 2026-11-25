@@ -1339,5 +1339,119 @@ class StageTests(unittest.TestCase):
         self.assertNotIn('catalogs', events)
 
 
+class TrainBCommandLineTests(unittest.TestCase):
+    """Train B switches Hermes, n8n and Headscale on, so the stage tells their children by the port their command line names
+    (child_ports). Read here from the argv the products' own spec builders make, not from a list written for the test:
+    Hermes' default child names no port (3000), Headscale's always names one (3000 for the default profile), n8n's default
+    names none and an additional one names it after its entry; every additional child names its own port (18000, 18001).
+    The builders need their runtimes installed and a node on the path, which the packaging tests do not have: the checks
+    those need are patched, nothing else is."""
+
+    CONNECTIONS = {'hermes': {'gateway_url': 'http://hermes.invalid:8642', 'gateway_api_key': 'DUMMY'},
+                   'headscale': {'url': 'http://headscale.invalid:8080', 'api_key': 'DUMMY'}}
+
+    def argv(self, product, port, *, additional):
+        from mcp_admin_core import products
+        data = private_dir(temporary(self) / 'data')
+        directory = private_dir(private_dir(data / 'profiles') / B) if additional else data
+        if product == 'n8n':
+            import n8n_adapter
+            store = ProductStore(directory, 'n8n')
+            store.update(backend_url='http://n8n.invalid:5678', backend_key='DUMMY')
+            state = store.load()
+            store.close()
+            with patch.object(n8n_adapter.shutil, 'which', return_value='/usr/local/bin/node'), \
+                    patch.object(Path, 'is_file', lambda self: True), \
+                    patch.object(n8n_adapter, 'profile_catalog', return_value=data / 'nodes.db'), \
+                    patch.object(n8n_adapter.features, 'MULTI_PROFILE_PRODUCTS', frozenset({'n8n'})):
+                return list(n8n_adapter.child_spec(state, directory, port).argv)
+        store = ProductStore(directory, product)
+        store.update(connection=self.CONNECTIONS[product])
+        state = store.load()
+        store.close()
+        with patch.object(Path, 'is_file', lambda self: True):
+            return list(products.child_spec(state, directory, port).argv)
+
+    def test_each_product_names_its_port_the_way_the_stage_reads_it(self):
+        expected = {'hermes': (None, 18000), 'n8n': (None, 18000), 'headscale': (3000, 18000)}
+        for product, (default, additional) in expected.items():
+            with self.subTest(product=product):
+                self.assertEqual(stage.child_port(self.argv(product, 3000, additional=False)), default)
+                self.assertEqual(stage.child_port(self.argv(product, 18000, additional=True)), additional)
+
+    def test_the_default_and_two_additional_children_are_found_on_their_ports(self):
+        for product in ('hermes', 'n8n', 'headscale'):
+            with self.subTest(product=product):
+                proc = FakeProc(self)
+                proc.process(1, ['/opt/woow/.venv/bin/python', 'management_launcher.py'])
+                pids = []
+                for pid, port, additional in ((10, 3000, False), (11, 18000, True), (12, 18001, True)):
+                    proc.process(pid, self.argv(product, port, additional=additional))
+                    pids.append(str(pid))
+                found = stage.child_ports(SimpleNamespace(children=lambda process: pids), Mock(pid=1), proc.root)
+                self.assertEqual(found, {3000: 10, 18000: 11, 18001: 12})
+
+
+class TrainBProfileFixtureTests(unittest.TestCase):
+    """create_profiles (the stage's fixture step) for Hermes, n8n and Headscale: each profile is born with the default
+    profile's backend, whatever the product keeps it in (`connection`, or n8n's backend_url and backend_key), and with its
+    policy now, except Headscale's three API key writes (owner decision 2026-11-25: products.NEW_PROFILE_WITHHELD, which
+    the stage's profile-policy comparison, check_routing, must not mistake for a difference: the probe's default profile
+    holds none of them by then, because the single-profile path saved the grants of one other write tool)."""
+
+    BACKENDS = {'hermes': {'connection': {'gateway_url': 'http://hermes.invalid:8642', 'gateway_api_key': 'DUMMY'}},
+                'n8n': {'backend_url': 'http://n8n.invalid:5678', 'backend_key': 'DUMMY'},
+                'headscale': {'connection': {'url': 'http://headscale.invalid:8080', 'api_key': 'DUMMY'}}}
+    WITHHELD = ['headscale_api_keys:create', 'headscale_api_keys:expire', 'headscale_api_keys:delete']
+
+    def load(self, directory, product, **options):
+        store = ProductStore(directory, product, **options)
+        try:
+            return store.load()
+        finally:
+            store.close()
+
+    def test_two_profiles_are_born_with_the_default_profile_s_backend_and_policy(self):
+        for product, backend in self.BACKENDS.items():
+            with self.subTest(product=product):
+                data = temporary(self) / 'mcp'
+                store = ProductStore(data, product)
+                default = store.update(**backend)
+                store.close()
+                probe = SimpleNamespace(DATA=data, fixture_update=lambda data=data, product=product: self.load(data, product))
+                with patch.object(stage, 'os', Owners()):
+                    created = stage.create_profiles(probe)
+                self.assertEqual([port for _, port in created], [18000, 18001])
+                layout = profiles.Layout(data)
+                for profile_id, _ in created:
+                    state = self.load(layout.profile(profile_id), product, existing_only=True)
+                    for name in backend:
+                        self.assertEqual(getattr(state, name).model_dump() if hasattr(getattr(state, name), 'model_dump')
+                                         else getattr(state, name),
+                                         getattr(default, name).model_dump() if hasattr(getattr(default, name), 'model_dump')
+                                         else getattr(default, name))
+                    kept = [grant for grant in default.enabled_write_tools if grant not in self.WITHHELD] \
+                        if product == 'headscale' else list(default.enabled_write_tools)
+                    self.assertEqual(list(state.enabled_write_tools), kept)
+                    self.assertEqual((state.disabled, state.writes_enabled), (default.disabled, default.writes_enabled))
+                    self.assertNotIn(state.child_token, {default.child_token})
+
+    def test_headscale_s_probe_default_holds_none_of_the_withheld_writes_so_the_profiles_list_the_same_tools(self):
+        """What the probe leaves the default profile with when the stage starts (container_probe.run: the grants of the one
+        write tool WRITE_CASES names, writes_enabled off): none of the three, so a new profile copies the same policy and
+        check_routing's "every profile lists the default's tools" holds for Headscale as for the others."""
+        from mcp_admin_core import products
+        grants = products.TOOLS['headscale'][probe.WRITE_CASES['headscale'][0]].grants(probe.WRITE_CASES['headscale'][0])
+        self.assertTrue(set(grants).isdisjoint(self.WITHHELD), grants)
+        data = temporary(self) / 'mcp'
+        store = ProductStore(data, 'headscale')
+        default = store.update(connection=self.BACKENDS['headscale']['connection'], writes_enabled=False,
+                               disabled=['headscale_health', probe.WRITE_CASES['headscale'][0]], enabled_write_tools=grants)
+        store.close()
+        state = products.profile_initial_state(default, taken={default.token, default.child_token})
+        self.assertEqual((state.disabled, state.writes_enabled, list(state.enabled_write_tools)),
+                         (default.disabled, default.writes_enabled, list(default.enabled_write_tools)))
+
+
 if __name__ == '__main__':
     unittest.main()
