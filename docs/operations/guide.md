@@ -256,7 +256,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
 
 - 每個帳號自己的子程式與健康檢查。一個帳號的子程式當掉，看門狗照 2→300 秒退避重起、不限次數、穩定 120 秒歸零，其他帳號不受影響（DQ-20）；
   額外帳號的健康監看停了只標記那個帳號（`failed`），預設帳號的元件停了照今天讓 add-on 結束、由 Supervisor 重啟（DQ-21）。
-- 健康檢查連兩次失敗才判後端連不上。後端拒絕憑證時退避 15→30→60→120→300 秒，存新憑證或面板重啟後歸零（DQ-25）。Odoo 依來源 IP 節流登入失敗
+- 健康檢查連兩次失敗才判後端連不上。後端拒絕憑證時退避 15→30→60→120→300 秒，存新憑證或面板重啟後歸零（DQ-25）；**n8n 例外**：它的 401 文字還沒被監看認得，API key 被拒時仍每 15 秒檢查一次、沒有退避，也不會有下面那行 log（0.5.0 照現況發，預計下一版補；契約第 1.4 節第 12 點）。Odoo 依來源 IP 節流登入失敗
   （系統參數 `base.login_cooldown_after`、`base.login_cooldown_duration`）：同一個 add-on 的每個帳號都從同一個來源連 Odoo，一個帳號的密碼錯可能讓
   別的帳號一起被冷卻；Odoo 管理員可以視需要調這兩個參數。
 - 額外帳號子程式的 `oom_score_adj` 是 500、`nice` 加 5：記憶體不夠時核心比較會先殺它們，但這不是保證，OOM 仍可能殺管理程序，所有帳號一起斷。
@@ -280,7 +280,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
   | `not started: no connection is saved yet (<欄位名>); …` | 那個帳號還沒設定後端（只列欄位名） | 到面板設定後端 |
   | `could not be started (<例外類別>)` | 起子程式失敗，照退避重試 | 多半是暫時的（例如記憶體不夠）；一直出現就看主機資源 |
   | `child resources not applied (…)` | `oom_score_adj`、`nice` 沒寫成，子程式照常跑 | 平台不准，不用處理 |
-  | `the backend refused the credentials; next health check in N s` | 後端拒絕憑證，健康檢查退避（15→300 秒） | 到面板存正確的憑證（存檔後歸零） |
+  | `the backend refused the credentials; next health check in N s` | 後端拒絕憑證，健康檢查退避（15→300 秒；n8n 沒有這行） | 到面板存正確的憑證（存檔後歸零） |
   | `its health monitor stopped; …` | 額外帳號的監看停了：那個帳號標成 failed、子程式停 | 面板存檔或重新啟動那個帳號的子程式 |
   | `its staggered start failed (<例外類別>); …` | 那個帳號開機時的錯開啟動出錯，其他帳號照起 | 面板重新啟動那個帳號的子程式 |
 
