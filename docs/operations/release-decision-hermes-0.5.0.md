@@ -1,8 +1,8 @@
-# Hermes 0.5.0（多帳號 train B）發佈紀錄（必要補驗完成，待 CI 與上架）
+# Hermes 0.5.0（多帳號 train B）發佈紀錄（必要補驗完成，PR 已合併）
 
-狀態：**2026-11-26 核對：映像已推 GHCR，必要 CI 與商店乾跑已通過；必要實機補驗與清理已完成（相容性與容量限制見共同紀錄），本次文件 head 的 CI 仍須通過；PR #140 未合併上架**。這是 `woow_mcp_hermes` 一個產品的發版：Hermes 開通多帳號（預設帳號＋最多 3 個額外帳號）、版號 0.4.15 → 0.5.0，與 n8n、Headscale 的 0.5.0 同一批（火車 B；一個升版 PR、各產品各自的 `release.yaml` run）。
+狀態：**2026-11-26 核對：映像已推 GHCR，必要 CI 與商店乾跑已通過；必要實機補驗與清理已完成（相容性與容量限制見共同紀錄），PR head [CI 45805906972](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45805906972) 與 [Release train 45805907598](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45805907598) 全數成功，PR #140 已於 19:34（台北）合併為 `49bc4b772717387b314241a11470b59b7ec91d27`；正式 Release、Store 同步與實機短回歸的最新結果統一記在 [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140)**。這是 `woow_mcp_hermes` 一個產品的發版：Hermes 開通多帳號（預設帳號＋最多 3 個額外帳號）、版號 0.4.15 → 0.5.0，與 n8n、Headscale 的 0.5.0 同一批（火車 B；一個升版 PR、各產品各自的 `release.yaml` run）。
 Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1 是同日 2026-11-25 的維修版，不在這一批；OpenDesign 的來源版本留在 0.4.15（商店停用、沒有映像）。
-合併升版 PR 即上架 WOOW App Store；合併前只補這份紀錄與驗收紀錄（只改 `docs/`）。
+升版 PR 已合併；正式 Release 與 Store 同步由既有管線完成。本次交付紀錄更新只改 `docs/`。
 
 ## 為什麼發這一版
 
@@ -62,7 +62,7 @@ Hermes 一節（負責人 2026-11-25 照建議）：**60 分鐘負載量測用�
 
 | # | 步驟 | 結果 |
 |---|---|---|
-| 1 | 推送分支、開 PR | [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140) 已開，映像建置時 head `22705ce`（後續證據提交只改 docs），draft、尚未合併；#139 為先前整合草稿。 |
+| 1 | 推送分支、開 PR | [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140) 已於 2026-11-26 19:34（台北）合併，merge commit `49bc4b7`；映像建置時 head `22705ce`，後續證據提交只改 docs；#139 為先前整合草稿。 |
 | 2 | 獨立審查 | 功能審查已在整合分支做完（HM-24、HM-25、HM-26 各兩份審查，修正後通過；筆記在 `docs/provenance/`）；升版片沒有新的程式，只有開關、版號、文件與測試的調整（測試只改 SHA-256 與釘 `switched_off`，沒有改任何斷言；看 `93cc365` 的內文） |
 | 3 | CI：`checks`、`Release train`、`Upgrade comparison`（`compare`、`runtime`） | [CI 45615872782](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45615872782) 映像來源 `22705ce` 的最新 attempt：checks、readiness、Upgrade comparison / compare、runtime 全部 success；[Release train 45615873358](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45615873358) success（2026-11-26 查證）。 |
 | 4 | 候選建置與容器驗收（`release.yaml` 的 gate → candidate：容器驗收含多帳號階段、子程式 bearer 401 與 HM-13a 還原樹；source／history／全部 layer 的 Gitleaks、SBOM、Grype、授權） | [run 45615946222](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45615946222) gate、candidate、publish 全部 success。映像與 tar 摘要見下方。 |
@@ -73,7 +73,7 @@ Hermes 一節（負責人 2026-11-25 照建議）：**60 分鐘負載量測用�
 | 9 | 展示機 HAOS 驗收：多帳號項目 | 2026-11-25～26 已完成身分切換不換 token、上限、N×N、cross 32/32、政策 PID 不變、單帳號重啟、故障恢復、一般負載、childbearer 28/28；一般／加密局部還原每輪四帳號撤銷、五張收據 410，舊權杖各 8/8 被拒，回退再升級及 34/34 plan 通過。清理完成、證據掃描 223 檔零命中；本次另以 QA Gateway 與真 Dashboard 補驗政策不中斷、換後端 -32004、撤銷 -32005、16 名額及第 17 請求約 1.017 秒回 -32003（其他帳號約 0.258 秒成功），兩帳號初次各登入一次；全輪四次登入皆 200、無 429。29 檔掃描零命中、18:54 清理並釋放鎖；細節與工具失敗保留於共同紀錄。 |
 | 10 | Hermes 60 分鐘負載量測（免費模型；只記錄、不擋發版） | 未執行 60 分鐘容量量測；已用測試 Gateway 完成必要長請求及名額補驗，沒有模型呼叫。容量依既有決定只記錄、不擋發版，不宣稱量測完成。 |
 | 11 | 容量 | 只記錄、不擋發版（負責人 2026-11-23）；驗收記 T-17（閘道、子程式、容器記憶體與停機秒數） |
-| 12 | 合併上架 | 尚未合併；三產品必要實機補驗及清理已完成，待本次 head 的必要 CI 後一起合併上架，再做 Store 回歸。 |
+| 12 | 合併上架 | 三產品必要實機補驗、清理與 PR 必要 CI 全數通過，PR #140 已合併；正式 Release、Store 同步與短回歸結果見 [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140)。 |
 
 ## 已發佈映像與證據（2026-11-26 核對）
 
