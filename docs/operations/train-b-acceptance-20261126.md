@@ -1,11 +1,11 @@
 # 火車 B 0.5.0：發佈與實機驗收覆核（2026-11-26）
 
-三個映像已發佈到 GHCR，映像來源及前一文件 head 的必要 CI、商店升級乾跑已通過。**三產品必要實機補驗與清理已完成；PR #140 尚未合併，待本次證據提交的必要 CI 通過後，接續合併、商店同步與回歸。** n8n 的資料夾功能保留後端版本／授權限制，不宣稱 62/62；Hermes 60 分鐘模型負載依既有決定只記錄、不擋發版。所有結論依逐項原始結果，未以監看通知或腳本結束碼代替。
+三個映像已發佈到 GHCR，映像來源及前一文件 head 的必要 CI、商店升級乾跑已通過。**三產品必要實機補驗、清理與 PR head 必要 CI 全數通過；PR #140 已於 19:34（台北）合併，正式 Release、商店同步與實機短回歸的最新結果統一記於 [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140)。** n8n 的資料夾功能保留後端版本／授權限制，不宣稱 62/62；Hermes 60 分鐘模型負載依既有決定只記錄、不擋發版。所有結論依逐項原始結果，未以監看通知或腳本結束碼代替。
 
 ## 發佈基準
 
 - 維修版 [PR #138](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/138) 已合併：`7dbec9ae84ae8ed6bc4b8a60e250ab24d2ef77ec`。
-- 火車 B [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140)：`release/train-b-0.5.0-20261125` → `claude-delivery`；覆核時為 draft、open、未合併。
+- 火車 B [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140)：`release/train-b-0.5.0-20261125` → `claude-delivery`；2026-11-26 19:34（台北）已合併，merge commit `49bc4b772717387b314241a11470b59b7ec91d27`。
 - 已發佈映像共同來源：`22705ce853af679fd235f32aa5bac2fe8a6fcd27`。後續驗收紀錄只改 `docs/`，不重建或覆寫既有 0.5.0 tag。下列 CI 成功結論綁定映像來源；後續文件提交仍須通過自己那一輪必要檢查才可合併。
 - [CI 45615872782](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45615872782)：映像來源 `22705ce` 的最新 attempt：`checks`、`readiness`、`Upgrade comparison / compare`、`Upgrade comparison / runtime` 全部 success；[Release train 45615873358](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45615873358) success。
 
@@ -88,7 +88,7 @@
 
 ## 發佈判斷與下一步
 
-n8n 的 API key 與可寫 QA 後端前置條件已排除；Headscale 政策讀取、完整退避，以及 Hermes 長請求隔離／名額與 Dashboard 登入快取均已補驗並清理。n8n 資料夾功能在舊新版均有相同後端限制，符合 [P9 kit](ha-p9-kit.md) 已列的社群版／授權限制，屬既有相容性限制；保留 61/62 的原始結果，不以其他通過項目取代它。三產品仍一起交付，依既有整套授權，在目前 head 必要 CI 通過後合併、同步 Store，再做 Store 安裝／升級後回歸。
+n8n 的 API key 與可寫 QA 後端前置條件已排除；Headscale 政策讀取、完整退避，以及 Hermes 長請求隔離／名額與 Dashboard 登入快取均已補驗並清理。n8n 資料夾功能在舊新版均有相同後端限制，符合 [P9 kit](ha-p9-kit.md) 已列的社群版／授權限制，屬既有相容性限制；保留 61/62 的原始結果，不以其他通過項目取代它。三產品依既有整套授權一起交付；PR head `6d128a8` 的 [CI 45805906972](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45805906972) 與 [Release train 45805907598](https://github.com/WOOWTECH/Woow_ha_mcp_addons/actions/runs/45805907598) 全數成功，已合併為 `49bc4b7`。正式 Release、Store 同步與安裝／升級後短回歸結果統一記在 [PR #140](https://github.com/WOOWTECH/Woow_ha_mcp_addons/pull/140)，與前述 GHCR 發佈及隔離乾跑分開核實。
 
 ## 驗收工具覆核
 
