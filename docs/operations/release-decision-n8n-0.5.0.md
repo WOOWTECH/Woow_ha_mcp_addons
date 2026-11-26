@@ -1,4 +1,4 @@
-# n8n 0.5.0（多帳號 train B）發佈紀錄（待實機驗收完成）
+# n8n 0.5.0（多帳號 train B）發佈紀錄（實機證據已補，尚未上架）
 
 狀態：**2026-11-26 核對：映像已推 GHCR，必要 CI 與商店乾跑已通過；實機驗收尚未全部完成，PR #140 未合併上架**。這是 `woow_mcp_n8n` 一個產品的發版：n8n 開通多帳號（預設帳號＋最多 2 個額外帳號）、版號 0.4.15 → 0.5.0，與 Hermes、Headscale 的 0.5.0 同一批（火車 B；一個升版 PR、各產品各自的 `release.yaml` run）。
 Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1 是同日 2026-11-25 的維修版，不在這一批；OpenDesign 的來源版本留在 0.4.15（商店停用、沒有映像）。
@@ -70,7 +70,7 @@ n8n 一節（負責人 2026-11-25 照建議）：**映像用 `505212c` 的功能
 | 6 | Store 升級乾跑（展示機，0.4.15 → 候選 `image.tar`；兩個 phase 都要撐過 60 秒、不退出、不重啟） | 2026-11-25 22:01（台北）完成新 head 的三產品乾跑；0.4.15 → 0.5.0，std 與官方 HA Core 2026.11.3 e2e 都 PASS，hassio network identity/IPAM 不變。 |
 | 7 | 推 GHCR（`public-release` 核准後的 publish） | 2026-11-25 已推送 `ghcr.io/woowtech/amd64-mcp-n8n:0.5.0`；run 45615960847 的 publish success，manifest digest 見下方。 |
 | 8 | PR 檢查：映像發佈後重跑 `readiness` 與 `Upgrade comparison` | 已重跑；readiness 與 Upgrade comparison 的 compare、runtime 均 success（2026-11-26 查證）。 |
-| 9 | 展示機 HAOS 驗收：多帳號項目 | 尚未開跑；缺本機與第二後端的兩把短效驗收 API key。候選容器與 Store 乾跑不能代替真後端驗收。 |
+| 9 | 展示機 HAOS 驗收：多帳號項目 | 已用展示機與 PaaS 真後端驗證多帳號、session、child bearer、區網 webhook／loopback、UC-09、面板換 origin 及一般／加密還原。舊新版 plan 均 61/62，唯一資料夾失敗為後端版本限制；PaaS 同項亦缺功能授權。回退再升級與清理均完成，原有 24 個工作流程雜湊未變、測試 key 已撤銷、14:08 釋放鎖。逐項結果見[共同紀錄](train-b-acceptance-20261126.md)，不宣稱全過。 |
 | 10 | 容量 | 只記錄、不擋發版（負責人 2026-11-23）；驗收記 T-17（閘道、子程式、容器記憶體與停機秒數） |
 | 11 | 合併上架 | 未合併；三產品必要實機驗收仍未全部完成。 |
 
