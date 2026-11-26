@@ -84,8 +84,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
-**狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。Odoo 0.5.1 的升版 PR（HM-19a）把 `odoo` 加進 `MULTI_PROFILE_PRODUCTS`；
-映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)）。LiteLLM、Nextcloud、EMQX 的 0.5.0（火車 A）也開通，各自的發佈紀錄（`release-decision-litellm-0.5.0.md`、`release-decision-nextcloud-0.5.0.md`、`release-decision-emqx-0.5.0.md`）寫明展示機真後端驗收還沒做；Hermes、n8n、Headscale 的 0.5.0（火車 B，2026-11-25 準備）也開通，各自的發佈紀錄（`release-decision-hermes-0.5.0.md`、`release-decision-n8n-0.5.0.md`、`release-decision-headscale-0.5.0.md`）是草稿，下面各產品的 HAOS 項目（Hermes 開通、n8n 開通、Headscale 開通版）還沒做；只有 OpenDesign 與 Odoo Manage 不開放。
+**狀態（2026-11-26）**：Odoo、LiteLLM、Nextcloud、EMQX、Hermes、n8n、Headscale 的來源均已開通多帳號；各產品的正式 HA 驗收結論以對應發佈紀錄和原始結果為準。Hermes、n8n、Headscale 的 0.5.0（火車 B）映像已發佈，必要 CI 與 Store 乾跑已通過；真後端驗收仍有未完成項目、尚未上架，進度與限制見 [2026-11-26 覆核](train-b-acceptance-20261126.md)。OpenDesign 與 Odoo Manage 不開放多帳號。
 
 - **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
   的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。
@@ -267,7 +266,7 @@ n8n 的升版 PR（把 `n8n` 加進 `MULTI_PROFILE_PRODUCTS`）在 HAOS 上除�
 3. **T-22 名額與沒後端的帳號**：兩個帳號各自 20 個 session（一個帳號開滿不影響另一個）；存 session 設定只重啟該帳號的子程序；沒有後端的額外帳號每支工具（含 7 個文件工具）回
    `backend_not_configured`，不起子程序。
 4. **T-04（N×N）**：各帳號建一個標記 workflow，每個帳號只在對角線看得到自己的（只對 API 成立：n8n 的 webhook 與 form 整台共用，安全審查 S-2，驗收紀錄要寫明）。
-5. **T-05、T-07、T-09、T-13、T-14**：P9 `--cross`；存政策只換該帳號的子程序 PID；刪帳號後舊 token 失效、`/tmp` 的副本也刪掉；P9 `childkill --child-port` 打 n8n 的額外帳號。
+5. **T-05、T-07、T-09、T-13、T-14**：P9 `--cross`；存政策由閘道處理，所有子程序 PID 都不變；存後端或 session 設定才只重啟該帳號的子程序（`tests/test_n8n_multi_profile.py`）；刪帳號後舊 token 失效、`/tmp` 的副本也刪掉；P9 `childkill --child-port` 打 n8n 的額外帳號。
 6. **T-17**：三個 n8n 子程序的記憶體（`CHILD_MEMORY_MIB` 是 300 MiB，只記錄）。
 7. **T-21**：還原後 `/tmp` 副本重做（還原不帶回副本）；T-23、T-29（合成憑證掃描與清理）。
 8. **UC-09 真機確認**：兩個帳號各自更新同一個 id 的 workflow，`n8n_workflow_versions` 只看得到自己的；一個帳號換到另一個後端之後，讀不到換之前的快照（審查 S-8）。
