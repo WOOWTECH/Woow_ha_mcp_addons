@@ -15,6 +15,21 @@ WRITE_CASES = {
 
 
 REFUSALS = ('Unknown tool', 'Operation not permitted', 'Invalid params')
+# A switched-on probe run sets it (container_profiles.after_backend_check) to a function that lists the requests the mock
+# backend has seen, so that a failure can name what reached it; None: a failure only says that something did.
+REACHED = None
+# False: no backend check of the gateway was seen before the denial checks (container_profiles.after_backend_check), so a
+# failure's text says so; None: not asked.
+SYNCED = None
+
+
+def reached(before):
+    """What the mock backend saw after its *before*-th request, for a failure's text: each request's method and path (never
+    a query, header or body), at most six; nothing when REACHED is not set."""
+    if REACHED is None:
+        return ''
+    text = ' (' + ', '.join(f'{method} {str(path).split("?")[0]}' for method, path in REACHED()[before:][:6]) + ')'
+    return text + ('; no backend check of the gateway was seen before the denial checks' if SYNCED is False else '')
 
 
 async def assert_denials(client, endpoint, headers, product, backend_count):
@@ -34,4 +49,4 @@ async def assert_denials(client, endpoint, headers, product, backend_count):
         error = reply.get('error') if isinstance(reply, dict) and 'result' not in reply else None
         assert (isinstance(error, dict) and error.get('code') == -32602 and error.get('message') in REFUSALS
                 and error.get('data', {}).get('tool') == name), label + ': refusal missing'
-        assert backend_count() == before, label + ': backend contacted'
+        assert backend_count() == before, label + ': backend contacted' + reached(before)

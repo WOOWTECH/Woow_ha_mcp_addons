@@ -55,6 +55,11 @@ HM-31 (plan 12.3 HM-31; contract 2.4, 5; PaaS #155): the manager holds the add-o
 counted); each profile's app charges its share (ProfileGate.budget_share, make_apps body_budget). A switched-off
 add-on's only profile has a budget of its own (make_apps makes it).
 
+PaaS #161 (contract 1.2, 2.8; not gated): the manager also holds the add-on's one table of in-flight JSON-RPC ids
+(inflight_ids.InflightIds) and gives every profile's apps the same one (make_apps inflight); the key has the profile's id,
+so the profiles do not see each other's ids. A ProfileRuntime takes inflight as a keyword-only option; left out (a
+switched-off product's lone runtime), make_apps makes a table of its own.
+
 HM-12 (plan 9 Odoo row, 12.3 HM-12; contract 3.1; DQ-05): every ProfileRuntime gives its apps stop_child (make_apps
 stop_child), which stops the child and drops its spec. Only a switched-on product's backend identity change uses it
 (gateway.make_apps: stop, one write of the connection and a new token, publish, start); switched off, nothing calls it.
@@ -84,6 +89,14 @@ secret path (origin_policy.OriginPolicy; /data/mcp/origin-policy.json, read when
 unless the product keeps its own rule (Headscale: secret_path_allowed_origins), and gives every profile's apps its
 check (make_apps origin_policy). A ProfileRuntime takes origin_policy as a keyword-only option; left out (every
 switched-off product), the secret path takes any Origin, as before.
+
+HM-25 (plan 9 n8n row, 12.3 HM-25; DQ-04, DQ-22): n8n's runtime is run_product's too (apps/n8n/run.py gives it the n8n
+adapter). A ProfileRuntime takes prepare_child, an async callable awaited with the state before the child's spec is
+built at each start the hold allows (n8n: an additional profile's own node catalog copy, made in a worker thread); the
+manager gives an additional profile's runtime its own (prepare_child(profile_id, state)), and calls profile_removed
+(profile_id) once a deleted profile's directory is gone (removed(): n8n removes the profile's catalog copy). Every
+profile's health monitor knows its profile (monitor option profile_id: an additional n8n profile without a backend has
+no child to check, profiles.documentation_child). Left out (every product of this package), nothing changes.
 """
 from __future__ import annotations
 
@@ -101,6 +114,7 @@ import stat
 import httpx
 
 from . import health as health_module, origin_policy, profiles, request_budget
+from . import inflight_ids  # PaaS #161: the add-on's table of in-flight JSON-RPC ids (contract 2.8)
 from .child_identity import ListenerGuard
 from .access import TokenAccess
 from .admin_auth import AdminAuthority
@@ -125,6 +139,7 @@ RUNTIME_OPTIONS = frozenset({'child_url', 'health', 'backend_changed', 'configur
                              'authority', 'admin_slots', 'admin_pipeline', 'profile_view', 'forward_slots',
                              'slot_busy', 'reply_secrets', 'child_blocked', 'default_endpoint', 'bootstrap_fields',
                              'body_budget', 'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice',
+                             'inflight',
                              'review_required', 'origin_policy'})
 MANAGEMENT_LISTENER_LIMIT = 64  # 8099's limit_concurrency (run_product), switched on or off
 # HM-09 (plan 5.4; C2-SF-4): after the default profile's child, at most STAGGER_SLOTS additional children start at
@@ -187,6 +202,9 @@ class ProfileRuntime:
     HM-30 (likewise): reply_worker: the profile's turn on the add-on's reply worker (reply_worker.Lane; make_apps
     reply_worker).
 
+    PaaS #161 (likewise; contract 2.8): inflight: the add-on's table of in-flight JSON-RPC ids that the profile registers
+    in (inflight_ids.InflightIds; make_apps inflight); left out, make_apps makes a table of the app's own.
+
     HM-13b (run_product, for a product not switched on that has profile data): dormant_profiles, make_apps' option of
     the same name, passed only when given.
 
@@ -196,6 +214,9 @@ class ProfileRuntime:
     HM-27 (likewise): origin_policy: the profile's check of the add-on's Origin policy (OriginPolicy.guard; make_apps
     origin_policy).
 
+    HM-25 (likewise, an additional profile's only): prepare_child: awaited with the state to start on before the spec is
+    built (n8n: the profile's catalog copy); a failure is the start's (child_start_failed).
+
     mcp_listener_limit: 8081's limit_concurrency when this runtime serves the add-on alone: 64, as before."""
     mcp_listener_limit = 64
 
@@ -203,8 +224,9 @@ class ProfileRuntime:
                  shared=None, profile_view=None, app_options=None, child_connections=CHILD_CONNECTIONS,
                  forward_slots=None, slot_busy=None, reply_secrets=None, hold=None, monitor_options=None,
                  report_blocked=False, default_endpoint=None, bootstrap_fields=None, body_budget=None,
+                 inflight=None,
                  reply_worker=None, dormant_profiles=None, restore_notice=None, review_required=None,
-                 origin_policy=None, listener_identity=False):
+                 origin_policy=None, listener_identity=False, prepare_child=None):
         if not isinstance(profile_id, str) or not PROFILE_ID.fullmatch(profile_id):
             raise ValueError('invalid profile id')
         if type(child_connections) is not int or child_connections < 1:
@@ -225,11 +247,15 @@ class ProfileRuntime:
             ('forward_slots', forward_slots), ('slot_busy', slot_busy), ('reply_secrets', reply_secrets),
             ('default_endpoint', default_endpoint), ('bootstrap_fields', bootstrap_fields),
             ('body_budget', body_budget), ('reply_worker', reply_worker),
+            ('inflight', inflight),
             ('dormant_profiles', dormant_profiles), ('restore_notice', restore_notice),
             ('review_required', review_required), ('origin_policy', origin_policy)) if value is not None}
         if hold is not None and not callable(hold):
             raise ValueError('invalid start hold')
         self.hold = hold
+        if prepare_child is not None and not callable(prepare_child):
+            raise ValueError('invalid child preparation')
+        self.prepare_child = prepare_child  # HM-25
         self.monitor_options = dict(monitor_options or {})
         if report_blocked:
             self.gateway_options['child_blocked'] = self.blocked_reason
@@ -362,6 +388,8 @@ class ProfileRuntime:
             await self.supervisor.stop()
             held = None if self.hold is None else self.hold(memory=False)
             if held is None:
+                if self.prepare_child is not None:
+                    await self.prepare_child(state)  # HM-25: n8n's catalog copy, before the spec names it
                 self.supervisor.spec = self.child_spec(state, self.store.directory, port=self.port)
                 if asked and self.hold is not None and self.supervisor.spec is not None:
                     held = self.hold(memory=True)
@@ -540,17 +568,35 @@ class ProfileManager:
     gets its own turn on it (reply_worker.lane(profile_id)), the default profile's included. Left out (tests that
     build a manager alone), every profile's replies are processed on the event loop.
 
+    PaaS #161 (contract 2.8; not gated): inflight is the add-on's one table of in-flight JSON-RPC ids
+    (inflight_ids.InflightIds), made with the manager: every profile's runtime registers its identified requests in it,
+    under its own id, so the same session id and request id of two profiles are two entries and a profile cannot fill the
+    table for the others.
+
     HM-27 (plan 8.7, 12.3 HM-27; DQ-11 (a)): origin is the add-on's one Origin policy of the secret path
     (origin_policy.OriginPolicy on the default profile's store directory), made at open() unless the product keeps its
     own rule (app_options secret_path_allowed_origins: Headscale; then None). Every profile's runtime gets its check
     (origin.guard(profile_id)); profile_admin serves the policy's route. open() reads the file once, so that one that
-    cannot be used is named in a WARNING before anything is served; nothing is written."""
+    cannot be used is named in a WARNING before anything is served; nothing is written.
+
+    HM-25 (plan 9 n8n row; DQ-04, DQ-22): prepare_child (an async callable (profile_id, state)) is given to every
+    additional profile's runtime as its own prepare_child; profile_removed (a callable (profile_id); False or an
+    exception: the cleanup failed) is called by removed() once profile_admin removed a deleted profile's directory (an
+    orphan's and a quarantine directory's too). Both come from the product's adapter (run_product.ProductAdapter: n8n's
+    catalog copies); left out, nothing is done. Every profile's monitor gets its profile id (HealthMonitor
+    profile_id)."""
 
     def __init__(self, store, product, tools, child_spec, *, port=CHILD_PORT, app_options=None, reply_worker=None,
-                 restore_notice=None):
+                 restore_notice=None, prepare_child=None, profile_removed=None):
         self.store, self.product, self.tools, self.child_spec = store, product, tools, child_spec
         self.port = port
         self.reply_worker = reply_worker
+        # HM-25: the product adapter's hooks (n8n's catalog copies), or None
+        if prepare_child is not None and not callable(prepare_child):
+            raise ValueError('invalid child preparation')
+        if profile_removed is not None and not callable(profile_removed):
+            raise ValueError('invalid profile cleanup')
+        self.prepare_child, self.profile_removed = prepare_child, profile_removed
         # HM-13c: the default profile's restore notice (restore_lock.Notice, or None) and the digests of tokens a
         # "revoke all" could not revoke (8081 refuses them: profile_router.McpDispatcher.resolve).
         self.restore_notice = restore_notice
@@ -558,6 +604,7 @@ class ProfileManager:
         self.app_options = dict(app_options or {})
         self.layout = profiles.Layout(Path(store.directory))
         self.reports = Reports()
+        self.inflight = inflight_ids.InflightIds()  # PaaS #161: every profile's in-flight JSON-RPC ids (contract 2.8)
         # HM-31: the add-on's request body budget, every profile's share of it (derived now: at startup)
         self.odoo_memory_enabled = True
         initial_limits = None
@@ -916,7 +963,7 @@ class ProfileManager:
         if not default:
             lifecycle['resources'] = EXTRA_CHILD_RESOURCES
         monitor = dict(first_check_after=self._first_check(len(self._entries)), tolerance=2, auth_backoff=AUTH_BACKOFF,
-                       own_child_only=True, log=log)
+                       own_child_only=True, log=log, profile_id=profile_id)
         if not default:
             self._labels[profile_id] = label  # HM-10: the echo's label (the index's)
         runtime = ProfileRuntime(store, self.tools, self.child_spec, port=port, profile_id=profile_id,
@@ -927,11 +974,13 @@ class ProfileManager:
                                  report_blocked=True, listener_identity=True, profile_view=partial(self.echo, profile_id),
                                  bootstrap_fields=partial(self.admin.bootstrap_fields, profile_id),
                                  default_endpoint=None if default else self.default_endpoint,
-                                 body_budget=gate.budget_share,
+                                 body_budget=gate.budget_share, inflight=self.inflight,
                                  reply_worker=None if self.reply_worker is None else self.reply_worker.lane(profile_id),
                                  restore_notice=self.restore_notice if default else None,
                                  review_required=partial(self.admin.review_required, profile_id),
-                                 origin_policy=None if self.origin is None else self.origin.guard(profile_id))
+                                 origin_policy=None if self.origin is None else self.origin.guard(profile_id),
+                                 prepare_child=(None if default or self.prepare_child is None
+                                                else partial(self.prepare_child, profile_id)))
         await runtime.open()
         entry = RegisteredProfile(profile_id, port, label, runtime, store, gate, credentials, disabled)
         self._entries[profile_id] = entry
@@ -960,6 +1009,23 @@ class ProfileManager:
         """HM-10: the index this process wrote last (profiles.write_index's view) is the one to compare with; then
         reevaluate()."""
         self.index = view
+
+    def removed(self, profile_id):
+        """HM-25: a deleted profile's directory is gone (profile_admin: a profile's, an orphan's or a quarantine
+        directory's): the product's cleanup (profile_removed; n8n removes the profile's catalog copy). A cleanup that
+        fails, by an exception or by answering False (n8n: something of the copy could not be removed; HM-25 review
+        S-2), is named once (the id's first 8 characters, never a path); the deletion stands."""
+        if self.profile_removed is None:
+            return
+        try:
+            done = self.profile_removed(profile_id)
+        except Exception as error:
+            logger.warning('multi-profile: the cleanup after deleting profile %s failed (%s)', profiles.log_id(profile_id),
+                           type(error).__name__)
+            return
+        if done is False:
+            logger.warning('multi-profile: the cleanup after deleting profile %s could not remove everything',
+                           profiles.log_id(profile_id))
 
     # ---- open and close ----
 

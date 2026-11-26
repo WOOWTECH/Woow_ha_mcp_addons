@@ -6,6 +6,12 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from test_hermes_safe_public_errors import _direct_call, _tool_text
 from test_six_hardening import Quiet, runtime, serve
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (Hermes switched on with its 0.5.0): written for the switched-off add-on, with a loopback fake backend (or
+# the order of a switched-off pipeline) that a switched-on product refuses or answers differently (HM-20, the
+# switched-on pipeline); the tests keep testing the same thing with the switch off (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 BODY_SENTINEL = "SYNTHETIC_PRIVATE_NESTED_BODY_2846"
 DEEP_409 = b"[" * 16384 + json.dumps(BODY_SENTINEL).encode() + b"]" * 16384

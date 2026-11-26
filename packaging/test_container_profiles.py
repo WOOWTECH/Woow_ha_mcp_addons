@@ -29,6 +29,7 @@ with patch.object(sys, 'argv', ['container_probe.py', 'headscale']):
 import container_profiles as stage  # noqa: E402
 import entrypoint  # noqa: E402
 from mcp_admin_core import profiles, restore_detect, restore_lock  # noqa: E402
+from mcp_admin_core.health import HEALTH_INTERVAL  # noqa: E402
 from mcp_admin_core.products import ProductStore  # noqa: E402
 from test_container_probe import Owners  # noqa: E402  (chown without root: lstat reports the owner it recorded)
 from test_container_probe import guard_lines  # noqa: E402  (the boot guard's lines, as the add-on's stderr shows them)
@@ -623,6 +624,14 @@ class RunningChildrenTests(unittest.TestCase):
         self.assertEqual(stage.child_port(['x', '--port=18001']), 18001)
         for argv in (child(), ['x', '--port'], ['x', '--port', 'abc'], ['x', '--port=']):
             self.assertIsNone(stage.child_port(argv))
+        # HM-25: n8n's children, as n8n_adapter.child_spec builds them: the default profile's names no port (3000), an
+        # additional profile's names it after its entry (and its exec wrapper's command line carries that too).
+        node = ['/usr/local/bin/node', '--require', '/opt/woow/apps/n8n/backend_policy.cjs',
+                '/opt/woow/apps/n8n/node_modules/n8n-mcp/dist/mcp/index.js']
+        self.assertIsNone(stage.child_port(node))
+        self.assertEqual(stage.child_port([*node, '--port', '18001']), 18001)
+        wrapper = ['/usr/local/bin/python', '-I', '-S', '-c', 'import os', '7', '500', '5', '-', '/usr/local/bin/node']
+        self.assertEqual(stage.child_port([*wrapper, *node, '--port', '18000']), 18000)
 
     def test_children_by_port_leave_out_the_gone_and_the_unreaped(self):
         self.spawn(10, None)  # the default child of Hermes and OpenDesign names no port
@@ -701,6 +710,47 @@ class RunningChildrenTests(unittest.TestCase):
                 self.proc.process(10, child(3000), 500, nice)
                 with self.assertRaisesRegex(AssertionError, 'default child resources changed'):
                     stage.check_resources(self.process, {3000: 10, 18000: 11}, self.proc.root)
+
+
+class N8nCatalogTests(unittest.TestCase):
+    """HM-25 (DQ-04, UC-09): each additional n8n profile's own catalog copy, as the stage checks it in the container."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp()) / 'woow-n8n-mcp'
+        self.addCleanup(shutil.rmtree, self.root.parent)
+        self.user = (os.getuid(), os.getgid())
+        self.created = [(A, 18000), (B, 18001)]
+        for profile_id, _ in self.created:
+            directory = self.root / 'profiles' / profile_id
+            directory.mkdir(mode=0o700, parents=True)
+            (directory / 'nodes.db').write_bytes(b'catalog')
+            os.chmod(directory / 'nodes.db', 0o600)
+        for directory in (self.root, self.root / 'profiles'):
+            os.chmod(directory, 0o700)
+
+    def check(self):
+        stage.check_n8n_catalogs(self.created, self.root, user=self.user)
+
+    def test_each_profile_has_a_private_copy_of_its_own(self):
+        self.check()
+
+    def test_a_missing_shared_open_or_foreign_copy_fails(self):
+        cases = {
+            'missing': lambda copy, other: copy.unlink(),
+            'shared': lambda copy, other: (copy.unlink(), os.link(other, copy)),
+            'open file': lambda copy, other: os.chmod(copy, 0o644),
+            'open directory': lambda copy, other: os.chmod(copy.parent, 0o755),
+            'a link': lambda copy, other: (copy.unlink(), copy.symlink_to(other)),
+            'empty': lambda copy, other: copy.write_bytes(b''),
+            'another profile': lambda copy, other: (copy.parent.parent / ('c' * 24)).mkdir(mode=0o700),
+            'a profile without one': lambda copy, other: shutil.rmtree(copy.parent),
+        }
+        for name, damage in cases.items():
+            with self.subTest(name):
+                self.setUp()  # a fresh tree for each case
+                damage(self.root / 'profiles' / B / 'nodes.db', self.root / 'profiles' / A / 'nodes.db')
+                with self.assertRaises((AssertionError, OSError)):
+                    self.check()
 
 
 class KillTests(unittest.TestCase):
@@ -1154,6 +1204,7 @@ class StageTests(unittest.TestCase):
                     'detect_as_runtime': record('detect', Each(*verdicts)),
                     'create_profiles': record('create', created),
                     'credentials': record('credentials', found), 'profiles_up': arecord('up', pids),
+                    'check_n8n_catalogs': record('catalogs'),
                     'check_routing': arecord('routing'), 'check_child_bearers': arecord('child bearers'),
                     'check_resources': record('resources'), 'kill_one': arecord('kill'),
                     'initialize_on': arecord('served again', (200, 'child-1', '2025-03-26')),
@@ -1277,11 +1328,190 @@ class StageTests(unittest.TestCase):
         self.assertEqual(events[-2:], ['stop', 'failed'])
         self.assert_every_start_stopped(events)
 
-    def test_n8n_is_refused_before_anything_changes(self):
-        """Review SF-2: n8n's children name their port in their environment only (HM-25)."""
-        events, _, failures, _ = self.run_stage(app='n8n')
-        self.assertEqual((events, failures), (['failed'], ["n8n's children name their port in their environment only "
-                                                           '(HM-25)']))
+    def test_n8n_runs_the_stage_and_checks_each_profile_s_catalog(self):
+        """HM-25 (review SF-2's handoff): n8n runs every step, and once every child is up each additional profile's
+        catalog copy is checked (its own, private); no other product's stage looks at n8n's catalogs."""
+        events, calls, failures, inputs = self.run_stage(app='n8n')
+        self.assertEqual(failures, [])
+        self.assertEqual(events[:9], ['marker ended', 'detect', 'create', 'credentials', 'start', 'ready', 'up',
+                                      'catalogs', 'routing'])
+        self.assertEqual(calls['catalogs'], [((inputs.created,), {})])
+        events, _, _, _ = self.run_stage(app='odoo')
+        self.assertNotIn('catalogs', events)
+
+
+class TrainBCommandLineTests(unittest.TestCase):
+    """Train B switches Hermes, n8n and Headscale on, so the stage tells their children by the port their command line names
+    (child_ports). Read here from the argv the products' own spec builders make, not from a list written for the test:
+    Hermes' default child names no port (3000), Headscale's always names one (3000 for the default profile), n8n's default
+    names none and an additional one names it after its entry; every additional child names its own port (18000, 18001).
+    The builders need their runtimes installed and a node on the path, which the packaging tests do not have: the checks
+    those need are patched, nothing else is."""
+
+    CONNECTIONS = {'hermes': {'gateway_url': 'http://hermes.invalid:8642', 'gateway_api_key': 'DUMMY'},
+                   'headscale': {'url': 'http://headscale.invalid:8080', 'api_key': 'DUMMY'}}
+
+    def argv(self, product, port, *, additional):
+        from mcp_admin_core import products
+        data = private_dir(temporary(self) / 'data')
+        directory = private_dir(private_dir(data / 'profiles') / B) if additional else data
+        if product == 'n8n':
+            import n8n_adapter
+            store = ProductStore(directory, 'n8n')
+            store.update(backend_url='http://n8n.invalid:5678', backend_key='DUMMY')
+            state = store.load()
+            store.close()
+            with patch.object(n8n_adapter.shutil, 'which', return_value='/usr/local/bin/node'), \
+                    patch.object(Path, 'is_file', lambda self: True), \
+                    patch.object(n8n_adapter, 'profile_catalog', return_value=data / 'nodes.db'), \
+                    patch.object(n8n_adapter.features, 'MULTI_PROFILE_PRODUCTS', frozenset({'n8n'})):
+                return list(n8n_adapter.child_spec(state, directory, port).argv)
+        store = ProductStore(directory, product)
+        store.update(connection=self.CONNECTIONS[product])
+        state = store.load()
+        store.close()
+        with patch.object(Path, 'is_file', lambda self: True):
+            return list(products.child_spec(state, directory, port).argv)
+
+    def test_each_product_names_its_port_the_way_the_stage_reads_it(self):
+        expected = {'hermes': (None, 18000), 'n8n': (None, 18000), 'headscale': (3000, 18000)}
+        for product, (default, additional) in expected.items():
+            with self.subTest(product=product):
+                self.assertEqual(stage.child_port(self.argv(product, 3000, additional=False)), default)
+                self.assertEqual(stage.child_port(self.argv(product, 18000, additional=True)), additional)
+
+    def test_the_default_and_two_additional_children_are_found_on_their_ports(self):
+        for product in ('hermes', 'n8n', 'headscale'):
+            with self.subTest(product=product):
+                proc = FakeProc(self)
+                proc.process(1, ['/opt/woow/.venv/bin/python', 'management_launcher.py'])
+                pids = []
+                for pid, port, additional in ((10, 3000, False), (11, 18000, True), (12, 18001, True)):
+                    proc.process(pid, self.argv(product, port, additional=additional))
+                    pids.append(str(pid))
+                found = stage.child_ports(SimpleNamespace(children=lambda process: pids), Mock(pid=1), proc.root)
+                self.assertEqual(found, {3000: 10, 18000: 11, 18001: 12})
+
+
+class TrainBProfileFixtureTests(unittest.TestCase):
+    """create_profiles (the stage's fixture step) for Hermes, n8n and Headscale: each profile is born with the default
+    profile's backend, whatever the product keeps it in (`connection`, or n8n's backend_url and backend_key), and with its
+    policy now, except Headscale's three API key writes (owner decision 2026-11-25: products.NEW_PROFILE_WITHHELD, which
+    the stage's profile-policy comparison, check_routing, must not mistake for a difference: the probe's default profile
+    holds none of them by then, because the single-profile path saved the grants of one other write tool)."""
+
+    BACKENDS = {'hermes': {'connection': {'gateway_url': 'http://hermes.invalid:8642', 'gateway_api_key': 'DUMMY'}},
+                'n8n': {'backend_url': 'http://n8n.invalid:5678', 'backend_key': 'DUMMY'},
+                'headscale': {'connection': {'url': 'http://headscale.invalid:8080', 'api_key': 'DUMMY'}}}
+    WITHHELD = ['headscale_api_keys:create', 'headscale_api_keys:expire', 'headscale_api_keys:delete']
+
+    def load(self, directory, product, **options):
+        store = ProductStore(directory, product, **options)
+        try:
+            return store.load()
+        finally:
+            store.close()
+
+    def test_two_profiles_are_born_with_the_default_profile_s_backend_and_policy(self):
+        for product, backend in self.BACKENDS.items():
+            with self.subTest(product=product):
+                data = temporary(self) / 'mcp'
+                store = ProductStore(data, product)
+                default = store.update(**backend)
+                store.close()
+                probe = SimpleNamespace(DATA=data, fixture_update=lambda data=data, product=product: self.load(data, product))
+                with patch.object(stage, 'os', Owners()):
+                    created = stage.create_profiles(probe)
+                self.assertEqual([port for _, port in created], [18000, 18001])
+                layout = profiles.Layout(data)
+                for profile_id, _ in created:
+                    state = self.load(layout.profile(profile_id), product, existing_only=True)
+                    for name in backend:
+                        self.assertEqual(getattr(state, name).model_dump() if hasattr(getattr(state, name), 'model_dump')
+                                         else getattr(state, name),
+                                         getattr(default, name).model_dump() if hasattr(getattr(default, name), 'model_dump')
+                                         else getattr(default, name))
+                    kept = [grant for grant in default.enabled_write_tools if grant not in self.WITHHELD] \
+                        if product == 'headscale' else list(default.enabled_write_tools)
+                    self.assertEqual(list(state.enabled_write_tools), kept)
+                    self.assertEqual((state.disabled, state.writes_enabled), (default.disabled, default.writes_enabled))
+                    self.assertNotIn(state.child_token, {default.child_token})
+
+    def test_headscale_s_probe_default_holds_none_of_the_withheld_writes_so_the_profiles_list_the_same_tools(self):
+        """What the probe leaves the default profile with when the stage starts (container_probe.run: the grants of the one
+        write tool WRITE_CASES names, writes_enabled off): none of the three, so a new profile copies the same policy and
+        check_routing's "every profile lists the default's tools" holds for Headscale as for the others."""
+        from mcp_admin_core import products
+        grants = products.TOOLS['headscale'][probe.WRITE_CASES['headscale'][0]].grants(probe.WRITE_CASES['headscale'][0])
+        self.assertTrue(set(grants).isdisjoint(self.WITHHELD), grants)
+        data = temporary(self) / 'mcp'
+        store = ProductStore(data, 'headscale')
+        default = store.update(connection=self.BACKENDS['headscale']['connection'], writes_enabled=False,
+                               disabled=['headscale_health', probe.WRITE_CASES['headscale'][0]], enabled_write_tools=grants)
+        store.close()
+        state = products.profile_initial_state(default, taken={default.token, default.child_token})
+        self.assertEqual((state.disabled, state.writes_enabled, list(state.enabled_write_tools)),
+                         (default.disabled, default.writes_enabled, list(default.enabled_write_tools)))
+
+
+class AfterBackendCheckTests(unittest.TestCase):
+    """The denial checks wait for the gateway's own check of the backend first (release 0.5.0 of Headscale)."""
+
+    def run_wait(self, script, **options):
+        """Run after_backend_check while *script* (a coroutine function of the probe stand-in) adds requests to its CALLS.
+        Returns (what it returned, the count when it returned, the stand-in, the REACHED and SYNCED it left)."""
+        probe = SimpleNamespace(CALLS=[])
+        async def run():
+            task = asyncio.create_task(script(probe))
+            try:
+                result = await stage.after_backend_check(probe, step=.005, **options)
+                return result, len(probe.CALLS)
+            finally:
+                await task
+        with patch.multiple(stage.denial_probe, REACHED=None, SYNCED=None):
+            result, at_return = asyncio.run(run())
+            return result, at_return, probe, stage.denial_probe.REACHED, stage.denial_probe.SYNCED
+
+    def test_it_returns_once_a_check_has_been_seen_and_is_over(self):
+        async def check(probe):
+            await asyncio.sleep(.05)
+            for _ in range(3):  # a check of a few requests close together
+                probe.CALLS.append(('GET', '/api/v1/health'))
+                await asyncio.sleep(.02)
+        result, at_return, probe, reached, synced = self.run_wait(check, patience=2, quiet=.2)
+        self.assertIs(result, True)
+        self.assertEqual(at_return, 3)  # it waited for the last request of the check
+        self.assertEqual(reached(), [('GET', '/api/v1/health')] * 3)  # and told denial_probe where to read them
+        self.assertIs(synced, True)
+
+    def test_a_check_that_never_shows_leaves_the_wait_after_the_patience(self):
+        async def nothing(probe):
+            await asyncio.sleep(0)
+        result, at_return, probe, reached, synced = self.run_wait(nothing, patience=.1, quiet=.05)
+        self.assertIs(result, False)
+        self.assertEqual(at_return, 0)
+        self.assertIs(synced, False)  # the failure text says so
+        self.assertEqual(reached(), [])
+
+    def test_requests_the_probe_made_before_the_wait_do_not_count_as_a_check(self):
+        probe = SimpleNamespace(CALLS=[('GET', '/earlier')] * 4)
+        with patch.multiple(stage.denial_probe, REACHED=None, SYNCED=None):
+            self.assertIs(asyncio.run(stage.after_backend_check(probe, patience=.1, quiet=.05, step=.005)), False)
+
+    def test_requests_that_never_stop_leave_the_wait_after_the_patience(self):
+        async def endless(probe):
+            for _ in range(60):
+                probe.CALLS.append(('GET', '/api/v1/health'))
+                await asyncio.sleep(.01)
+        result, at_return, probe, reached, synced = self.run_wait(endless, patience=.2, quiet=.05)
+        self.assertIs(result, False)  # bounded: it does not wait for a quiet that never comes
+        self.assertIs(synced, False)
+
+    def test_the_defaults_cover_the_monitor_s_interval(self):
+        """A check of the periodic kind must always show within the patience, and the quiet must outlast the close requests
+        of one check (Odoo's two)."""
+        self.assertGreater(stage.BACKEND_CHECK_SECONDS, HEALTH_INTERVAL)
+        self.assertGreaterEqual(stage.BACKEND_CHECK_QUIET, .25)
 
 
 if __name__ == '__main__':

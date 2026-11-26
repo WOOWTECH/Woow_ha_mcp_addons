@@ -31,10 +31,11 @@ BACKEND_FIELDS = {
     'headscale': {'url': IDENTITY, 'api_key': SECRET},
 }
 
-# Identity fields whose change rotates the MCP token (I11): Odoo as PaaS #131 (plan §9), Nextcloud and Hermes by
-# DQ-40 ⑩ (a). Changing only a password or key, or the first setup, never rotates. The other products' account is
-# decided by their secret (an API key), so they have none. products.IDENTITY_BOUND acts on Odoo's (HM-12) and
-# Nextcloud's (HM-22, as PaaS #154); Hermes' is HM-24's.
+# Identity fields used for token rotation (I11): Odoo as PaaS #131 (plan §9) and Nextcloud as PaaS #154 (HM-22) match
+# PaaS; Hermes retains its token on backend changes, matching PaaS (2026-11-20, HM-24: its fields stay named here as
+# data, but it is not in products.IDENTITY_BOUND). A password or key refresh alone never rotates, nor does the first
+# setup. The other products' account is decided by their secret (an API key), so they have none. Actual enforcement is
+# controlled by products.IDENTITY_BOUND, which acts on Odoo's (HM-12) and Nextcloud's (HM-22).
 TOKEN_ROTATING = {
     'odoo': ('url', 'database', 'username'),
     'nextcloud': ('url', 'username'),

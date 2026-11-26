@@ -28,6 +28,11 @@
   預設帳號、還原帶回舊憑證）、第 3 節偵測那一條補區塊層級的回滾（同日，審查 MF-2、S-9）。
   HM-22 在 I11 寫明 Nextcloud 已接上（url 照伺服器與存的路徑比）、補測試欄，第 1 節後端節流那列與第 3 節補 Nextcloud 的節流單位一條（2026-11-19）；
   依 HM-22 審查，第 3 節「換身分的寫入途中失敗」那條改成綁身分的產品（Odoo、Nextcloud），第 1 節後端節流那列補上漏的括號（同日）。
+  2026-11-20 使用者決定 Hermes 與 PaaS 一致，不受 I11 身分輪替保障（做法與測試欄），第 3 節加 Hermes Dashboard 登入限流共用一條（2026-11-19）。
+  HM-25 在第 3 節加 n8n 的兩條（webhook 網址照舊 `permissive`、每帳號的 catalog 副本不是安全邊界；2026-11-19），交 HM-25 之後的獨立安全審查；
+  依那次審查（S-2、S-7、S-8）改寫 webhook 那條（只有 DNS rebinding 打得到 loopback）並補三件、副本那條補換後端時重做、加版本歷史沒有上限一條（同日）；
+  合併 `claude-delivery` `95b7e9d`（HM-18）之後照原樣接在 HM-18 的 Bearer 那條後面（同日）。
+  HM-25 安全審查 S-1 的決定（負責人 2026-11-25：只收 loopback、區網照舊）：第 3 節 webhook 那條改寫（開通後 webhook、chat、form 的連線也拒 loopback，DNS rebinding 那條路關了）。
 - 來源：計畫 §8.1、§8.2、§8.9、§8.10（repo 外）；決策見 `decisions.md`（DQ-37 採 (a)：接受同 uid 信任邊界並寫明）。
 - 契約與差異表：`contract.md`；不變式對應的測試檔：`acceptance-matrix.md` 的測試檔登記表。
 
@@ -74,13 +79,13 @@
 | I2 一把 token 最多屬於一個帳號 | 建立一律新 token 與 child_token；全部比完；2 個以上 503 | 複製帳號目錄造成撞號 → 503、不導向 | HM-07、HM-08 |
 | I3 撤銷、輪替、刪除只影響該帳號、立即生效 | 每帳號 TokenAccess；刪除順序（先撤銷再停子程式、最後移出索引） | 負載中輪替 B，A 的串流不斷；刪除後舊 token 立即 404／401 | HM-05、HM-08、HM-10 |
 | I4 A 的請求只會被 A 的子程式執行 | 每帳號一個子程式；spawn 前 port 檢查；子程式只收自己帳號的 bearer 並驗格式；listener 檢查（條件式） | 直連 loopback：7 支 Python 子程式不帶、帶錯、帶別帳號、兩個標頭、空字串都 401；n8n（n8n-mcp 維持現狀）不帶、帶錯、帶別帳號、空字串 401，另外收下三種都要先有自己 child token 的寫法，沒有越權（`contract.md` 第 9 節 #37 的註）；別的程序先綁 port → 不轉發 | HM-06、HM-09、HM-15 |
-| I5 新帳號不借用別人的身分、權限不比預設寬 | 連線全空；複製預設帳號當下的政策（DQ-02 採 (a)） | 新帳號呼叫工具回 `backend_not_configured`；政策等於預設當下值 | HM-07、HM-10 |
+| I5 新帳號不借用別人的身分、權限不比預設寬 | 連線全空；複製預設帳號當下的政策（DQ-02 採 (a)；Headscale 不複製 `headscale_api_keys` 的 create、expire、delete，2026-11-25） | 新帳號呼叫工具回 `backend_not_configured`；政策等於預設當下值（Headscale：少那三個寫入） | HM-07、HM-10、HM-26 |
 | I6 預設帳號資料不被多帳號功能寫入 | 索引與帳號目錄放旁邊 | 啟動、列清單、建刪帳號前後預設 `state.json` SHA-256 不變 | HM-01、HM-07 |
 | I7 紀錄不含 token、帳號名稱、路徑 | 新 log 只寫 id 前 8 碼、port、pid；遮罩不比 pin 版 PaaS 差 | 測試期間收集所有 log record，掃 token 與名稱 0 命中；HM-27：Origin 的紀錄只有判定、模式、原因與照 PaaS 規則呈現的來源（可印 ASCII、120 字內），惡意值換不了行、偽造不了欄位、帶不出 token、路徑或 query（`tests/test_origin_policy.py`） | HM-01、HM-02、各片 |
 | **I8 一個帳號（含預設帳號）的持有人拖垮不了其他帳號** | 每帳號准入、轉送名額、串流上限、待送回覆額度、httpx client；請求內容位元組預算的每帳號份額（全 add-on 一份預算，一個帳號最多用到自己的份額；HM-31，照 PaaS #155）與 JSON 結構守門（不受開關管）；回覆處理依帳號輪流；健康檢查連兩次失敗才判壞 | S5、S6；預設帳號送 12 條慢速 16 MiB body＋大回覆時，閒置的額外帳號仍拿到正常結果（不是 `-32003`；帶 id 的忙碌回應也是 200）、閘道持有的不超過它的份額；一個帳號用滿份額，另一個帳號的大請求照樣通過（`tests/test_request_budget_gateway.py`）；宣告 10 位元組、實際用 chunked 送 10 MiB 的請求照樣被份額切斷、停住照樣 408（開關關與開、真的 h11 socket；HM-31 審查 MF-1）；子程式先送 SSE 標頭、回覆晚到時，閘道持有的轉送內容不超過該帳號的份額（ASCII、中文、emoji）；一個帳號的佇列滿了，別的帳號的請求照樣排隊、被服務（兩個方向，`tests/test_gateway_queue_ha.py`；HM-14 審查 MF-1）；CPU 飢餓（回覆；量整段：A 的請求同時開始、回覆還在讀進來到全部處理完，D3；請求端見第 3 節）；十二種形狀（第二輪審查 MF-1 補了 ID 清單、小整數、整數與浮點數的時間序列、浮點數清單等沒有物件的數字陣列）與兩種事件的真實 8 MiB 回覆在工作執行緒分段處理，迴圈單次停頓 ≤50 ms、位元組和迴圈內處理相同（D1）；扁平陣列在解析、遮罩、成本計算每 1,024 個數字或成員喘一次（計數型）；沒有物件也沒有數字的陣列（短字串清單等）解析仍是一次 C 呼叫，本機約 0.1 秒，只印不斷言（使用者 2026-11-17 定 Q1：接受，HM-19c 實測再定；第 3 節）；秘密放在切段邊界、長字串、3 萬列與 5 千個鍵裡，工作執行緒照樣全部遮掉、和迴圈內處理逐位元相同（第二輪審查 MF-3）；慢讀 RSS（ASCII、emoji；`contract.md` 第 6 節）；預設帳號與額外帳號的待送回覆額度各自擋自己的 tools/call。待送回覆額度是軟上限：已轉送的回覆一律交出，一次湧入時帳號最多再持有轉送名額個回覆（每個原始最多 8 MiB、帳上照跳脫後最多 24 MiB 扣；使用者 2026-11-16 接受，D2；`contract.md` 第 5、6 節）。這個上界靠 JSON 回覆在放掉轉送名額之前就扣、排隊的 tools/call 拿到名額之後再查一次（第二輪審查 MF-2；縮小額度的一次湧入測試：JSON 最多轉送名額＋1 個、帳上不超過上限＋名額×一個回覆）。只在請求層成立：8081 外框的連線數與全 add-on 的位元組預算是全 add-on 共用（第 3 節） | HM-08、HM-14、HM-30、HM-31、HM-19c |
 | **I9 還原不讓任何帳號的舊 token 復活**（涵蓋：含 HM-13 的版本以後做的備份；預設帳號依 DQ-03） | 兩訊號偵測；以磁碟為準撤銷；讀不到就隔離；獨立驗證；不受開關管。HM-13b：開機守門在任何子程式與 listener 之前（`restore_lock.guard`，`contract.md` 第 1.3 節），沒做完就不啟動、下次重做。HM-13c：守門撤銷的帳號在核對前不能重發（`token/rotate` 409 `restore_review_required`；還原紀錄讀不到時 503，一律擋）；全部撤銷的路由拿完所有鎖才做、在工作執行緒跑，撤銷了的重起子程式，沒做完時沒撤銷成功的帳號撤銷前的權杖在 8081 回 503；還原時每個收據檔都換新（備份時沒有的也寫），備份後才做、隨還原消失的操作 id 回 410。HM-13c 審查修正：休眠開機寫的紀錄不丟掉還在等的核對（預設帳號那一列、還原段落），上一份讀不到就不改它（MF-1）；紀錄讀不到時全部撤銷做完重寫（S-2）；全部撤銷遇到意外的例外也當結果未知、每個舊權杖 503（S-4） | root 擁有的還原樹；sentinel 不符；每一步中途當掉重做（`tests/test_restore_lock.py` 在每一個改磁碟的呼叫之前與之後各停一次）；讀不到的 state 之後任何開機都不被路由；磁碟滿；獨立驗證不過不開 listener；`profiles/` 是目錄卻一時列不出來時不啟動、標記留著，全部撤銷也不算做完（審查 MF-2）；C1-M1 攻擊序（`tests/test_dormant_profiles.py`）；UC-24 三種版本混搭；sentinel 不被任何 chmod／chown 碰到（呼叫點清單＋執行時記錄）。HM-13c（`tests/test_restore_review.py`）：核對前 rotate 409、什麼都不寫，核對後才發、8081 服務新權杖；核對前 HM-12 的換身分換 token 也 409、子程式不停、什麼都不寫，核對後照常換（審查 S-3，開關關時照今天）；紀錄讀不到一律擋；全部撤銷第 k 個失敗（k＝預設帳號、B、C）時 409＋逐帳號結果、失敗帳號的舊權杖在 8081 回 503（密鑰網址與 Bearer），之後做完的全部撤銷解除；標記存不下與沒收尾兩種；在工作執行緒跑、8081 照常回答；每條新路由每一種等待之後的第二次角色檢查；索引不能用時紀錄照讀、核對等索引隔離；還原後備份時沒有收據檔的帳號與索引旁也回 410；面板 `restore-review.spec.mjs`。審查修正：還原後沒核對預設帳號、休眠開機改寫紀錄，重新開通後預設帳號仍 409（審查實驗 X1）；休眠紀錄只保留還在等的列與還原段落（三種核對情況）；休眠開機不改讀不到的紀錄；全部撤銷重建讀不到的紀錄；全部撤銷遇到意外的例外 409、舊權杖 503；讀得到的隔離目錄刪除前先撤銷、抹憑證；開通而沒有帳號資料時逐步中斷也一定留下標記或提示 | HM-13a、HM-13b、HM-13c |
 | **I10 先驗 HA 管理員，才做任何看帳號狀態的判斷；非管理員在任何帳號狀態下拿到逐位元相同的 403** | 共用管線，角色檢查在第 ⑥ 步（`contract.md` 第 3.2 節） | 路由表自動產生的否定矩陣 | HM-10 |
-| I11 Odoo token 永遠綁一個後端身分（DQ-40 ⑩ 採用：擴到 Nextcloud、Hermes 的使用者欄位；Nextcloud 的 url、username 由 HM-22 接上，url 照它指的伺服器與存的路徑比） | 換身分欄位（含清空）時同一次寫入換 token；先停舊子程式、寫入、發布、再起新子程式（新 token 可能在磁碟上時，沒有子程式跑在舊憑證上）；開通後改網址來源要重填秘密（DQ-40 ⑨） | 舊 token 兩條入口都失效（含分派器的路由與排隊中的請求）；只換密碼、初次設定不換；停不下、store 拒絕寫入、新檔寫不出來、取代 state 檔途中失敗、新子程式起不來各自的故障注入；新 token 在新子程式起來前碰不到任何子程式；A 的審批 token 在 B 的真子程式被拒（兩帳號 state 除了 token 都相同的對照）（`tests/test_odoo_identity_rotation.py`、`test_odoo_multi_profile.py`、`test_new_origin_secret.py`）；Nextcloud：換 url（另一台伺服器、另一條路徑，含大小寫；貼上的頁面路徑先正規化）或 username 換 token、同一台伺服器的寫法（scheme、host 大小寫、預設 port、結尾斜線）不換、只換 app password 不換、只換該帳號，兩個真的 Nextcloud 子程式換帳號後新 token 只讀到新使用者的家目錄（`tests/test_nextcloud_multi_profile.py`） | HM-12、HM-22（HM-24） |
+| I11 Odoo token 永遠綁一個後端身分（DQ-40 ⑩ 採用：擴到 Nextcloud、Hermes 的使用者欄位；Nextcloud 的 url、username 由 HM-22 接上，url 照它指的伺服器與存的路徑比；Hermes 2026-11-20 使用者定案與 PaaS 一致、不輪替，HM-24） | 換身分欄位（含清空）時同一次寫入換 token；先停舊子程式、寫入、發布、再起新子程式（新 token 可能在磁碟上時，沒有子程式跑在舊憑證上）；開通後改網址來源要重填秘密（DQ-40 ⑨） | 舊 token 兩條入口都失效（含分派器的路由與排隊中的請求）；只換密碼、初次設定不換；停不下、store 拒絕寫入、新檔寫不出來、取代 state 檔途中失敗、新子程式起不來各自的故障注入；新 token 在新子程式起來前碰不到任何子程式；A 的審批 token 在 B 的真子程式被拒（兩帳號 state 除了 token 都相同的對照）（`tests/test_odoo_identity_rotation.py`、`test_odoo_multi_profile.py`、`test_new_origin_secret.py`）；Nextcloud：換 url（另一台伺服器、另一條路徑，含大小寫；貼上的頁面路徑先正規化）或 username 換 token、同一台伺服器的寫法（scheme、host 大小寫、預設 port、結尾斜線）不換、只換 app password 不換、只換該帳號，兩個真的 Nextcloud 子程式換帳號後新 token 只讀到新使用者的家目錄（`tests/test_nextcloud_multi_profile.py`）；Hermes 與 PaaS 一樣不因身分變更輪替，舊 token 持有人仍能存取新後端，管理員需明確輪替或撤銷（`tests/test_hermes_multi_profile.py`） | HM-12、HM-22、HM-24 |
 | I12 開通後沒明確選帳號的管理請求不會落到任何帳號 | 缺 `X-MCP-Profile` 回 400；回聲比對 | 缺標頭的 reveal、rotate、bootstrap 都 400（管理員）；回聲不符面板不顯示 | HM-10、HM-11 |
 | **I13 沒開通的產品（含緊急關閉版）不讓休眠帳號的 token 可用** | 休眠處理：開機在 listener 前撤銷額外帳號與孤兒（已撤銷的不動；開不了的隔離）；bootstrap 只多 `dormant_profiles` | 開關關＋有帳號資料 → 全部撤銷、之後的開機不再寫任何東西；開關關＋帳號資料＋標記 → 全撤銷才刪標記；重新開通後 token 仍是撤銷的（`tests/test_dormant_profiles.py`）；store 說撤銷了、磁碟沒變，或 `profiles/` 一時列不出來時這次開機停下（審查 S-2、MF-2）；重新開通後休眠時撤銷的帳號未核對前不能重發、預設帳號不用等（HM-13c，`tests/test_restore_review.py`）；休眠前就撤銷的帳號（`already_revoked`）重新開通後也要核對（審查 S-1）；沒開通時沒有任何 HM-13c 的管理路由（`test_switched_off_the_new_routes_are_unknown`） | HM-13b、HM-13c |
 
@@ -237,6 +242,22 @@
   主機名與 Supervisor bridge 位址不在規則裡：從那裡只連得到 8081 與 8099（子程式只聽 127.0.0.1）；8081 要 token，8099 只收
   `172.30.32.2`，所以最多是把這個帳號的後端憑證送進自己的閘道或面板、拿到 401、403 或 404。要連 bridge 位址一起擋，是另一個
   決定，不在 HM-20。
+- Headscale（HM-26，開通後）：API key 是整台 Headscale 的管理權限，Headscale 沒有 key 層級的權限。同一台的帳號不論用幾把 key，彼此
+  都只靠工具政策分權：每個子程式每次呼叫讀自己帳號的 state（`HEADSCALE_MCP_STATE_PATH`）；同一把 key 時，網址與 key 的比對分不出兩個帳號的
+  state（FM-88），所以子程式另外比對 state 的 child token 與自己的 `WOOW_MCP_CHILD_TOKEN`，不符就每個呼叫 fail closed（HM-26 安全審查
+  S-1，不受開關管）：接錯別的帳號的 state、child token 換了而子程式沒重起，都擋得下（能拿舊 child token 的只有容器裡同 uid 的程序，在 DQ-37
+  的已知限制內）。`tests/test_headscale_multi_profile.py` 守住每個子程式只拿到自己帳號的路徑、伺服器、key 與 child token，照自己帳號的政策，
+  直連也一樣。
+- 工具政策只在受限的帳號拒絕 `headscale_api_keys` 的 create、expire、delete 時才算數（HM-26 安全審查 M-1）。create（`reveal_once`）
+  把一把整台管理權限的新 key 明文交給持有這個帳號 token 的人，在 add-on 外也能用，任何工具政策、「全部撤銷」、還原守門、刪帳號都撤不到；
+  expire、delete 能停掉別的帳號的 key。同理，`headscale_preauth_keys` create 發出的金鑰能讓任何裝置加入 tailnet。新安裝這些寫入 grant
+  全開，預設帳號與已存在的帳號照舊。新建的額外帳號照 DQ-02 複製預設帳號當下的政策，唯獨 `headscale_api_keys` 的 create、expire、delete 不複製
+  （負責人 2026-11-25；`products.NEW_PROFILE_WITHHELD`，`contract.md` §9 #144）：新帳號預設拿不到整台管理 key、也停不掉別人的 key，管理員在它的工具權限頁
+  開啟後，上面三點對那個帳號才成立。`headscale_preauth_keys` 與其他寫入照複製，管理員要自己收緊。
+- 同 uid 被攻破的子程式讀得到每個帳號的 key（第 1 節），等於拿到每一台設定過的 Headscale 的完整管理權限。建議每個帳號各一把 key（DQ-26
+  建議，不強制）：可以只撤銷那一把（接錯 state 由 child token 的核對擋下，和 key 是否共用無關）；共用一把時，在 Headscale 撤銷它會同時停掉共用的帳號。
+- 事故處理（第 4 節）第 2 步對 Headscale：在每一台 Headscale 列出所有 API key（`headscale apikeys list`），撤銷這個 add-on 用過的與不認得的
+  每一把（經 `headscale_api_keys create` 發出的 key 不在任何帳號的 state 裡），再到面板逐帳號存新 key。
 
 - 密鑰網址的 Origin 清單（HM-27，開通後）預設 report-only：**不擋任何請求**，要擋得在面板切 enforce。一行 would_deny 只說明有人送了
   這個 Origin，不證明是誰：任何持有 token 的用戶端都能送任意 Origin（PaaS 同）。切 enforce 前先看紀錄，把需要的來源加入清單。
@@ -268,6 +289,34 @@
   單位要在 HAOS 驗收時用真的 Nextcloud 確認（HM-22 筆記）；是來源位址的話，DOCS 要寫明「一個帳號密碼錯，同一台 Nextcloud 的
   其他帳號也可能變慢」。
 - Bearer `/mcp` 帶 Origin 一律 403（DQ-11 第二問待 S14；HM-03b 沒做，交 HM-19b）：Claude.ai 若送 Origin，就只能用密鑰網址（網址進代理與 tunnel log）。
+- Hermes Dashboard 的登入限流是全部帳號共用的（HM-24；`contract.md` 第 9 節 #135）：Hermes Agent 對每個來源位址每 60 秒只放 10 次登入（成功也算），而同一個 add-on 的每個帳號子程式都從同一個位址連線（Dashboard 在別台機器時看到的是 HA 主機的位址，同一台 HA 上別的程式也算在內）。每個子程式各自登入、cookie 快取 10 分鐘、401 時重登一次，Hermes 最多 4 個子程式，平常碰不到上限；子程式反覆重啟、或同一位址還有別的程式在登入時才會碰到：登入回 429，子程式退避 1、2 秒重試兩次，仍 429 的那次工具呼叫失敗（`BACKEND_HTTP_ERROR status=429`），下一次呼叫再試。PaaS 同一個 Pod 的子程式與管理端代理也共用一個位址。
+- n8n 的 webhook、chat、form 網址的驗證照舊是 `permissive`（契約第 9 節 #90），但開通後這三種用戶端的**連線**也拒 loopback（HM-25 安全審查 S-1；
+  負責人 2026-11-25 採用：只收本機、區網照舊）：n8n-mcp 2.96.2 把三者的連線都建在 `SSRFProtection.createPinnedAgents` 上，`backend_policy.cjs`
+  在那裡檢查它拿到的每個位址，任何一個是 127.0.0.0/8、::1、0.0.0.0/8、::（IPv4-mapped 含）就整組拒絕、不連線，錯誤文字同 API 與官方 MCP
+  端點的拒絕（不帶位址）；沒開通時完全照今天。網址一律是設定的 n8n 網址（去掉 `/api/v1`）加 `/webhook/…`、`/form/…`（n8n-mcp 2.96.2
+  `triggers/handlers/base-handler.js` 的 `getBaseUrl`；`x-n8n-url` 不轉送，換不掉），`n8n_test_workflow` 每次觸發前先經 API 讀那個 workflow
+  （`mcp/handlers-n8n-manager.js:1285`），開通後這次拒 loopback（#39，HM-20）。S-1 以前只有 DNS rebinding 打得到 loopback：設定的名稱在 API 那次
+  查到公開位址、在 webhook 那次查到 127.0.0.1，port 是設定網址的 port（路徑可以用 `..` 走到同一個 origin 的任何路徑，方法、標頭與內容由持有人定，
+  n8n 的 API key 不會跟著送）；現在這條路關了，webhook、chat、form 到不了這個 add-on 的子程式 port（18000 起、3000）。區網與公開位址照舊連得到
+  （permissive 保留的功能：`n8n_test_workflow` 要打 HA 網路上的 n8n），包括 add-on 自己的 bridge 位址：從那裡只連得到 8081（要某個帳號的 token）
+  與 8099（只收 `172.30.32.2`，來源不符一律 403），子程式只聽 127.0.0.1（見上面「後端網址拒絕 loopback」那條）。另外三件（HM-25 獨立安全審查 S-2）：
+  - n8n-mcp 的 `/` 與 `/health` 不驗 bearer（`http-server-single-session.js:803,832`）：loopback 上任何來源都讀得到它的版本與 uptime
+    （S-1 之後，token 持有人經 webhook 碰不到）。
+  - n8n-mcp 的登入限流（`authLimiter`）以來源 IP 計、15 分鐘 20 次失敗（`AUTH_RATE_LIMIT_MAX` 沒設，HA 現值；PaaS 是 1000，#62）：
+    閘道的請求都從 127.0.0.1 來，所以對一個子程式的 port 送 20 次錯的 bearer，那個子程式對閘道也回 429 十五分鐘（跨帳號的 DoS；
+    S-1 以前從別帳號只有上面那條 DNS rebinding 做得到，拿不到任何憑證；現在那條路關了）。
+  - 兩個帳號接同一台 n8n 時，n8n 的 webhook、form 是整台共用、不看 API key：A 的持有人可以用自己看得到的 workflow 帶 B 的 webhook
+    路徑觸發 B 的 workflow。HAOS 驗收 T-04「標記只在對角線」只對 API 成立；要 webhook 也分開，就每個帳號接自己的 n8n，或 webhook
+    節點加 header 驗證（寫進 DOCS 草稿，`unreleased-changes.md` 第 3.2 節）。
+- n8n 每個額外帳號的 `nodes.db` 副本（`/tmp/woow-n8n-mcp/profiles/<id>/`）只讓 n8n-mcp 自己的版本歷史分開（UC-09：單一租戶模式的
+  `instance_id` 一律是空字串，共用一份就會互看、互刪、互相回滾），不是安全邊界：同 uid 的子程式讀寫得到每一份（DQ-37）。副本不在
+  `/data`、不進備份，容器重建或管理程序重啟後重做（版本歷史跟著清掉，同預設帳號今天）；額外帳號換了後端（網址或 key）時也重做，
+  帳號交給另一個後端的持有人時讀不到前一個後端的快照（HM-25 安全審查 S-8）。預設帳號的副本照舊只在管理程序啟動時重做：預設帳號換
+  後端之後，前一個後端的版本快照要到 add-on 重啟才清掉（今天就是如此）。
+- n8n 的版本歷史沒有大小上限（HM-25 安全審查 S-7）：n8n-mcp 每次更新 workflow 自動存一版、每個 workflow 留 10 版，workflow 的數量由
+  持有人在自己的後端決定。`/tmp` 不是 tmpfs，在容器的可寫層上（HM-03b 的 UC-03 實測），也就是 HAOS 的資料分割區：任一帳號的持有人都能
+  讓自己的副本長大，佔用其他帳號與主機的磁碟。預設帳號今天就是如此，不是 HM-25 造成的；寫進 DOCS 的已知限制（草稿在
+  `unreleased-changes.md` 第 3.2 節）。上限要不要做、多大、超過時清掉歷史重做副本，交 n8n 升版前由使用者定。
 
 ## 4. 事故處理：懷疑某個子程式或帳號被攻破（計畫 §8.10；HM-18 已寫進 `docs/operations/guide.md`）
 

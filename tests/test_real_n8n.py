@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
-from mcp_admin_core import VERSION
+from mcp_admin_core import version_for_product
 from mcp_admin_core.products import ProductStore
 from mcp_admin_core.health import protocol_reply
 
@@ -71,7 +71,10 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
     admin_port, mcp_port = draw_public_ports(2)
     env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT / "packages/mcp-admin-core") + ":" + str(ROOT / "apps/n8n")}
     runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
-    code = 'import run; ' + runner.code('run') + 'run.main()'
+    # Train B: the subprocess reads the repository's switch, not a fixture's, so it sets the switched-off mode this test is
+    # about itself (a switched-on n8n refuses the loopback fake workflow API below: HM-20; tests/switch_modes.py).
+    code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset()\n'
+            'import run; ' + runner.code('run') + 'run.main()')
     runner.release()
     process = await asyncio.create_subprocess_exec(sys.executable, '-c', code,
         "--data", str(data), "--host", "127.0.0.1", "--admin-port", str(admin_port), "--mcp-port", str(mcp_port),
@@ -98,7 +101,8 @@ async def test_real_tcp_runtime_documentation_session_and_shutdown(tmp_path, fak
                         pass
                     await asyncio.sleep(0.2)
             # 0.1.8 (F6): the add-on's identity, not n8n-mcp's ("n8n-documentation-mcp" 2.96.2); no instructions.
-            assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": VERSION} and "instructions" not in result
+            # HM-25: n8n's runtime is run_product's, which gives the add-on's release version (version_for_product).
+            assert result["serverInfo"] == {"name": "woow-mcp-n8n", "version": version_for_product("n8n")} and "instructions" not in result
             assert result["capabilities"] == {"tools": {}}
             assert session
             headers["Mcp-Session-Id"] = session

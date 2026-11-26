@@ -16,9 +16,9 @@ KNOWN_PRODUCTS = frozenset({'n8n', 'odoo', 'odoo-manage', 'hermes', 'opendesign'
                             'headscale'})
 
 # Odoo has additional profiles from its 0.5.0 release (R1, HM-19a); EMQX, LiteLLM and Nextcloud from theirs (train A,
-# 0.5.0); every other product is still switched off. OpenDesign and Odoo Manage never will be (DQ-28;
-# profiles.supports_profiles).
-MULTI_PROFILE_PRODUCTS: frozenset[str] = frozenset({'odoo', 'emqx', 'litellm', 'nextcloud'})
+# 0.5.0); Hermes, n8n and Headscale from theirs (train B, 0.5.0). OpenDesign and Odoo Manage are switched off and never
+# will be (DQ-28; profiles.supports_profiles).
+MULTI_PROFILE_PRODUCTS: frozenset[str] = frozenset({'odoo', 'emqx', 'litellm', 'nextcloud', 'hermes', 'n8n', 'headscale'})
 
 
 def enabled(product: str) -> bool:

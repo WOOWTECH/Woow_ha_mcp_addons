@@ -17,8 +17,8 @@ what that needs plus 25% when it is lower (never above the hard limit, no privil
 read or raised enough, the add-on degrades instead of guessing: no additional profile is served, the outer bound stays
 64, and one WARNING says so (HM-03a confirms the HAOS values).
 
-n8n keeps its own runtime (apps/n8n/run.py) until HM-25; OpenDesign and Odoo Manage have no additional profiles
-(DQ-28) and are never switched on.
+HM-25: n8n's runtime is run_product's too (apps/n8n/run.py runs it with the n8n adapter), so every test here runs for
+n8n as well; OpenDesign and Odoo Manage have no additional profiles (DQ-28) and are never switched on.
 """
 import hashlib
 import hmac
@@ -38,7 +38,7 @@ from test_single_profile_golden import (ACCEPT, BEARER_REQUIRED, GENUINE_CLIENT,
 from test_upgrade_zero_rewrite import tree_facts
 
 pytestmark = pytest.mark.usefixtures('log_scan')
-RUN_PRODUCTS = [product for product in golden.PRODUCTS if product != 'n8n']
+RUN_PRODUCTS = list(golden.PRODUCTS)  # HM-25: n8n's runtime is run_product's too
 B = 'a' * 24
 
 

@@ -263,12 +263,13 @@ async def test_a_legitimate_13_mib_upload_passes_with_the_default_budget(tmp_pat
 
 async def test_a_flood_of_large_requests_never_holds_more_than_the_budget(tmp_path, monkeypatch):
     """20 requests of 4 MiB at once (one body, shared): what the gateway holds never passes 16 MiB; some reach the
-    child, the others are answered busy under their id; all of it goes back."""
+    child, the others are answered busy under their id; all of it goes back. Each request has a session of its own: a
+    JSON-RPC id may be in flight once in a session (PaaS #161; tests/test_inflight_ids.py), and this one body has one id."""
     limits(monkeypatch, 16, 16)
     child = Child()
     async with single(tmp_path, child) as gw:
         body = encoded(held_call(100, 4 * MiB))
-        tasks = [asyncio.create_task(gw.post(body)) for _ in range(20)]
+        tasks = [asyncio.create_task(gw.post(body, **{'Mcp-Session-Id': f'{SESSION}-{number}'})) for number in range(20)]
         await until(lambda: child.held >= 3, 30)
         await asyncio.sleep(.3)
         child.release.set()
@@ -499,19 +500,20 @@ async def test_make_apps_takes_only_a_share_of_a_budget_beside_hm09s_and_hm10s_o
     those three refuses what is not its own.
     HM-13b's dormant_profiles, merged after HM-31, HM-12 and HM-30, follows reply_worker (keyword-only, None
     by default, as each of these), and HM-13c's restore_notice and review_required follow that one (the same);
-    HM-27's origin_policy, merged after HM-13c, comes last (the same)."""
+    HM-27's origin_policy, merged after HM-13c, and PaaS #161's inflight (the in-flight JSON-RPC id table, merged
+    after HM-27; tests/test_inflight_ids.py) come last (the same)."""
     import inspect
 
     parameters = inspect.signature(gateway.make_apps).parameters
     # HM-12's stop_child comes after it (tests/test_odoo_identity_rotation.py checks that option),
     # then HM-30's reply_worker (HM-30 rebased after HM-12), then HM-13b's dormant_profiles (merged after both), then
     # HM-13c's restore_notice and review_required, then HM-27's origin_policy (merged after HM-13c;
-    # tests/test_origin_policy.py)
-    assert list(parameters)[-10:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
+    # tests/test_origin_policy.py), then PaaS #161's inflight
+    assert list(parameters)[-11:] == ['child_blocked', 'default_endpoint', 'bootstrap_fields', 'body_budget',
                                       'stop_child', 'reply_worker', 'dormant_profiles', 'restore_notice',
-                                      'review_required', 'origin_policy']
+                                      'review_required', 'origin_policy', 'inflight']
     assert parameters['body_budget'].kind is inspect.Parameter.KEYWORD_ONLY and parameters['body_budget'].default is None
-    for name in ('dormant_profiles', 'restore_notice', 'review_required', 'origin_policy'):
+    for name in ('dormant_profiles', 'restore_notice', 'review_required', 'origin_policy', 'inflight'):
         assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY and parameters[name].default is None
     limits(monkeypatch, 16, 16)
     configure(tmp_path / 'odoo', 'odoo')

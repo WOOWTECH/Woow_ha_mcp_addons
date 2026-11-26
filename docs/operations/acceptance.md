@@ -84,8 +84,7 @@ session URL、備份或私人拓樸。LOCAL/MOCK、CONTAINER/MOCK、HA、PUBLIC 
 
 ## 多帳號驗收（T-01～T-29 的 HA 版；HM-16）
 
-**狀態（2026-11-19）：工具備好；有一次發版前預驗，還沒有 HM-19b 的正式驗收**。Odoo 0.5.1 的升版 PR（HM-19a）把 `odoo` 加進 `MULTI_PROFILE_PRODUCTS`；
-映像還沒建置，HM-19b 等它推上 GHCR 之後做（[0.5.1 發佈紀錄](release-decision-odoo-0.5.1.md)）。LiteLLM、Nextcloud、EMQX 的 0.5.0（火車 A）也開通，各自的發佈紀錄（`release-decision-litellm-0.5.0.md`、`release-decision-nextcloud-0.5.0.md`、`release-decision-emqx-0.5.0.md`）寫明展示機真後端驗收還沒做；其他產品還沒開通。
+**狀態（2026-11-26）**：Odoo、LiteLLM、Nextcloud、EMQX、Hermes、n8n、Headscale 的來源均已開通多帳號；各產品的正式 HA 驗收結論以對應發佈紀錄和原始結果為準。Hermes、n8n、Headscale 的 0.5.0（火車 B）映像已發佈，必要 CI 與 Store 乾跑已通過；真後端驗收仍有未完成項目、尚未上架，進度與限制見 [2026-11-26 覆核](train-b-acceptance-20261126.md)。OpenDesign 與 Odoo Manage 不開放多帳號。
 
 - **發版前預驗（2026-11-19）**：在負責人指定的展示機上，用拋棄式的本機 add-on（以已發佈的 Odoo 0.4.14 映像為底、換上 `claude-delivery` `fcd0b22`
   的程式，開關關與開各一份）跑了 Odoo 多帳號實測，結果見 [Odoo 多帳號發版前預驗](ha-test-odoo-multiprofile-early.md)。
@@ -119,8 +118,9 @@ sentinel 是執行期自己建的而且沒被動過、子程式跑過後 `/data/
 寫還原紀錄（兩個訊號、每個帳號都撤銷）；每個帳號的 token 是 null、child token 換新、其他欄位與索引不變；每個子程式重新起來；
 還原前的 token 兩種接法都被拒（Bearer 401、密鑰網址 404）、每個子程式拒絕還原前的 child token；停機後 sentinel 已重建、
 守門留下的樹仍符合修復規則；這次啟動的 entrypoint `re-owned N` 一行、每個帳號的 `REVOKED` 一行、`REVOKED_NOTICE` 一行，
-守門沒有別的行（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n 開通（HM-25）前這個階段不收 n8n：
-n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個帳號的。
+守門沒有別的行（log 收到沒有名字的暫存檔，不印）。這些是容器裡的模擬，不是 HA 證據。n8n（HM-25 起）：額外帳號的子程式在命令列
+寫 `--port N`（預設帳號的沒寫，就是 3000），這個階段照樣認得出每個帳號的子程式；另外檢查每個額外帳號讀自己的 catalog 副本
+（`/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`，0600、目錄 0700、每帳號一份）。
 
 下表「怎麼驗」寫每一層實際驗哪幾項；沒寫到的項目只在 LOCAL 驗。「Odoo 首發」照計畫 §10.4：是＝Odoo 首發（HM-19b）前要過。
 
@@ -147,7 +147,7 @@ n8n 子程式的 port 只在環境變數裡，認不出哪個子程式是哪個�
 | T-19 | 背壓與每帳號名額 | LOCAL | 轉送名額、准入、位元組預算、GET 串流照契約第 2.4、5 節；CPU 飢餓下閒置帳號健康不逾時 | 是 |
 | T-20 | 升級、回退、再升級 | STORE：`seed`／`verify`（只驗升級那一段）；HA：升級 → 還原升級前備份 → 再升級 | 升級：預設 token、兩條網址、`state.json` 位元不變。回退＝還原升級前備份：預設 token＝備份當時的值、額外帳號消失、沒有撤銷。再升級：額外帳號不存在、預設不變；照文件按「全部撤銷」並確認。回退與再升級只在 HA 驗 | 是 |
 | T-21 | 備份還原 | LOCAL：全部；CONTAINER：單帳號還原（守門刪標記、還原提示、`KEPT_NOTICE` 與 `re-owned N` 各一行、守門沒有別的行）、多帳號還原樹（每個帳號撤銷、child token 換新、還原紀錄、還原前的 token 兩種接法與 child token 都被拒、sentinel 重建、`REVOKED` 每帳號一行與 `REVOKED_NOTICE` 一行、守門沒有別的行）；HA：full、partial、加密各一次，步驟見下方 [T-21 在 HAOS 的步驟](#t-21-在-haos-的步驟hm-16) | 預設帳號依 DQ-03（採 (b) A2：有帳號資料才連預設一起撤銷；沒撤銷時面板與 log 提示權杖已回到備份當時的值）；兩個訊號至少一個觸發；讀不到的帳號隔離（只能刪）；獨立驗證（撤銷後重新讀過每個帳號，和還原前的 token 都對不上）；核對後才重發；舊收據 410（備份後才做、隨還原消失的操作也是）；C1-M1 攻擊序；版本混搭各一次（計畫 §10.6 第 6 點）。讀不到的帳號隔離與 C1-M1 只在 LOCAL 驗 | 是 |
-| T-22 | n8n 名額與逾時 | 等 n8n 開通（HM-25） | `n8n_session` 每帳號一份；沒後端的額外帳號回 `backend_not_configured` | 否（n8n） |
+| T-22 | n8n 名額與逾時 | LOCAL：全部（`tests/test_n8n_multi_profile.py`）；CONTAINER：n8n 的多帳號階段（每帳號的子程式、自己的 catalog 副本）；HA：n8n 升版 PR 的驗收（兩個 n8n 帳號、使用者批准的後端身分；P9 `--cross`、`childkill --child-port`） | `n8n_session` 每帳號一份（各自 20 個、10 分鐘；存一個帳號的設定只重啟它的子程式）；沒後端的額外帳號不起子程式、每支工具（含 7 支文件工具）回 `backend_not_configured`；`nodes.db` 每帳號一份、刪帳號一起刪；`x-n8n-*` 不轉送 | 否（n8n） |
 | T-23 | 子程式 bearer 隔離 | LOCAL：全部（7 支 Python＋n8n）；CONTAINER：每個帳號的真子程式不帶、隨機、別帳號的 child token | 不帶、帶錯、帶別帳號、兩個標頭、空字串都 401，自己的 200（n8n 另見矩陣）。兩個標頭與空字串只在 LOCAL 驗 | 是（Odoo） |
 | T-24 | 來源檢查 | LOCAL：全部（`tests/test_origin_policy.py`、面板的 `origin-policy` 測試）；HA：S14 交 HM-19b，用 echo 端點看 Claude.ai 實際送的 Origin（預設清單有 `https://claude.ai`，Claude.ai 送它時不會有 would_deny 行，看 add-on log 量不出來；也可以暫時把清單清空、維持 report-only 再看紀錄）；實機另看 add-on log 裡 would_deny 行的格式與節流 | 照[矩陣](../multi-profile/acceptance-matrix.md) T-24（HM-27 定案）：密鑰網址清單外（預設清單只有 `https://claude.ai`）只記一行 would_deny、不擋，回應和不帶 Origin 的同一個請求逐位元相同；面板切 enforce 後只擋清單外（403 固定本體），清單內與沒帶 Origin 照舊；政策檔不能用時每個帳號的密鑰網址 503；還原後政策是備份當時的；Bearer 帶 Origin 403；Headscale 只放 `https://claude.ai`。S14 的結果交負責人決定 DQ-11 第二問（2026-11-19 HM-18 改寫：原本只寫「記下 Claude.ai 送的 Origin」，是 HM-27 定案前的寫法） | 是 |
 | T-25 | 紀錄稽核 97 種寫法 | LOCAL；HA：add-on log 與診斷 | 不比 pin 版 PaaS 差；0 token | 是 |
@@ -215,6 +215,65 @@ LOCAL 的對應在 `tests/test_nextcloud_multi_profile.py`（假 Nextcloud、真
    add-on 的位址）與這份文件。
 7. **清理**（T-29）：刪掉額外帳號、撤銷測試用的 App 密碼、刪掉測試使用者；合成憑證清單掃描 0 命中。
 
+### Hermes 開通（HM-24）
+
+Hermes 的升版 PR（把 `hermes` 加進 `MULTI_PROFILE_PRODUCTS`）在 HAOS 上除了上表與下一節，另外做這幾項。功能 PR（HM-24）只有
+LOCAL 的測試（`tests/test_hermes_multi_profile.py`），沒有任何 HA 實測。每一步照上面的規則先經使用者批准；token、Gateway key、
+Dashboard 密碼一律不印、不存。
+
+1. **要使用者先批准的後端身分**：一台測試用的 Hermes Agent（Gateway 與 Dashboard；PaaS 正式站用 v0.22.5），每個帳號一組自己的
+   Gateway API key 與 Dashboard 帳號：預設帳號＋至少 2 個額外帳號（T-04 的 N×N 最多到 Hermes 的上限，預設＋3），另加一組換身分用的
+   Dashboard 帳號（T-03）。同一台 Hermes 若只能有一組 Gateway key 或一個 Dashboard 使用者，就要多台測試用 Hermes（這點還沒確認）。
+   只用合成名稱，不用真人帳號；建立與刪除每一組都要使用者批准，驗完刪掉並留清理證明（T-29）。
+2. **T-02 上限與容器階段**：Hermes 的額外帳號上限是 3（`profiles.EXTRA_PROFILE_LIMITS['hermes']`；上表 T-02 的「第 6 個」是 Odoo 的 5）：
+   第 4 個額外帳號回 409 `profile_limit_reached`＋`limit`。T-13、T-14、T-23 的容器階段（`packaging/container_profiles.py`）對 Hermes 一樣適用：
+   預設帳號的子程式沒寫 `--port`，就當 3000。
+3. **T-03 換連線不換權杖**：`gateway_url`、`dashboard_url`、`dashboard_username` 各換一次，再補上與清空 Dashboard 各一次：每次權杖都不變、
+   面板沒有「權杖已換新」的提示、舊網址（Bearer 與密鑰網址）照樣可用並連到新的後端；只換 `gateway_api_key`、`dashboard_password` 一樣不變
+   （契約第 9 節 #134；2026-11-20 定案，與 PaaS 一致）。要收回舊的存取時，明確重新產生或撤銷權杖，並驗舊網址失效。
+4. **T-04 N×N**：每個帳號用自己的身分在 Hermes 留一個看得出來是誰的標記（例如用測試鍵的設定值，或具名對話），每個帳號只看得到自己的。
+5. **Dashboard 登入**：兩個以上帳號接同一個 Dashboard 時，各自第一次用到 Dashboard 只各登入一次（Dashboard 的 log 或登入紀錄）；
+   記下有沒有 429（全部帳號共用 Dashboard 的登入限流，#135）。
+6. **T-07、T-12、T-19 的長 chat**：存一個帳號的政策（例如停用 `hermes_chat`）只改它的工具清單、每個子程式 PID 都不變；一個帳號的長 chat
+   進行中換它的連線或撤銷，只有它的 chat 結束；同一個帳號並行長 chat 到名額滿（額外帳號 16）時，下一個請求等 1 秒後回 `-32003`，
+   別的帳號照常（#136）。換連線存檔會重啟那個帳號的子程式，所以進行中的 chat 收到的是 HTTP 200 的 SSE 事件 `-32004`（子程式連線中斷；
+   權杖不變，所以不是 401，也不是 `-32005`）；它的文字目前說子程式仍在執行，照實記下。明確撤銷或重新產生權杖時，進行中的 chat 照契約第 2.5 節
+   結束（回答已開始的收到 `-32005`）。
+   並行 chat 會打真的 Gateway、可能花模型費用：用免費模型或測試 Gateway，先問使用者。
+7. **每子程式 MiB 的負載量測（至少 60 分鐘；計畫 §9、C3-SF-12）**：PaaS 量到每個 Hermes 子程式的 RSS 從 90 MiB 漲到 160～168 MiB
+   （前 2 分鐘就長完）、負載停了也不回落（R02 C-04）；HA 只在建立帳號、存後端、手動重啟時看 MemAvailable，之後的成長看不到。
+   - 在目標硬體（J6412，可以的話 J1900）上，預設帳號＋3 個額外帳號都接好、都在跑；每個帳號一個用戶端持續混合呼叫至少 60 分鐘：
+     `hermes_chat`（含長回合）、Dashboard 類（`hermes_inspect`、`hermes_session`、`hermes_cron` 的 list）、`hermes_gateway` 的 status，
+     跨過 Dashboard cookie 的 10 分鐘到期（會重登）。
+   - 每 30 秒記：每個子程式的 RSS 與 PSS（`/proc/<pid>/smaps_rollup`）、管理程序的 RSS、MemAvailable；負載停止後再記 10 分鐘。
+   - 結論寫：開始、穩定後、最後 10 分鐘的最大值，停止後的值，每個子程式穩定後的最大值加餘裕作為建議值。改
+     `profiles.CHILD_MEMORY_MIB['hermes']`（暫定 160）與契約第 5 節要另開功能 PR，請求內容位元組預算（HM-31）會跟著重算；升版 PR 不改常數。
+   - 負責人 2026-11-25（火車 B「三個一起，照建議做」）：這項用免費模型（或測試用 Gateway）做，**只記錄、不擋發版**；結果寫進
+     `release-decision-hermes-0.5.0.md` 的驗收紀錄。
+   - 證據放 repo 外 `artifacts/…`，repo 內只放不含秘密的摘要。
+
+### n8n 開通（HM-25；n8n 的升版片做）
+
+n8n 的升版 PR（把 `n8n` 加進 `MULTI_PROFILE_PRODUCTS`）在 HAOS 上除了上表與下一節，另外做這幾項。功能 PR（HM-25）只有 LOCAL 的測試
+（`tests/test_n8n_multi_profile.py`，假 n8n、真的 n8n-mcp 子程序），沒有任何 HA 實測。每一步照上面的規則先經使用者批准；token、API key、MCP Access Token
+一律不印、不存。
+
+1. **要使用者先批准的後端身分**：兩個 n8n 帳號要用的兩組 n8n API key，建議同一台 n8n 的兩個受限使用者（各自的 API key），或兩台 n8n；要驗官方 MCP 端點時再各加一把
+   instance-level MCP access token。預設帳號用既有的那一組。只用合成名稱，建立與刪除每一組都要使用者批准，驗完刪掉並留清理證明（T-29）。
+2. **T-02 上限與容器階段**：n8n 的額外帳號上限是 2（`profiles.EXTRA_PROFILE_LIMITS['n8n']`）：第 3 個額外帳號回 409 `profile_limit_reached`＋`limit`。
+   容器階段（`packaging/container_profiles.py`）n8n 一樣跑：預設帳號的子程序命令列沒有 `--port`（就當 3000），額外帳號在入口後面多 `--port N`，並檢查每個額外帳號的目錄副本
+   （`/tmp/woow-n8n-mcp/profiles/<id>/nodes.db`）。
+3. **T-22 名額與沒後端的帳號**：兩個帳號各自 20 個 session（一個帳號開滿不影響另一個）；存 session 設定只重啟該帳號的子程序；沒有後端的額外帳號每支工具（含 7 個文件工具）回
+   `backend_not_configured`，不起子程序。
+4. **T-04（N×N）**：各帳號建一個標記 workflow，每個帳號只在對角線看得到自己的（只對 API 成立：n8n 的 webhook 與 form 整台共用，安全審查 S-2，驗收紀錄要寫明）。
+5. **T-05、T-07、T-09、T-13、T-14**：P9 `--cross`；存政策由閘道處理，所有子程序 PID 都不變；存後端或 session 設定才只重啟該帳號的子程序（`tests/test_n8n_multi_profile.py`）；刪帳號後舊 token 失效、`/tmp` 的副本也刪掉；P9 `childkill --child-port` 打 n8n 的額外帳號。
+6. **T-17**：三個 n8n 子程序的記憶體（`CHILD_MEMORY_MIB` 是 300 MiB，只記錄）。
+7. **T-21**：還原後 `/tmp` 副本重做（還原不帶回副本）；T-23、T-29（合成憑證掃描與清理）。
+8. **UC-09 真機確認**：兩個帳號各自更新同一個 id 的 workflow，`n8n_workflow_versions` 只看得到自己的；一個帳號換到另一個後端之後，讀不到換之前的快照（審查 S-8）。
+9. **webhook、chat、form 的連線（2026-11-25 負責人定；契約 #90）**：n8n 在區網上的位址時，`n8n_test_workflow` 的 webhook 照常連得到（區網照舊）；把 n8n 網址換成 add-on 自己的
+   loopback（127.0.0.1 或 localhost）存檔被拒（400），webhook 的 loopback 位址不連線、回固定錯誤。
+10. **面板情境重錄**：`profile-api-cases.json` 的 `new-origin-unset-secret`（標了 `rerecord_on_real_backend`）在真後端重錄，回應不同就改情境與 fixture。
+
 ### 每次升版都要重驗（每個開通的產品，每一版）
 
 - **UC-08 還原偵測**：在 QA HAOS 做 full、partial、加密備份各一次還原，記下兩個訊號各自有沒有觸發（`/data/mcp` 屬 root 而留下
@@ -253,6 +312,37 @@ virtual key，各自的帳號只看得到自己的模型」。每一步照上面
   #129；要不要放寬或改健康檢查由負責人決定）。要在 HAOS 驗，用 T-04 那台 LiteLLM，負責人決定。
 - **清理（T-29）**：刪掉帳號 B 與 T-02 建的帳號（舊 token 立刻失效）、刪掉測試副本（在在用的 app 上做的，由負責人還原預設帳號的後端）、
   負責人撤銷兩把 key，合成憑證掃描 0 命中。
+
+### Headscale 開通版（0.5.0）在 HAOS 要加的項目（HM-26）
+
+`tests/test_headscale_multi_profile.py` 在 CI 用兩台假伺服器驗了：每個帳號的子程式只讀自己帳號的 state、照自己帳號的政策（直連也一樣）、
+只認自己的 child token；每個帳號的 key 只送到自己設定的那台（同一台同 key、同一台不同 key、另一台各一個帳號：DQ-26 的兩種形態）；
+受限帳號的 `headscale_api_keys` create 閘道與子程式都擋；存政策只重啟該帳號的子程式，別的帳號的 session 不斷；網址改到別台要重填 key；
+每個帳號的密鑰網址只放 `https://claude.ai`；伺服器拒絕 key 時開通的監看照 DQ-25 退避。這些是 LOCAL/MOCK，不是 HA 證據。HAOS 上用真的
+Headscale 再驗，**每一步先問使用者**：
+
+- 真後端身分（使用者批准建立，驗完撤銷並記清理證明，T-29）：在 QA 用的 Headscale 上建 2～3 把**專用、短效期**的 API key（同一台：
+  一把給預設帳號與一個額外帳號共用、一把給另一個額外帳號自己用；CF-15 同 key、不同 key 各一次）。寫入只對一個專用的測試使用者
+  （例如 `hm26-test`）與它的 preauth key 做，不碰正式的使用者、節點、路由與 ACL 政策（`headscale_policy` 只做 get、check、diff，
+  不做 apply）。**驗收全程不呼叫 `headscale_api_keys` 的 create**（它會發出一把不在任何帳號 state 裡的整台管理 key）。
+- 多台：QA 只有一台 Headscale 時，「一帳號一台」在 HAOS 上沒有驗，只有 CI 的兩台假伺服器驗了（上一段；HM-05 的
+  `tests/test_profile_runtime.py::test_each_child_is_started_on_its_own_state_directory_and_port[headscale]` 也是每帳號不同網址與 key）。
+  要在 HAOS 驗，使用者要另外提供第二台 QA 用的 Headscale；沒有就在驗收紀錄寫明這是已知限制。
+- T-02：Headscale 額外帳號上限 3（第 4 個 409 `profile_limit_reached`，`limit` 3）。
+- T-04（Headscale 版，契約第 9 節 #137、#138）：同一台、同一把 key、不同政策的兩個帳號：唯讀帳號（政策拒絕所有寫入，包括
+  `headscale_api_keys` 的 create、expire、delete）的寫入被擋（閘道與子程式都擋，伺服器沒收到）、另一個做得到；受限帳號的
+  `headscale_api_keys` create、expire、delete 經閘道與直連子程式都擋、伺服器沒收到（只送會被擋的呼叫）；在 Headscale 撤銷某個帳號
+  自己的那把 key 後，只有那個帳號的呼叫失敗（`HEADSCALE_UPSTREAM_ERROR`、401）、它的健康監看進入認證退避，其他帳號照常。
+  新建的額外帳號預設就拒絕 `headscale_api_keys` 的 create、expire、delete（讀取 `list` 可以；預設帳號照舊全開）：經閘道與直連子程式都擋、伺服器沒收到，到它的工具權限頁開啟後才做得到（只做會被擋的那一邊，**不要真的 create**；契約 #144）。
+- 權杖不再顯示（和 PaaS 一致，不受開關管）：面板沒有「顯示權杖」，`token/reveal` 回 404；「產生新的 Claude.ai 連線網址」會輪替權杖（舊網址立即失效）；新增的帳號要「重新產生」一次才顯示它的第一把權杖（P9 kit 的 Headscale 路徑照此，[P9 kit](ha-p9-kit.md)）。
+- T-05、T-08、T-09、T-13：P9 kit 照 [P9 kit](ha-p9-kit.md)（`--cross`、`--temp-profile`、`childkill`）。
+- T-07：存一個帳號的政策，只有它的子程式換 PID，別的帳號的 session 不斷。
+- T-20：0.4.19 → 0.5.0 升級後預設帳號的 token、兩條網址、`state.json` 位元不變（Store `verify`）；回退與再升級照 T-20。
+- T-21：還原（full、partial、加密）後每個帳號照守門撤銷、核對後重發，子程式照常起來（還原放寬的權限在子程式讀之前收回）。
+- T-24、T-27：真 Claude.ai 用兩個帳號的密鑰網址各連一次；別的瀏覽器 Origin 403；記下 Claude.ai 送的 Origin（S14）。
+- 清理（T-29）：撤銷這次建的 key（`headscale apikeys expire`）之後，在 Headscale 跑 `headscale apikeys list`，確認只剩驗收前就有的 key、
+  沒有多出來的（只記 prefix 與數目，不記 key）；結果寫進清理證明。
+- 上面「每次升版都要重驗」的四項照做。
 
 ## 故障處置界線
 

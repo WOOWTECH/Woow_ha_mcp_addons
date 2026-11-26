@@ -482,6 +482,10 @@ async def run():
                 # 0.1.13: the gateway's own JSON-RPC Method not found (was 403); never forwarded.
                 response = await client.post(ENDPOINT, headers=headers, json={'jsonrpc': '2.0', 'id': 4, 'method': method})
                 assert response.status_code == 200 and response.json()['error']['code'] == -32601
+            if features.enabled(APP):
+                # A switched-on product's gateway asks the backend itself as its child first answers: the denial windows
+                # below must not hold that check (container_profiles.after_backend_check). Nothing changes otherwise.
+                await container_profiles.after_backend_check(sys.modules[__name__])
             await assert_denials(client, ENDPOINT, headers, APP, lambda: len(CALLS))
             # Missing identity and forged role/peer headers must still deny,
             # including after the separately implemented real verifier integrates.

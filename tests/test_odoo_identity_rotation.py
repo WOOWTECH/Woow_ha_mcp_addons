@@ -21,8 +21,8 @@ file is in place, as when the default state cannot be read); a new token on disk
 after the rename that leaves the store usable) is served with no child. The old child stays stopped in both. A new child
 that cannot start leaves the new token and never the old child (config_apply_failed with token_rotated). Switched off,
 nothing changes (plan 3.3): the save commits first and restarts the child, the token stays, the answer is today's. The
-other switched-on products keep their token (Hermes HM-24); Nextcloud is bound to its account since HM-22
-(tests/test_nextcloud_multi_profile.py).
+other switched-on products keep their token (Hermes too: the owner's 2026-11-20 decision, as PaaS, HM-24;
+tests/test_hermes_multi_profile.py); Nextcloud is bound to its account since HM-22 (tests/test_nextcloud_multi_profile.py).
 
 PaaS (woow-mcp-server 69ac425): packages/mcp-admin-core/mcp_admin_core/config/store.py:502-533 patch_connection_bound
 and its tests packages/mcp-admin-core/tests/test_config_store.py:102-170 (test_bound_connection_rotation_is_atomic_and_
@@ -926,8 +926,9 @@ OTHERS = {
 @pytest.mark.parametrize('product', sorted(OTHERS))
 async def test_switched_on_the_other_products_keep_their_token_on_a_changed_backend(tmp_path, log_scan, monkeypatch,
                                                                                     product):
-    """Only Odoo and (HM-22) Nextcloud are bound to their identity: a switched-on Hermes, EMQX, LiteLLM or Headscale
-    backend saved with another account or server (its secrets brought) keeps its token and answers as today."""
+    """Only Odoo (HM-12) and (HM-22) Nextcloud are bound to their identity: a switched-on Hermes (HM-24: it keeps its
+    token, as PaaS), EMQX, LiteLLM or Headscale backend saved with another account or server (its secrets brought) keeps
+    its token and answers as today."""
     monkeypatch.setattr(features, 'MULTI_PROFILE_PRODUCTS', frozenset({product}))
     saved_connection, changes = OTHERS[product]
     restarts = []

@@ -6,6 +6,8 @@
 
 0.4.7 起，driver 使用與管理畫面相同的設定版本及操作識別契約。每次設定寫入會帶入已讀取的版本；token 輪替／撤銷會帶唯一操作識別碼並核對收據。遇到衝突或回應不明時立即停止，**不會自動重送**。若輸出未確認的操作識別碼，先透過同一管理員身分查詢 `GET api/operations/<id>` 並核對目前設定，再決定後續處理；不要重新執行整個 driver。識別碼只在程序記憶體及不含秘密的診斷輸出中保留。此 driver 的寫入測試需使用 0.4.7 以上契約；舊版請使用對應版本的 kit。
 
+**Headscale 限制（本分支未發佈）**：P9 依賴不輪替的 token reveal；本分支的 Headscale 不提供 reveal，因此需要 token 的模式在修改後端或輪替 token 前先檢查 reveal，若回 404 就停止；仍提供 reveal 的舊版照舊可用。不要以自動輪替替代：會使既有用戶端失效。此限制適用單帳號與多帳號模式；只設定後端的執行不受影響。
+
 ## 前提
 
 - 真 HA 管理員帳號（owner 或 system-admin）；帳密只從環境變數讀，不印、不寫檔。
@@ -34,7 +36,7 @@ driver 以 HA 登入流程取得管理員 token → WebSocket `supervisor/api` �
 | `--plan P` | 依清單呼叫工具：reads 必須成功（HTTP 200、非 isError、無 `success:false`）；denials 必須被 gateway 拒絕（HTTP 403；0.1.14 起在 session 內為 HTTP 200 的 JSON-RPC `-32602`／`-32603` 錯誤、沒有 result） | 無（防護失效時見下方說明） |
 | `--outage-url U` | 搭配前兩者：後端所有網址欄位（`url`、`gateway_url`、`dashboard_url`…）換成不通的 U，每個 read 都須回 HTTP 200（本機工具照常、後端工具回結構化錯誤），且至少一個 read 回結構化錯誤（只有加 `--outage-refusal` 的產品——每個連線階段都要先連後端的 Odoo Manage（已下架）——可改以「0.1.2 gateway 在初始化就回 503 `BACKEND_UNAVAILABLE` 且不帶 session id」為準，此時只檢查拒絕）；改回原設定後清單須再次全過 | 暫時改這個 app 的後端設定 |
 
-probe 開的每個 session 都會 DELETE，不吃掉 app 的共用 session 名額（n8n 為 20 個、閒置 10 分鐘回收）。
+probe 開的每個 session 都會 DELETE，不吃掉 app 的共用 session 名額（n8n 為每個帳號 20 個、閒置 10 分鐘回收：每個帳號的子程式各自算）。
 
 ### 清單（plan）
 
@@ -76,7 +78,7 @@ driver 的管理用戶端（`packaging/ha_p9_admin.mjs` 包面板的 `AdminApi`�
 | 選項 | 做什麼 | 會改變什麼 |
 |---|---|---|
 | `--profile ID` | `--backend-file`、`--tokens`、`--plan`、`--modes` 都對這個帳號做（`default` 或 24 位小寫 hex）；沒給就是預設帳號 | 同上表，只動這個帳號 |
-| `childkill`（開通的 app） | 只 SIGKILL `--profile` 那個帳號的子程式：driver 從帳號清單取它的 port，probe 以 `--child-port` 依子程式命令列的 `--port` 找出它（預設帳號的 Hermes／OpenDesign 子程式沒寫 port，就是 3000 那個）。找不到唯一一個就什麼都不殺、失敗。看門狗第一次重起要等 2 秒，這段時間閘道自己回 initialize，所以 probe 殺掉後每 0.5 秒看一次子程式清單（最多 60 秒），直到剛好一個新 PID 服務那個 port；期間別的帳號子程式的 PID 一變就失敗。接著要等到那個帳號的 token 開得到子程式自己的 session 才算恢復（最多再 60 秒；閘道自答的 `woow-local-` session 一律結束、只計數）。輸出 `new pid … after N s (K looks)` 與 `child's session after M s more (J gateway sessions before it …)`。新 PID 沒出現、session 一直是閘道自答的、或別的 PID 變了，probe 都 exit 1。n8n 開通（HM-25）前認不出 n8n 的子程式（port 只在環境變數裡），什麼都不殺、失敗 | 中斷這個帳號的 MCP 連線數秒 |
+| `childkill`（開通的 app） | 只 SIGKILL `--profile` 那個帳號的子程式：driver 從帳號清單取它的 port，probe 以 `--child-port` 依子程式命令列的 `--port` 找出它（預設帳號的 Hermes／OpenDesign 子程式沒寫 port，就是 3000 那個）。找不到唯一一個就什麼都不殺、失敗。看門狗第一次重起要等 2 秒，這段時間閘道自己回 initialize，所以 probe 殺掉後每 0.5 秒看一次子程式清單（最多 60 秒），直到剛好一個新 PID 服務那個 port；期間別的帳號子程式的 PID 一變就失敗。接著要等到那個帳號的 token 開得到子程式自己的 session 才算恢復（最多再 60 秒；閘道自答的 `woow-local-` session 一律結束、只計數）。輸出 `new pid … after N s (K looks)` 與 `child's session after M s more (J gateway sessions before it …)`。新 PID 沒出現、session 一直是閘道自答的、或別的 PID 變了，probe 都 exit 1。n8n 從 HM-25 起也認得出來：額外帳號的子程式在命令列最後寫 `--port N`（n8n-mcp 不讀它，照舊聽 `PORT`），預設帳號的沒寫，就是 3000 那個 | 中斷這個帳號的 MCP 連線數秒 |
 | `--cross` | 交叉矩陣（T-05）：帳號清單裡每個帳號的 token（各自在自己的 `X-MCP-Profile` 下 reveal）用 Bearer 與密鑰網址兩種接法都開得了 session、列得出工具；每個 session 拿任何別帳號的 token（兩種接法）都 404；隨機 token：Bearer 401、密鑰網址 404。開 session 時一律帶 `X-MCP-Profile: default`：MCP port 不看這個標頭，要是它照標頭選了預設帳號，交叉那一步就會變 200。沒有啟用中 token 的帳號跳過並印一行 | 無（只讀；每個 session 都 DELETE） |
 | `--temp-profile` | 暫時帳號模式（照 PaaS `public_probe.py --temp-profile`）：用剛讀到的索引版本建一個名為 `p9-temp-<8 hex>` 的帳號 →（有 `--backend-file` 就存到它身上、有 `--plan` 就用它的 token 跑；沒有後端又有 `PROBE_TOOL` 時，它的工具呼叫要被閘道拒絕（`Backend not configured`），不會借用預設帳號的後端）→ 它和預設帳號做交叉矩陣 → 刪掉它（重讀索引版本；前面失敗也照刪）→ 它的舊 token 必須被拒（Bearer 401、密鑰網址 404）。`--plan` 要搭 `--backend-file`；不能和 `--profile`、`--tokens`、`--modes`、`--outage-url` 一起用 | **建立並刪除一個帳號**；預設帳號不變 |
 

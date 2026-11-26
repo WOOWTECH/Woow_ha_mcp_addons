@@ -157,6 +157,14 @@ export function profileMenu(ui, { rows, current, loading, supported, writable, o
     ...notes);
 }
 
+// What the create dialog says (DQ-02: a new profile copies the default profile's tool policy). Headscale's adds the one
+// exception (owner decision 2026-11-25; the add-on's products.NEW_PROFILE_WITHHELD): an API key administers the whole
+// Headscale server, so a new Headscale profile starts without the writes of headscale_api_keys (create, expire, delete)
+// and its administrator turns them on in its own tool page. Every other product's text is as it was.
+const HEADSCALE_NOT_COPIED = 'Headscale 的 API 金鑰是整台伺服器的管理權限，所以新帳號不複製 headscale_api_keys 的建立、作廢與刪除（讀取照複製），預設不能用；需要時到這個帳號的「工具權限」頁自行開啟。';
+export const createDescription = product => '新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。'
+  + `${product === 'headscale' ? HEADSCALE_NOT_COPIED : ''}建立後會自動切換到新帳號；需要權杖時到「連線與權杖」按「${product === 'headscale' ? '重新產生' : '顯示權杖'}」。`;
+
 // The create and rename dialog: resolves with the trimmed label, or null when cancelled. The label is checked here
 // first (the server checks again); names are only ever inserted as text.
 export function labelDialog(ui, { title, description, initial = '', submit }) {

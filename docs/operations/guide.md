@@ -9,7 +9,7 @@
 
 **映像已發佈（目前 0.1.7），0.1.1–0.1.7 已在測試 HA 回歸（[0.1.7 紀錄](ha-test-0.1.7.md)）。** 七支都批准
 `homeassistant_api: true`（n8n 自 0.1.0、其他五支自 0.1.1 起，負責人 2026-10-05 核准；Nextcloud 自 0.1.7 起，2026-10-08 核准）；正式 fixed-WS provider 已實作並經審查，
-七支共用同一個驗證器（n8n 經 `apps/n8n/run.py`、其他六支經 `run_product.py`），下方的 Core 版本清單七支一體適用。
+七支共用同一個驗證器（都由 `run_product.py` 接上；n8n 的 `apps/n8n/run.py` 自 HM-25 起跑 `run_product` 的 runtime，以前是自己接），下方的 Core 版本清單七支一體適用。
 管理 HTML/assets/API 與 UI 已串接：真 HA 上已實測 owner 經 Ingress 的後端設定與 token reveal/rotate/revoke（管理 API），
 一般使用者 403；瀏覽器 UI 只在本地 Chromium（真 Core + fake HA transport）測過。
 不要直接修改 state、搬入 test verifier 或映射8099 LAN。
@@ -179,7 +179,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
 
 ## 多帳號（產品開通後）
 
-**狀態（2026-11-23）：Odoo 從 0.5.1 起、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通**（HM-19a、火車 A；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），其他產品還沒開通。這一節寫開通之後的行為；之後哪一版、
+**狀態（2026-11-25）：Odoo 從 0.5.1 起，LiteLLM、Nextcloud、EMQX、Hermes、n8n、Headscale 從各自的 0.5.0 起開通**（HM-19a、火車 A、火車 B；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`、`hermes`、`n8n`、`headscale`），只有 OpenDesign 與 Odoo Manage 不開放（DQ-28）。Hermes、n8n、Headscale 的 0.5.0 是火車 B，尚未發佈。這一節寫開通之後的行為；之後哪一版、
 哪個產品開通，以該產品的 CHANGELOG 為準。連線與網址見 [client 文件](clients.md#多帳號產品開通後)；還原、回退與緊急關閉見 [更新、備份與回復](update-backup-rollback.md)。
 完整規則在多帳號契約 `docs/multi-profile/contract.md`（開通後預設帳號會變的事：第 1.4 節）；威脅模型與已知限制在 `docs/multi-profile/threat-model.md`。
 
@@ -189,7 +189,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
   Odoo 5、n8n 2，Hermes、EMQX、LiteLLM、Nextcloud、Headscale 各 3；OpenDesign、Odoo Manage 不開放（DQ-28）。記憶體或開檔數不夠時上限更低
   （下面兩點）。
 - 每個帳號有自己的後端連線與憑證、一把 MCP 權杖、一份工具政策、一個子程式。新帳號複製預設帳號當下的工具政策（之後各自獨立），後端連線是空的，
-  要另外設定（DQ-02）。「MCP 用戶端端點」全 add-on 一個，只在預設帳號設定（DQ-13）。
+  要另外設定（DQ-02）；Headscale 例外：新帳號不複製 `headscale_api_keys` 的建立、作廢與刪除（API 金鑰是整台伺服器的管理權限），要用就到新帳號的工具權限頁自行開啟。「MCP 用戶端端點」全 add-on 一個，只在預設帳號設定（DQ-13）。
 - **一組管理身分管全部帳號**：任何能開這個 add-on 面板的 HA 管理員（owner 或系統管理員），都能看、輪替、撤銷、刪除每個帳號的權杖，改每個帳號的
   後端與政策。沒有帳號層級的管理權限，也沒有跨帳號總覽（DQ-31）。
 
@@ -222,6 +222,8 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
 
 - 開通的 Odoo 帳號改 url、database 或 username（包括清空連線）時，同一次存檔換一把新的 MCP 權杖：**兩條舊網址（Bearer 與密鑰網址）同時立即失效**，
   存檔提示會說權杖已換。到「連線與權杖」複製新的權杖或網址，更新所有用戶端。只改密碼、第一次設定、權杖已撤銷時不換（DQ-05；PaaS 同）。
+- 開通的 Hermes 帳號不一樣：改 Gateway 網址、Dashboard 網址或 Dashboard 使用者（含補上或清空 Dashboard）**不換權杖**，與 PaaS 一致（2026-11-20 定案，HM-24；
+  契約 §8.8 #134）。舊網址仍可使用並連到新的後端；要收回舊的存取，到「連線與權杖」明確重新產生或撤銷權杖。
 - 把後端網址改到另一台伺服器（scheme、host 或 port 變了）時，表單要求一起重新輸入那條網址的密碼或金鑰，否則不存（422；所有產品，DQ-40 ⑨ (a)）：
   防止把存好的密碼送到新的伺服器。只改同一台伺服器的路徑不用重填，但已存的秘密會送到新路徑：換路徑前先確認兩條路徑後面是同一個服務。
 - 存檔回 503（state unavailable）：這次寫入的結果不明。**重新啟動 add-on，重啟後到「連線與權杖」確認網址**：權杖可能已經換了（舊網址失效），
@@ -254,7 +256,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
 
 - 每個帳號自己的子程式與健康檢查。一個帳號的子程式當掉，看門狗照 2→300 秒退避重起、不限次數、穩定 120 秒歸零，其他帳號不受影響（DQ-20）；
   額外帳號的健康監看停了只標記那個帳號（`failed`），預設帳號的元件停了照今天讓 add-on 結束、由 Supervisor 重啟（DQ-21）。
-- 健康檢查連兩次失敗才判後端連不上。後端拒絕憑證時退避 15→30→60→120→300 秒，存新憑證或面板重啟後歸零（DQ-25）。Odoo 依來源 IP 節流登入失敗
+- 健康檢查連兩次失敗才判後端連不上。後端拒絕憑證時退避 15→30→60→120→300 秒，存新憑證或面板重啟後歸零（DQ-25）；**n8n 例外**：它的 401 文字還沒被監看認得，API key 被拒時仍每 15 秒檢查一次、沒有退避，也不會有下面那行 log（0.5.0 照現況發，預計下一版補；契約第 1.4 節第 12 點）。Odoo 依來源 IP 節流登入失敗
   （系統參數 `base.login_cooldown_after`、`base.login_cooldown_duration`）：同一個 add-on 的每個帳號都從同一個來源連 Odoo，一個帳號的密碼錯可能讓
   別的帳號一起被冷卻；Odoo 管理員可以視需要調這兩個參數。
 - 額外帳號子程式的 `oom_score_adj` 是 500、`nice` 加 5：記憶體不夠時核心比較會先殺它們，但這不是保證，OOM 仍可能殺管理程序，所有帳號一起斷。
@@ -278,7 +280,7 @@ fallback；metadata/link-local/混合非法 answers 拒絕。合法 LAN/ULA/publ
   | `not started: no connection is saved yet (<欄位名>); …` | 那個帳號還沒設定後端（只列欄位名） | 到面板設定後端 |
   | `could not be started (<例外類別>)` | 起子程式失敗，照退避重試 | 多半是暫時的（例如記憶體不夠）；一直出現就看主機資源 |
   | `child resources not applied (…)` | `oom_score_adj`、`nice` 沒寫成，子程式照常跑 | 平台不准，不用處理 |
-  | `the backend refused the credentials; next health check in N s` | 後端拒絕憑證，健康檢查退避（15→300 秒） | 到面板存正確的憑證（存檔後歸零） |
+  | `the backend refused the credentials; next health check in N s` | 後端拒絕憑證，健康檢查退避（15→300 秒；n8n 沒有這行） | 到面板存正確的憑證（存檔後歸零） |
   | `its health monitor stopped; …` | 額外帳號的監看停了：那個帳號標成 failed、子程式停 | 面板存檔或重新啟動那個帳號的子程式 |
   | `its staggered start failed (<例外類別>); …` | 那個帳號開機時的錯開啟動出錯，其他帳號照起 | 面板重新啟動那個帳號的子程式 |
 

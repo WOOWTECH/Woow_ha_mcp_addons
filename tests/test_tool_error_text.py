@@ -19,6 +19,7 @@ from batch2_owned_port import reserve_port
 from mcp_admin_core.products import ProductStore, child_spec
 from owned_runtime import Endpoint
 from test_real_products import connection, rpc
+from switch_modes import switched_off  # noqa: F401  (fixture: the Hermes case pins the switch)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -150,7 +151,12 @@ EXPECTED = {
 
 
 @pytest.mark.parametrize('product', list(EXPECTED))
-async def test_real_children_answer_the_1x_text(tmp_path, product):
+async def test_real_children_answer_the_1x_text(tmp_path, product, request):
+    # Train B: Hermes is switched on in the repository, and a switched-on product's child refuses the loopback address its
+    # closed port is on (HM-20: BACKEND_DESTINATION_DENIED, not the 1.x connect text this test is about), so the Hermes case
+    # pins the switch off; the other cases keep reading the repository's switch, as before.
+    if product == 'hermes':
+        request.getfixturevalue('switched_off')
     # The backend's port stays bound and never listens: every backend call fails to connect, and the child's reservation
     # (a bind of port 0, Endpoint) cannot draw it, as it could draw a port closed right away.
     with reserve_port() as backend, closing(ProductStore(tmp_path / 'state', product)) as store:

@@ -37,6 +37,7 @@ from . import VERSION
 from .config import ConfigError, State, Store, strict_json
 from .configuration import ConfigurationState
 from .lifecycle import CHILD_URL
+from . import inflight_ids  # PaaS #161: the in-flight JSON-RPC id table (contract 2.8)
 from .policy import Denied, ToolCallRefused, UnknownMethod, authorize, filter_list, validate_operation_denies
 from .admin_auth import AdminAuthority, BadRequest, prefix
 from .capabilities import ManagementOptions, capability_snapshot, observe_tools, tool_catalog
@@ -45,7 +46,7 @@ from .operations import OperationJournal, KINDS as OPERATION_KINDS, RESULTS as O
 from .reply_worker import WorkerStopped, breathe, encoded
 # HM-05 (contract 1.1): a profile's id, the default profile's or 24 lowercase hexadecimal characters; HM-08: the one
 # grammar, profiles.PROFILE_ID.
-from .profiles import PROFILE_ID, log_id
+from .profiles import PROFILE_ID, documentation_child, log_id
 
 logger = logging.getLogger(__name__)
 # HM-12 (DQ-40 ⑨; contract 4.1): a switched-on product's backend/patch that moves a URL to another origin without the
@@ -392,6 +393,17 @@ def stream_busy_reply(text):
                       {"Retry-After": str(STREAM_RETRY_AFTER), "Cache-Control": "no-store"})
 
 
+def duplicate_id_reply(ident):
+    """PaaS #161 (contract 2.8, not gated; woow-mcp-server 81fd50a proxy.py): a request whose JSON-RPC id is already in
+    flight in its MCP session, refused before the child gets it: 400, the JSON-RPC error -32600 under id null, Cache-Control
+    no-store. Not under its id: a client that follows the spec gives an answer to the first request it still waits on with
+    that id, so an answer under it would fail the one request that is fine. The text names the id (cut and escaped,
+    inflight_ids.shown_id): never a token, a session or a profile."""
+    return json_reply({"jsonrpc": "2.0", "id": None,
+                       "error": {"code": inflight_ids.DUPLICATE_ERROR_CODE, "message": inflight_ids.duplicate_text(ident)}},
+                      400, {"Cache-Control": "no-store"})
+
+
 def sse_frame(frame: bytes):
     """Split one SSE event (boundary removed) into (kept field lines, data lines), or None if unsafe.
 
@@ -510,6 +522,17 @@ class UpstreamOwner:
         self.reply = None
         self.answered = False
         self.reply_event = None  # the answer's event as the stream yields it (an Ending compares what the server took)
+        # PaaS #161 (contract 2.8; not gated): the release of the request's registration in the in-flight id table
+        # (inflight_ids), set by serve(): given back together with the slot, so that every end of the request, whichever
+        # it is, gives back both (close); an event stream gives it back earlier, once the child's reply is in hand
+        # (stream: the child has answered, so the id is no longer in flight, whenever the client takes the reply).
+        self.inflight = None
+
+    def release_inflight(self):
+        """Give the request's id back (at most once, whoever asks first); nothing when it registered none."""
+        release, self.inflight = self.inflight, None
+        if release is not None:
+            release()
 
     async def close(self):
         if self.closed:
@@ -539,7 +562,10 @@ class UpstreamOwner:
                         # leaves it (a BaseException such as a cancellation can, and the slot is still released).
                         await self.end_session()
                 finally:
-                    self.slots.release()
+                    try:
+                        self.release_inflight()  # its id is free again as its slot is
+                    finally:
+                        self.slots.release()
 
         # ASGI 2.3 level cancellation and direct asyncio cancellation both must
         # join this bounded cleanup. No reader/cleanup task is detached.
@@ -929,7 +955,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
               dormant_profiles: int | None = None,
               restore_notice=None,
               review_required: Callable[[], bool] | None = None,
-              origin_policy: Callable[[list[str]], None] | None = None):
+              origin_policy: Callable[[list[str]], None] | None = None,
+              inflight: inflight_ids.InflightIds | None = None):
     """listing (0.2.2): the product's tools/list tools as its child lists them (surface.listing). With it, a client
     connects whatever the backend's state: when no child can answer (no backend configured, so no child; a child that is
     not up) the gateway answers initialize, notifications/initialized, ping and tools/list itself, from listing through
@@ -1023,6 +1050,22 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     - each refusal writes one WARNING per profile and situation a minute (body_budget's warn), never content or a
       token.
 
+    PaaS #161 (contract 1.2, 2.8; the PaaS gateway, woow-mcp-server 81fd50a, ad03275, 39891b6: inflight_ids.py, proxy.py),
+    not gated: a request whose JSON-RPC id is already in flight in its MCP session is refused (400, -32600, id null) before
+    the child gets it, because the SDK's Streamable HTTP keys a request's answer by str(id) and two such requests would
+    overwrite each other's stream.
+    - inflight: the table the profile registers in (inflight_ids.InflightIds): one for every profile of a switched-on
+      add-on (profile_runtime.ProfileManager), keyed by the profile's id (its echo's, "default" without one), the session
+      and str(id); left out, a table of this app's own (a switched-off add-on's only profile). The profile holds at most as
+      many ids as it has forwarding slots (forward_slots).
+    - serve() registers an identified POST other than initialize right before it forwards it, holding its slot: never what
+      the gateway answers itself (a refused call, an unknown method, a session of its own, a busy answer), a notification,
+      a GET or a DELETE. UpstreamOwner.close gives the registration back with the slot, so every way a request ends gives
+      back both; an event stream gives it back as soon as the child's reply is in hand (the child has answered).
+      A table that is full, a profile at its limit and an id longer than inflight_ids.MAX_ID_LENGTH register
+      nothing and refuse nothing: the request goes on as before and one WARNING a minute per profile and situation says so
+      (budget_share's, never the id, a session or a token).
+
     HM-12 (multi-profile plan 9 Odoo row, 12.3 HM-12; DQ-05, DQ-40 ⑨ (a); contract 3.1, 4.1, section 9 #40, #41 and
     HM-12's rows; I11), only once the product is switched on; switched off, every answer stays as before:
     - stop_child: stops this profile's child, from then on until backend_changed relaunches it
@@ -1090,7 +1133,14 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
       report-only a value the list does not hold writes one decision=would_deny line), raises BadRequest(403) (enforce:
       a value the list does not hold; one decision=deny line) or ConfigError (an unusable policy file: 503 state
       unavailable). No CORS header is ever added. Left out: the secret path takes any Origin, as before. The Bearer path
-      is not its: any Origin there is 403 as before."""
+      is not its: any Origin there is 403 as before.
+
+    HM-25 (multi-profile plan 9 n8n row; DQ-22; contract section 9 #28 and HM-25's rows): with listing, a tools/call
+    the gateway answers itself (no child up) of a profile without a backend is refused as unconfigured (-32603 Backend
+    not configured) for every tool when the profile's child runs only with a backend (profiles.documentation_child: an
+    additional n8n profile, whose id the profile echo gives; every other product's tools require one anyway), the seven
+    documentation tools too: never the "try again shortly" of a child that is not up. n8n's default profile (no
+    profile_view, or its echo's id 'default') keeps its documentation child's answers, as before."""
     if not SERVER_NAME.fullmatch(server_name) or instructions is not None and not (
             isinstance(instructions, str) and 0 < len(instructions) <= 4096):
         raise ValueError("invalid server identity")
@@ -1127,6 +1177,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
         raise ValueError("invalid request budget")
     if origin_policy is not None and (not callable(origin_policy) or secret_path_allowed_origins is not None):
         raise ValueError("one secret-path Origin rule")  # HM-27: Headscale's own rule, or the add-on's policy
+    if inflight is not None and not isinstance(inflight, inflight_ids.InflightIds):
+        raise ValueError("invalid in-flight id table")
     if policy_changed is not None and not callable(policy_changed):
         raise ValueError("invalid policy change handler")
     if stop_child is not None and not callable(stop_child):
@@ -1143,6 +1195,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     if review_required is not None and not callable(review_required):
         raise ValueError("invalid review gate")
     n8n_request_bounds = getattr(store, "product", None) == "n8n"
+    # HM-25 (DQ-22): which profile this is, for whether its child serves documentation tools without a backend
+    served_profile = "default" if profile_view is None else profile_echo(profile_view())["id"]
     # HM-31: the add-on's request body budget (this profile's share) and the single-request ceiling it is charged up to
     budget_share = request_budget.own_share(getattr(store, "product", None)) if body_budget is None else body_budget
     body_cap = N8N_MAX_REQUEST if n8n_request_bounds else MAX_REQUEST
@@ -1162,6 +1216,11 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     configuration = configuration or ConfigurationState(store)
     operations = OperationJournal(store.path)
     slots = asyncio.Semaphore(FORWARD_SLOTS if forward_slots is None else forward_slots)
+    # PaaS #161: the in-flight id table (shared by the add-on's profiles when switched on), this profile's key in it and
+    # the most ids it holds: one for each of its forwarding slots
+    inflight = inflight_ids.InflightIds() if inflight is None else inflight
+    inflight_profile = profile_echo(profile_view())["id"] if profile_view is not None else "default"
+    inflight_limit = FORWARD_SLOTS if forward_slots is None else forward_slots
     ingress_parse_slot = asyncio.Semaphore(1) if slot_busy is not None else None
     # HM-14: a switched-on profile's two lanes (the ordinary slots and the reserved ones); switched off: slots, as before
     lanes = None if slot_busy is None else {
@@ -1672,6 +1731,8 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     return JSONResponse({"error": "unsupported"}, status_code=409, headers=headers)
                 return JSONResponse(redact.redact_secrets(diagnostics(), masks(state)), headers=headers)
             if name == "token/reveal" and request.method == "POST":
+                if getattr(state, "product", None) == "headscale":
+                    return JSONResponse({"detail": "Not Found"}, status_code=404, headers=headers)
                 return JSONResponse({"token": store.load().token}, headers=headers)
             if name == "token/rotate" and request.method == "POST":
                 if review_required is not None and review_required():
@@ -1996,6 +2057,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if event is not None:
                     if final:
                         owner.reply_event = event  # HM-14: an Ending knows the reply by it (delivered or not)
+                        # PaaS #161: the child has answered, so this id is no longer in flight; a client that takes the
+                        # reply and reuses the id at once finds it free, not held until this stream's clean-up is done
+                        owner.release_inflight()
                     yield event
                 if final:
                     # HM-14: the generator resumes only once the server took the reply: it was delivered (an Ending
@@ -2177,7 +2241,9 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                 if method == "tools/list":
                     return listed_reply(message["id"], state)
                 name = message["params"]["name"]  # tools/call: authorize allows nothing else here
-                if not configured and tools[name].requires_backend:
+                if not configured and (tools[name].requires_backend or not documentation_child(
+                        getattr(state, "product", "n8n"), served_profile)):
+                    # HM-25 (DQ-22): no backend and no child that runs without one: every tool is unconfigured
                     return tool_refusal(message["id"], ToolCallRefused("backend_not_configured", name))
                 reason = (available["reason"] if available["backend"] == "unreachable" and available["reason"] else
                           "MCP_SERVER_NOT_READY: the add-on's MCP server is " + available["child"] + "; try again shortly")
@@ -2384,6 +2450,25 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
                     answer = pending(message)
                     if answer is not None:
                         return answer
+                if method != "initialize" and "id" in message:
+                    # PaaS #161 (contract 2.8; not gated): this request is going to the child, holding its slot. Its id in
+                    # its session is registered; one already in flight there is refused now, before the child gets it
+                    # (the SDK would overwrite the first request's answer stream with this one's). The registration is
+                    # given back with the slot, whichever way the request ends (UpstreamOwner.close). Nothing here
+                    # reads the body again: the id is the parsed message's.
+                    released, outcome = inflight.begin(inflight_profile, headers["mcp-session-id"], message["id"],
+                                                       inflight_limit)
+                    if outcome == inflight_ids.DUPLICATE:
+                        # one WARNING a minute per profile, as the budget's and the slots' refusals: a client with a
+                        # token that repeats an id would else fill the profile's log with one line a request
+                        budget_share.warn("duplicate-id", "refused a request whose JSON-RPC id is already in flight in its "
+                                                          "MCP session (HTTP 400, -32600); it was not sent")
+                        return duplicate_id_reply(message["id"])
+                    if released is None:  # not registered (a bound is reached): forwarded as before, unchecked
+                        budget_share.warn("inflight-" + outcome,
+                                          inflight_ids.skipped_text(outcome, inflight.max_entries, inflight_limit))
+                    else:
+                        owner.inflight = released
                 forwarded = message
                 if method == "initialize" and isinstance(message.get("params"), dict):
                     # The gateway answers no server-to-client requests (sampling, elicitation, roots): the
@@ -2630,4 +2715,5 @@ def make_apps(store: Store, tools, child: httpx.AsyncClient, *,
     mcp_app.router.redirect_slashes = False
     mcp_app.state.lanes = lanes  # HM-14: a switched-on profile's lanes (slots, waiting), for diagnostics and tests
     mcp_app.state.body_budget = budget_share  # HM-31: this profile's share of the request body budget (tests)
+    mcp_app.state.inflight = inflight  # PaaS #161: the in-flight id table this profile registers in (tests)
     return admin, mcp_app

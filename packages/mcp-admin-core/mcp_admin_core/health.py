@@ -7,9 +7,10 @@ product's ProfileManager gives every profile's monitor its options; left out, th
 - first_check_after: the start point (the default profile at once; an additional one later, staggered); the interval
   stays HEALTH_INTERVAL.
 - auth_backoff: while the backend refuses the credentials (auth_refused: the probes' fixed texts of this repository's
-  children), the next check waits the table's next step (AUTH_BACKOFF: 15, 30, 60, 120, 300 s; Odoo 18 counts failed
-  logins per source address, C-tracer 4.4); any other answer of the child resets it, and so does reset() (a save or
-  the panel's restart: new credentials).
+  children; HM-26: refused_login, a refusal the Headscale child's reply says in its error object only), the next check
+  waits the table's next step (AUTH_BACKOFF: 15, 30, 60, 120, 300 s; Odoo 18 counts failed logins per source address,
+  C-tracer 4.4); any other answer of the child resets it, and so does reset() (a save or the panel's restart: new
+  credentials).
 - tolerance 2: the verdict unreachable (what makes the gateway refuse a tools/call: the child answered and the backend
   did not) needs two such checks in a row of the same child (C2-MF-4 point 3: a check that another profile's load
   delayed refuses nothing); until then the previous verdict stays (reachable, or unknown after a start). A check the
@@ -17,6 +18,9 @@ product's ProfileManager gives every profile's monitor its options; left out, th
   test_saved (the panel's backend test) still answers with what it found.
 - own_child_only: nothing is sent while the profile's own child is not running (blocked, backing off, failed, stopped):
   the port may be another program's (T-15).
+- profile_id (HM-25, DQ-22): the profile whose child this monitor checks; an additional n8n profile without a backend
+  runs no child (profiles.documentation_child), so it is unconfigured and nothing is checked, as for every other
+  product's profile without one. Left out (None): the default profile, as before.
 
 Every product, switched on or off (HM-09 follow-up, 2026-11-16: PR #103's checks; the owner's decision at 13:4x;
 contract 1.2; tests/test_monitor_cancel.py): a monitor stops when it is asked to, also when the HTTP stack swallowed the
@@ -37,6 +41,7 @@ from . import redact
 from .capacity_metrics import active_metrics
 from .config import ConfigError, strict_json
 from .lifecycle import CHILD_URL
+from .profiles import documentation_child
 
 SESSION_ID = re.compile(r"[\x21-\x7e]{1,256}")  # as the gateway accepts from clients
 REASON_LIMIT = 1000  # characters of a failed health check's own text kept as the reason
@@ -45,8 +50,9 @@ HEALTH_INTERVAL = 15  # seconds between two checks (DQ-25: unchanged)
 AUTH_BACKOFF = (15, 30, 60, 120, 300)  # DQ-25: the next check after 1, 2, 3, 4, 5 or more refused logins in a row
 # A refusal of the credentials, as the readiness probes of this repository's children word it (the start of the
 # probe's reason; tests/test_health_backoff.py pins each text to its child's source): Odoo and Hermes
-# BACKEND_AUTH_REJECTED, Headscale HEADSCALE_INVALID_CREDENTIAL, Nextcloud's public code for a 401 and for its
-# brute-force throttle (a 429 after failed logins: the same back-off), EMQX's and LiteLLM's 401 texts.
+# BACKEND_AUTH_REJECTED, Headscale HEADSCALE_INVALID_CREDENTIAL (a key its client will not send; a key the Headscale
+# server refuses is refused_login's), Nextcloud's public code for a 401 and for its brute-force throttle (a 429 after
+# failed logins: the same back-off), EMQX's and LiteLLM's 401 texts.
 AUTH_REFUSED = re.compile(r"(?:BACKEND_AUTH_REJECTED|HEADSCALE_INVALID_CREDENTIAL)(?![A-Za-z0-9_])"
                           r"|BACKEND_HTTP_ERROR status=(?:401|429)(?![0-9])"
                           r"|EMQX rejected the API credentials \(401\)"
@@ -56,6 +62,27 @@ AUTH_REFUSED = re.compile(r"(?:BACKEND_AUTH_REJECTED|HEADSCALE_INVALID_CREDENTIA
 def auth_refused(reason):
     """Whether a health check's reason says the backend refused the credentials (DQ-25)."""
     return isinstance(reason, str) and AUTH_REFUSED.match(reason) is not None
+
+
+def refused_login(reply):
+    """HM-26: whether the readiness probe's reply says the backend refused the credentials where its reason cannot
+    (probe_reason keeps an error object's "error" or "message" only): the Headscale child's error object, whose code and
+    HTTP status say it (apps/headscale/vendor/headscale_mcp_server: a revoked, expired or wrong API key is answered
+    HEADSCALE_UPSTREAM_ERROR with http_status 401). Asked only by a Headscale profile's monitor with auth_backoff (a
+    switched-on product's, DQ-25), and counted only for a check the child answered: the reason the check records, and
+    every answer, stay as they were."""
+    if not isinstance(reply, dict) or reply.get("isError") is not True or not isinstance(reply.get("content"), list):
+        return False
+    texts = [item["text"] for item in reply["content"]
+             if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str)]
+    if len(texts) != 1:
+        return False
+    try:
+        payload = strict_json(texts[0])
+    except (ValueError, RecursionError):
+        return False
+    return (isinstance(payload, dict) and payload.get("code") == "HEADSCALE_UPSTREAM_ERROR"
+            and type(payload.get("http_status")) is int and payload["http_status"] == 401)
 
 
 def probe_reason(reply):
@@ -115,8 +142,9 @@ async def protocol_reply(response: httpx.Response, expected_id):
 
 class HealthMonitor:
     def __init__(self, store, process, client, child_url=CHILD_URL, *, first_check_after=0, tolerance=1,
-                 auth_backoff=None, own_child_only=False, log=None):
+                 auth_backoff=None, own_child_only=False, log=None, profile_id=None):
         self.store, self.process, self.client, self.child_url = store, process, client, child_url
+        self.profile_id = profile_id  # HM-25: None, the default profile (see the module docstring)
         self.backend = "unconfigured"
         self.management = "alive"
         # 0.2.2: the outcome of the last COMPLETED check (child start count, child answered, backend, reason). snapshot()
@@ -133,6 +161,7 @@ class HealthMonitor:
         self.own_child_only, self.log = own_child_only, log
         self.paced = (first_check_after, tolerance, auth_backoff, own_child_only, log) != (0, 1, None, False, None)
         self.auth_refusals = 0  # refused logins in a row
+        self.login_refused = False  # HM-26: the last check's probe reply said so (refused_login; auth_backoff only)
         self.refusals = 0  # checks in a row of the current child that got its answer and found the backend unreachable
         self._generation = None
         self._reachable = None  # the child start whose last answered check found the backend reachable
@@ -225,7 +254,7 @@ class HealthMonitor:
         configured = getattr(state, 'configured', bool(state.backend_url and state.backend_key))
         self.backend = "unreachable" if configured else "unconfigured"
         product = getattr(state, 'product', 'n8n')
-        if product != 'n8n' and not configured:
+        if not configured and not documentation_child(product, self.profile_id):
             self.settled = (generation, False, self.backend, None)
             self.auth_refusals = self.refusals = 0
             return self.settled
@@ -257,7 +286,9 @@ class HealthMonitor:
         refused logins in a row counted for auth_backoff."""
         generation, answered, backend, reason = found
         if self.auth_backoff is not None:
-            if backend == 'unreachable' and auth_refused(reason):
+            # HM-26 review N-1: a refused login the reply said counts only on a check the child answered, as the
+            # reason's does (a check it did not answer has the reason MCP_SERVER_NOT_READY)
+            if backend == 'unreachable' and (auth_refused(reason) or (answered and self.login_refused)):
                 self.auth_refusals += 1
                 if self.log is not None:
                     self.log('auth backoff', 'the backend refused the credentials; next health check in '
@@ -306,6 +337,7 @@ class HealthMonitor:
     async def _check(self, state, configured, product):
         """One readiness check; returns why the backend was not proven reachable (None when it was or nothing says)."""
         reason = None
+        self.login_refused = False
         if product == 'n8n':
             probe_name, probe_args = 'n8n_list_workflows', {'limit': 1}
         else:
@@ -355,6 +387,10 @@ class HealthMonitor:
                             "name": probe_name, "arguments": probe_args}}) as response:
                         reply = await protocol_reply(response, 3)
                         reason = probe_reason(reply)  # 0.2.2: kept only when the backend stays unreachable
+                        # HM-26: a refused key the reply says only in its error object, for auth_backoff's count alone;
+                        # the Headscale child's object, so a Headscale profile's monitor only (security review S-2)
+                        self.login_refused = (self.auth_backoff is not None and product == 'headscale'
+                                              and refused_login(reply))
                         if isinstance(reply, dict) and not reply.get("isError"):
                             for item in reply.get("content", []):
                                 if isinstance(item, dict) and item.get("type") == "text":

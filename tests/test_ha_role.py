@@ -20,6 +20,7 @@ from mcp_admin_core.gateway import make_apps
 from mcp_admin_core.products import ProductStore, TOOLS as PRODUCT_TOOLS
 from mcp_admin_core.surface import listing
 from n8n_adapter import TOOLS, child_spec
+from switch_modes import switched_off  # noqa: F401  (fixture: the one test that pins the switch)
 
 DUMMY = "DUMMY-machine-token"
 IDENTITY = {"X-Remote-User-Id": "human"}
@@ -631,6 +632,10 @@ async def test_identity_ambiguity_never_queries(tmp_path, monkeypatch, headers):
     ("endpoint", "PUT", {"endpoint": "http://example.test/mcp"}),
     ("bootstrap", "GET", None),
 ])
+# Train B (n8n switched on with its 0.5.0): one of the saved backends is a loopback URL, which a switched-on n8n refuses
+# with 400 before the fresh role query (validation precedes it: test_body_and_validation_precede_fresh_query); the
+# test is about the single-profile pipeline as shipped before, so it pins the switch off (tests/switch_modes.py).
+@pytest.mark.usefixtures('switched_off')
 async def test_denied_fresh_action_no_mutation_or_disclosure(tmp_path, monkeypatch, operation, method, payload):
     async with owned_provider(monkeypatch) as (verify, seen, _):
         async with gateway(tmp_path, verify) as (store, client, _, __):
@@ -733,8 +738,8 @@ def test_n8n_and_six_products_share_factory():
     import inspect
     import run
     from mcp_admin_core import run_product
-    assert run.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
-    assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run.run)
+    # HM-25: n8n's runtime is run_product's (run.run hands it the n8n adapter), so it takes run_product's factory.
+    assert "run_product.run(" in inspect.getsource(run.run) and not hasattr(run, "make_ha_admin_verifier")
     assert run_product.make_ha_admin_verifier is ha_role.make_ha_admin_verifier
     assert "verify_admin=make_ha_admin_verifier()" in inspect.getsource(run_product.run)
     assert not isinstance(ha_role._NoRedirectConnect.process_redirect(None, RuntimeError()), str)
@@ -756,18 +761,22 @@ def owned_transport(uri, **options):
     assert uri == "ws://supervisor/core/websocket"
     return connector(uri, host="127.0.0.1", port={seen['port']}, **options)
 ha_role._NoRedirectConnect = owned_transport
-apps = run.make_apps
+from mcp_admin_core import profile_runtime  # HM-25: n8n's runtime is run_product's; its profile makes the apps
+apps = profile_runtime.make_apps
 def ingress_simulation(*args, **kwargs):
     assert isinstance(kwargs["verify_admin"], ha_role._Verifier)
     admin, mcp = apps(*args, **kwargs)
     async def ingress(scope, receive, send):
         await admin({{**scope, "client": ("172.30.32.2", 1)}}, receive, send)
     return ingress, mcp
-run.make_apps = ingress_simulation
+profile_runtime.make_apps = ingress_simulation
 run.main()
 '''
         runner = Executable(tmp_path, 'n8n', [admin_port, mcp_port])
-        code = 'import run; ' + runner.code('run') + '\n' + code
+        # Train B: the subprocess reads the repository's switch, not a fixture's: it sets the switched-off mode this test is
+        # about itself (an n8n switched on has the multi-profile admin pipeline and refuses the fake's loopback address).
+        code = ('from mcp_admin_core import features; features.MULTI_PROFILE_PRODUCTS = frozenset()\n'
+                'import run; ' + runner.code('run') + '\n' + code)
         runner.release()
         process = await asyncio.create_subprocess_exec(sys.executable, "-c", code,
             "--data", str(tmp_path / "runtime"), "--host", "127.0.0.1",

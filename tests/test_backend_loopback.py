@@ -14,8 +14,10 @@ loads:
   loopback before (http_policy.py) and still does.
 - apps/n8n/backend_policy.cjs: the API client's pinned agents and the official MCP client's pinned fetch (the same
   configured origin, with the instance-level MCP access token) refuse 127.0.0.0/8, ::1 and 0.0.0.0, IPv4-mapped
-  forms included; the webhook, chat and form clients keep WEBHOOK_SECURITY_MODE=permissive (owner decision
-  2026-10-15, kept 2026-11-15 15:3x; reviewed again before n8n is switched on, HM-25).
+  forms included; so do the webhook, chat and form clients (HM-25 security review S-1; owner decision 2026-11-25:
+  only this add-on itself, the LAN stays): they connect through SSRFProtection.createPinnedAgents, which refuses an
+  answer that is this add-on, any one of a name's answers being enough. WEBHOOK_SECURITY_MODE=permissive stays (owner
+  decision 2026-10-15, kept 2026-11-15 15:3x and 2026-11-25): a LAN or public address connects as before.
 
 Switched off, the variable is absent and every spec is the snapshot's (tests/contract/child_spec_default.json); any
 value but 1 makes the child refuse to start. The test double tests/loopback_backends.py turns the rule off inside a
@@ -552,10 +554,12 @@ def n8n_spec(tmp_path, url='http://n8n.invalid:5678'):
         return n8n_adapter.child_spec(store.load(), store.directory)
 
 
-async def node(spec, code, **extra):
-    process = await asyncio.create_subprocess_exec(*spec.argv[:-1], '-e', code, cwd=spec.cwd,
-                                                   env={**spec.env, **extra}, stdout=asyncio.subprocess.PIPE,
-                                                   stderr=asyncio.subprocess.PIPE)
+async def node(spec, code, *, policy=True, **extra):
+    """*code* run by the child's own node with its environment plus *extra* (environment variables): the policy
+    preloaded as the child does (policy=False: n8n-mcp as shipped, without it)."""
+    process = await asyncio.create_subprocess_exec(*(spec.argv[:-1] if policy else spec.argv[:1]), '-e', code,
+                                                   cwd=spec.cwd, env={**spec.env, **extra},
+                                                   stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     out, err = await asyncio.wait_for(process.communicate(), 60)
     return process.returncode, out.decode(), err.decode()
 
@@ -643,33 +647,42 @@ fake.listen(0, '127.0.0.1', async () => {
 
 
 async def test_n8n_webhooks_stay_permissive_with_the_variable(tmp_path, switch):
-    """WEBHOOK_SECURITY_MODE=permissive is kept (owner decision 2026-10-15, kept 2026-11-15; HM-25 reviews it before
-    n8n is switched on): a loopback webhook URL is still valid and its pinned agents are still made. Only the
-    configured instance's own clients refuse loopback."""
+    """WEBHOOK_SECURITY_MODE=permissive is kept (owner decision 2026-10-15, kept 2026-11-15 and 2026-11-25): the
+    validators are n8n-mcp's own, so a loopback webhook URL is still valid there. What is refused is the connection:
+    the pinned agents of the webhook, chat and form clients (createPinnedAgents) refuse exactly the answers the
+    official MCP client's pinned fetch refuses (HM-25 security review S-1; until then the agents for 127.0.0.1 were
+    made), and are made as before for the others."""
     switch('n8n')
     spec = n8n_spec(tmp_path)
     code = IMPORT + '''
 (async () => {
     const out = {};
     out.webhook = (await SSRFProtection.validateWebhookUrl('http://127.0.0.1:5678/webhook/x')).valid;
-    out.agents = typeof SSRFProtection.createPinnedAgents([{address: '127.0.0.1', family: 4}]).httpAgent;
-    const fetches = {};
+    const fetches = {}, agents = {};
     for (const address of ['10.0.0.2', 'fd12::1', '127.0.0.1', '127.9.9.9', '::1', '0.0.0.0', '::',
                            '::ffff:127.0.0.1', '::ffff:0.0.0.0']) {
-        try { await SSRFProtection.createPinnedFetch([{address, family: address.includes(':') ? 6 : 4}]).close();
+        const answers = [{address, family: address.includes(':') ? 6 : 4}];
+        try { await SSRFProtection.createPinnedFetch(answers).close();
               fetches[address] = true; } catch (error) { fetches[address] = error.message; }
+        try { const made = SSRFProtection.createPinnedAgents(answers);
+              agents[address] = typeof made.httpAgent + '/' + typeof made.httpsAgent;
+        } catch (error) { agents[address] = error.message; }
     }
     out.fetches = fetches;
+    out.agents = agents;
     console.log(JSON.stringify(out));
 })();
 '''
     status, out, err = await node(spec, code)
     assert status == 0, err[-3000:]
     result = json.loads(out.splitlines()[-1])
-    assert result['webhook'] is True and result['agents'] == 'object'
-    assert result['fetches'] == {'10.0.0.2': True, 'fd12::1': True, '127.0.0.1': NODE_DENIED, '127.9.9.9': NODE_DENIED,
-                                 '::1': NODE_DENIED, '0.0.0.0': NODE_DENIED, '::': NODE_DENIED,
-                                 '::ffff:127.0.0.1': NODE_DENIED, '::ffff:0.0.0.0': NODE_DENIED}
+    fetches = {'10.0.0.2': True, 'fd12::1': True, '127.0.0.1': NODE_DENIED, '127.9.9.9': NODE_DENIED,
+               '::1': NODE_DENIED, '0.0.0.0': NODE_DENIED, '::': NODE_DENIED,
+               '::ffff:127.0.0.1': NODE_DENIED, '::ffff:0.0.0.0': NODE_DENIED}
+    assert result['webhook'] is True
+    assert result['fetches'] == fetches
+    assert result['agents'] == {address: 'object/object' if outcome is True else outcome
+                                for address, outcome in fetches.items()}
 
 
 async def test_the_official_mcp_pinned_fetch_refuses_a_mixed_answer(tmp_path, switch):
@@ -695,6 +708,214 @@ async def test_the_official_mcp_pinned_fetch_refuses_a_mixed_answer(tmp_path, sw
                                                  'fd12::1,::1': NODE_DENIED, '10.0.0.2,fd12::1': True}
 
 
+# --- the webhook, chat and form clients (HM-25 security review S-1; owner decision 2026-11-25: only this add-on) --
+# n8n_test_workflow's webhook (N8nApiClient.triggerWebhook, which the WebhookHandler calls), chat (ChatHandler) and form
+# (FormHandler) clients connect through the agents SSRFProtection.createPinnedAgents makes
+# (test_n8n_mcp_makes_its_http_agents_only_in_createpinnedagents). WEBHOOK_SECURITY_MODE=permissive stays, so n8n-mcp's
+# validators accept any address; with WOOW_MCP_DENY_LOOPBACK=1 the policy refuses, when the agents are made, an answer
+# that is this add-on itself (any one answer of a name is enough), with the error the API and official MCP clients give
+# (no address in it). A LAN or public address connects as before. Nothing leaves the process: the target is a fake n8n
+# on 127.0.0.1, or the connection is cut off right after the agent's pinned lookup and the addresses it was pinned to
+# are what is compared.
+
+TRIGGERS = ('webhook', 'chat', 'form')
+HANDLERS = (f"const {{WebhookHandler}} = require({str(DIST / 'triggers/handlers/webhook-handler.js')!r});\n"
+            f"const {{ChatHandler}} = require({str(DIST / 'triggers/handlers/chat-handler.js')!r});\n"
+            f"const {{FormHandler}} = require({str(DIST / 'triggers/handlers/form-handler.js')!r});\n")
+TRIGGER = '''
+// What n8n-mcp's handler of *kind* answers when it triggers a workflow of the n8n at *origin*: its error or 'answered'.
+async function trigger(kind, origin) {
+    const client = new N8nApiClient({baseUrl: origin, apiKey: 'DUMMY', maxRetries: 0, timeout: 2000});
+    const context = {n8nApiUrl: origin, n8nApiKey: 'DUMMY'};
+    const reply = await {
+        webhook: () => new WebhookHandler(client, context).execute(
+            {workflowId: 'w1', triggerType: 'webhook', webhookPath: 'x', httpMethod: 'POST', data: {}}, {nodes: []}),
+        chat: () => new ChatHandler(client, context).execute(
+            {workflowId: 'w1', triggerType: 'chat', message: 'hello'}, {nodes: []}),
+        form: () => new FormHandler(client, context).execute(
+            {workflowId: 'w1', triggerType: 'form', data: {}}, {nodes: []}),
+    }[kind]();
+    return reply.success ? 'answered' : reply.error;
+}
+'''
+CONNECTIONS = '''
+const http = require('node:http');
+const https = require('node:https');
+const net = require('node:net');
+// More names than DNS has: every answer a name has counts, whatever its place in the list.
+Object.assign(names, {'mixedfirst.invalid': [{address: '127.0.0.1', family: 4}, {address: '10.0.0.2', family: 4}],
+                      'dual.invalid': [{address: '10.0.0.2', family: 4}, {address: 'fd12::1', family: 6}]});
+const lookup = dns.promises.lookup;  // a numeric host is read as getaddrinfo reads it, without a lookup
+dns.promises.lookup = async (host, options) => net.isIP(host) ? [{address: host, family: net.isIP(host)}]
+                                                              : lookup(host, options);
+// Every agent made from now on is cut off after its pinned lookup: no socket, the addresses it was pinned to are kept.
+const attempts = [];
+for (const Agent of [http.Agent, https.Agent]) {
+    Agent.prototype.createConnection = function (options, callback) {
+        options.lookup(options.host, {all: true},
+                       (error, answers) => attempts.push(answers.map(entry => entry.address)));
+        callback(Object.assign(new Error('intercepted before connect'), {code: 'ECONNREFUSED'}));
+    };
+}
+'''
+THIS_HOST_URLS = [url for url in LOOPBACK_URLS if url != 'http://mixed.invalid:5678'] + [
+    'http://0.0.0.0:5678', 'http://[::]:5678', 'http://[::ffff:127.0.0.1]:5678', 'http://[::ffff:0.0.0.0]:5678',
+    'http://zero.invalid:5678']
+MIXED_URLS = ['http://mixed.invalid:5678', 'http://mixedfirst.invalid:5678']  # a LAN answer and a loopback one
+LAN_TRIGGER_URLS = LAN_URLS + ['http://dual.invalid:5678']  # a name with only LAN answers, IPv4 and IPv6
+PINNED = {  # the addresses the pinned agents of a trigger client hold for each URL (numeric hosts as URL writes them)
+    'http://127.0.0.1:5678': ['127.0.0.1'], 'http://127.1:5678': ['127.0.0.1'], 'http://0x7f000001:5678': ['127.0.0.1'],
+    'http://2130706433:5678': ['127.0.0.1'], 'http://0177.0.0.1:5678': ['127.0.0.1'],
+    'http://127.0.0.1.:5678': ['127.0.0.1'], 'http://[::1]:5678': ['::1'], 'http://[0::1]:5678': ['::1'],
+    'http://localhost:5678': ['127.0.0.1', '::1'], 'http://rebind.invalid:5678': ['127.0.0.1'],
+    'http://rebind6.invalid:5678': ['::1'], 'http://0.0.0.0:5678': ['0.0.0.0'], 'http://[::]:5678': ['::'],
+    'http://[::ffff:127.0.0.1]:5678': ['::ffff:7f00:1'], 'http://[::ffff:0.0.0.0]:5678': ['::ffff:0:0'],
+    'http://zero.invalid:5678': ['0.0.0.0'],
+    'http://mixed.invalid:5678': ['10.0.0.2', '127.0.0.1'], 'http://mixedfirst.invalid:5678': ['127.0.0.1', '10.0.0.2'],
+    'http://10.1.2.3:5678': ['10.1.2.3'], 'http://192.168.1.50:5678': ['192.168.1.50'],
+    'http://[fd12::1]:5678': ['fd12::1'], 'http://lan.invalid:5678': ['10.0.0.2'],
+    'http://dual.invalid:5678': ['10.0.0.2', 'fd12::1']}
+REQUESTS = {'webhook': 'POST /webhook/x', 'chat': 'POST /webhook/w1', 'form': 'POST /form/w1'}
+
+
+async def trigger_connections(spec, kind, urls, **extra):
+    """For each configured n8n URL in *urls*: what n8n-mcp's trigger client of *kind* answers ('reply') and the
+    addresses its pinned agents were made for ('attempts': one list per connection it would have made, none when the
+    agents were refused)."""
+    code = IMPORT + HANDLERS + DNS + CONNECTIONS + TRIGGER + f'const kind = {kind!r}, urls = {json.dumps(urls)};' + '''
+(async () => {
+    const out = {};
+    for (const url of urls) {
+        attempts.length = 0;
+        out[url] = {reply: await trigger(kind, url), attempts: attempts.slice()};
+    }
+    console.log(JSON.stringify(out));
+})();
+'''
+    status, out, err = await node(spec, code, **extra)
+    assert status == 0, err[-3000:]
+    return json.loads(out.splitlines()[-1])
+
+
+def refused(urls):
+    return {url: {'reply': NODE_DENIED, 'attempts': []} for url in urls}
+
+
+@pytest.mark.parametrize('kind', TRIGGERS)
+async def test_a_trigger_client_refuses_this_add_on_once_switched_on(tmp_path, switch, kind):
+    """Loopback and unspecified addresses, in every way a URL or a name gives one: refused before any connection."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    variables = spec.env.get(ENV), spec.env.get('WEBHOOK_SECURITY_MODE')  # never spec.env itself in an assertion
+    assert variables == ('1', 'permissive'), variables
+    assert await trigger_connections(spec, kind, THIS_HOST_URLS, **LOOKALIKES) == refused(THIS_HOST_URLS)
+
+
+@pytest.mark.parametrize('kind', TRIGGERS)
+async def test_a_trigger_client_refuses_a_name_when_any_one_of_its_answers_is_this_add_on(tmp_path, switch, kind):
+    """A name that has a LAN answer and a loopback one, in either order, is refused as a whole (DNS rebinding)."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    assert await trigger_connections(spec, kind, MIXED_URLS) == refused(MIXED_URLS)
+
+
+@pytest.mark.parametrize('kind', TRIGGERS)
+async def test_a_trigger_client_still_connects_to_a_lan_n8n_once_switched_on(tmp_path, switch, kind):
+    """The owner kept the LAN (decision 2026-10-15, again 2026-11-25): its pinned agents are made as before, for
+    every answer of the name."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    result = await trigger_connections(spec, kind, LAN_TRIGGER_URLS, **LOOKALIKES)
+    assert {url: row['attempts'] for url, row in result.items()} == {url: [PINNED[url]] for url in LAN_TRIGGER_URLS}
+    assert [url for url, row in result.items() if NODE_DENIED in row['reply']] == []
+
+
+@pytest.mark.parametrize('kind', TRIGGERS)
+async def test_a_trigger_client_connects_as_before_when_switched_off(tmp_path, switch, kind):
+    """Switched off there is no variable and every URL above, loopback ones included, is connected to as before."""
+    switch()
+    spec = n8n_spec(tmp_path)
+    variable = spec.env.get(ENV)  # never spec.env itself in an assertion
+    assert variable is None, variable
+    result = await trigger_connections(spec, kind, list(PINNED))
+    assert {url: row['attempts'] for url, row in result.items()} == {url: [addresses]
+                                                                     for url, addresses in PINNED.items()}
+    assert [url for url, row in result.items() if NODE_DENIED in row['reply']] == []
+
+
+@pytest.mark.parametrize('on', [True, False])
+@pytest.mark.parametrize('kind', TRIGGERS)
+async def test_a_trigger_client_reaches_a_loopback_n8n_only_when_switched_off(tmp_path, switch, kind, on):
+    """The same through a real socket: a fake n8n on 127.0.0.1 gets no request when switched on and the client's
+    error is the policy's; switched off it gets the client's request and answers."""
+    switch('n8n') if on else switch()
+    spec = n8n_spec(tmp_path)
+    code = IMPORT + HANDLERS + TRIGGER + FAKE_N8N + f'const kind = {kind!r};' + '''
+fake.listen(0, '127.0.0.1', async () => {
+    const reply = await trigger(kind, 'http://127.0.0.1:' + fake.address().port);
+    console.log(JSON.stringify({reply, requests: seen}));
+    fake.close();
+});
+'''
+    status, out, err = await node(spec, code)
+    assert status == 0, err[-3000:]
+    assert json.loads(out.splitlines()[-1]) == ({'reply': NODE_DENIED, 'requests': []} if on
+                                                else {'reply': 'answered', 'requests': [REQUESTS[kind]]})
+
+
+async def test_the_pinned_agents_keep_their_signature_and_result_for_every_other_answer(tmp_path, switch):
+    """What the policy wraps is the same function to its callers: one parameter, the {httpAgent, httpsAgent} of an
+    http.Agent and an https.Agent pinned to the answers it was given, and n8n-mcp's own error for none at all; a list
+    of answers that is not one, or has an entry that is no address, is refused rather than passed on (as the pinned
+    fetch's is)."""
+    switch('n8n')
+    spec = n8n_spec(tmp_path)
+    code = IMPORT + '''
+const http = require('node:http');
+const https = require('node:https');
+(async () => {
+    const answers = [{address: '10.0.0.2', family: 4}, {address: 'fd12::1', family: 6}];
+    const made = SSRFProtection.createPinnedAgents(answers);
+    const pinned = await new Promise(resolve => made.httpAgent.options.lookup('lan.invalid', {all: true},
+                                                                              (error, found) => resolve(found)));
+    const others = {};
+    for (const [name, value] of Object.entries({none: [], nothing: null, object: answers[0], text: '10.0.0.2',
+                                                 'null entry': [null], 'no address': [{family: 4}],
+                                                 'a name': [{address: 'lan.invalid', family: 4}]})) {
+        try { SSRFProtection.createPinnedAgents(value); others[name] = true; }
+        catch (error) { others[name] = error.message; }
+    }
+    console.log(JSON.stringify({length: SSRFProtection.createPinnedAgents.length, keys: Object.keys(made).sort(),
+                                agents: [made.httpAgent instanceof http.Agent, made.httpsAgent instanceof https.Agent],
+                                pinned, others}));
+})();
+'''
+    status, out, err = await node(spec, code)
+    assert status == 0, err[-3000:]
+    assert json.loads(out.splitlines()[-1]) == {
+        'length': 1, 'keys': ['httpAgent', 'httpsAgent'], 'agents': [True, True],
+        'pinned': [{'address': '10.0.0.2', 'family': 4}, {'address': 'fd12::1', 'family': 6}],
+        'others': {'none': 'createPinnedAgents requires at least one validated address', 'nothing': NODE_DENIED,
+                   'object': NODE_DENIED, 'text': NODE_DENIED, 'null entry': NODE_DENIED, 'no address': NODE_DENIED,
+                   'a name': NODE_DENIED}}
+
+
+async def test_switched_off_the_policy_leaves_the_pinning_functions_as_n8n_mcp_ships_them(tmp_path, switch):
+    """Without the variable the policy wraps neither createPinnedAgents nor createPinnedFetch: both are n8n-mcp's own
+    functions character for character (a process that never loads the policy is the reference); with it they are not."""
+    code = ("const {SSRFProtection} = require(" + repr(str(DIST / 'utils/ssrf-protection.js')) + ");\n"
+            "console.log(JSON.stringify([String(SSRFProtection.createPinnedAgents), "
+            "String(SSRFProtection.createPinnedFetch)]));")
+    texts = {}
+    for name, policy, on in (('shipped', False, False), ('off', True, False), ('on', True, True)):
+        switch('n8n') if on else switch()
+        status, out, err = await node(n8n_spec(tmp_path / name), code, policy=policy)
+        assert status == 0, err[-3000:]
+        texts[name] = json.loads(out.splitlines()[-1])
+    assert texts['off'] == texts['shipped'] and 'createPinnedAgents requires' in texts['shipped'][0]
+    assert texts['on'][0] != texts['shipped'][0] and texts['on'][1] != texts['shipped'][1]
+
+
 @pytest.mark.parametrize('value', [None, '1', '0', '', 'true', 'yes', ' 1', '1 ', '01', 'deny', 'ON'])
 async def test_the_n8n_child_starts_only_without_the_variable_or_with_1(tmp_path, switch, value):
     switch()
@@ -716,6 +937,29 @@ def test_only_the_official_mcp_client_makes_a_pinned_fetch():
     assert callers == {'utils/ssrf-protection.js', 'services/n8n-official-mcp-client.js'}
     endpoint = (DIST / 'config/n8n-api.js').read_text()
     assert "return new URL(instanceUrl).origin + '/mcp-server/http';" in endpoint  # the configured origin
+
+
+def test_n8n_mcp_makes_its_http_agents_only_in_createpinnedagents():
+    """backend_policy.cjs refuses a loopback answer in SSRFProtection.createPinnedAgents (HM-25 security review S-1)
+    because that is where every http(s) agent of n8n-mcp is made and where the webhook client (N8nApiClient
+    .triggerWebhook; the WebhookHandler makes no request itself), the chat client and the form client get theirs: they
+    hand the agents to their request and use no other. The API client's own getPinnedAgents calls it too (until this
+    policy's replaces it, which also does), and fetchN8nVersion is given that client's agents. A pinned n8n-mcp that
+    makes an agent elsewhere, or has another caller, needs review before its next release."""
+    texts = {str(path.relative_to(DIST)): path.read_text() for path in sorted(DIST.rglob('*.js'))}
+    assert {name for name, text in texts.items()
+            if re.search(r'new [\w.]*Agent\(', text)} == {'utils/ssrf-protection.js'}
+    assert {name: len(re.findall(r'SSRFProtection\.createPinnedAgents\(', text)) for name, text in texts.items()
+            if 'SSRFProtection.createPinnedAgents(' in text} == {
+        'services/n8n-api-client.js': 2, 'triggers/handlers/chat-handler.js': 1, 'triggers/handlers/form-handler.js': 1}
+    assert {name for name, text in texts.items() if re.search(r'\bhttps?Agent\b', text)} == {
+        'services/n8n-api-client.js', 'services/n8n-version.js', 'triggers/handlers/chat-handler.js',
+        'triggers/handlers/form-handler.js', 'utils/ssrf-protection.js'}
+    for name in ('services/n8n-api-client.js', 'triggers/handlers/chat-handler.js',
+                 'triggers/handlers/form-handler.js'):
+        assert texts[name].count('httpAgent: pinned?.httpAgent') == 1, name  # triggerWebhook, chat, form
+    assert 'axios' not in texts['triggers/handlers/webhook-handler.js']
+    assert 'this.client.triggerWebhook(' in texts['triggers/handlers/webhook-handler.js']
 
 
 # --- the test double ---------------------------------------------------------------------------------------------

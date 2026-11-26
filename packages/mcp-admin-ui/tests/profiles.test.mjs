@@ -4,9 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AdminApi, ApiError, ProfileEchoError, StaleProfileError } from '../src/api.js';
 import { OperationIdentity, PROFILES_SCOPE } from '../src/operation-identity.js';
-import { DEFAULT_PROFILE, blockedNotice, clientName, disabledNotice, echoMatches, indexState, labelProblem, optionLabel, orphanIds, profileName, profileRows, shortId } from '../src/profiles.js';
+import { DEFAULT_PROFILE, blockedNotice, clientName, createDescription, disabledNotice, echoMatches, indexState, labelProblem, optionLabel, orphanIds, profileName, profileRows, shortId } from '../src/profiles.js';
 import { readFileSync } from 'node:fs';
-import { clientExample, policyFingerprint, policyRestartNotice, UiError } from '../src/contracts.js';
+import { clientExample, policyFingerprint, policyRestartNotice, products, UiError } from '../src/contracts.js';
 import { createP9AdminClient } from '../../../packaging/ha_p9_admin.mjs';
 // HM-12: read through the modules, so a name a module does not have fails only the cases that use it.
 import * as panelApi from '../src/api.js';
@@ -395,6 +395,18 @@ test('labels count code points; control, format and reserved names are refused b
   }
 });
 
+test('the create dialog says what a new profile copies; Headscale\'s also what it does not (owner decision 2026-11-25), every other product\'s as it was', () => {
+  const copies = '新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立；後端連線是空的，要另外設定。';
+  for (const product of Object.keys(products).filter(name => name !== 'headscale')) {
+    assert.equal(createDescription(product), `${copies}建立後會自動切換到新帳號；需要權杖時到「連線與權杖」按「顯示權杖」。`, product);
+  }
+  const headscale = createDescription('headscale');
+  assert.ok(headscale.startsWith(copies + 'Headscale 的 API 金鑰是整台伺服器的管理權限，'));
+  assert.match(headscale, /所以新帳號不複製 headscale_api_keys 的建立、作廢與刪除（讀取照複製），預設不能用；需要時到這個帳號的「工具權限」頁自行開啟。建立後會自動切換到新帳號；/);
+  assert.ok(headscale.endsWith('需要權杖時到「連線與權杖」按「重新產生」。'));  // PR #130: Headscale shows no existing token
+  assert.doesNotMatch(headscale, /顯示權杖/);
+});
+
 test('the policy fingerprint names the profile; the example names an additional profile; a restart notice says only this profile', () => {
   const policy = {product: 'odoo', policy_contract: 'woow-v3-exact-grants', tools: {}, disabled: [], writes_enabled: false, enabled_write_tools: []};
   assert.notEqual(policyFingerprint({...policy, profile: {id: DEFAULT_PROFILE}}), policyFingerprint({...policy, profile: {id: B}}));
@@ -743,6 +755,35 @@ test('HM-12 review S-7: a backend save of a switched-on Odoo answered 503 state 
   assert.equal(await run(unavailable, {product: 'nextcloud'}), `${UNAVAILABLE} ${OUTCOME}`);
   assert.equal(await run(unavailable, {product: 'nextcloud', switched: false}), UNAVAILABLE);
   assert.equal(await run(denied, {switched: false}), UNAVAILABLE);
+  // Hermes is not identity-bound, including when profiles are enabled.
+  assert.equal(await run(unavailable, {product: 'hermes'}), UNAVAILABLE);
+  assert.equal(await run(unavailable, {product: 'hermes', operation: 'backend'}), UNAVAILABLE);
+  assert.equal(await run(unavailable, {product: 'hermes', switched: false}), UNAVAILABLE);
+  assert.equal(await run(denied, {product: 'hermes'}), UNAVAILABLE);
+});
+
+// A refused identity-bound save names the relevant fields; Hermes keeps the general review message.
+test('HM-24: the review-wait copy of a backend save names the identity fields of the save\'s own product', async () => {
+  const {identityBound, identityChange} = panelContracts;
+  assert.deepEqual(Object.keys(identityChange ?? {}).sort(), [...identityBound].sort());
+  const WAITS = '這個帳號是從備份還原（或休眠）回來的，還沒有核對：請先到預設帳號頁的核對卡確認它的設定，按「已核對」後才能重新產生權杖。';
+  const saveWaits = names => `改後端身分（${names}）會換新這個帳號的 MCP 權杖，所以也要先核對才能儲存；這次未儲存任何變更。`;
+  const held = () => Response.json({error: 'request denied', detail: {code: 'restore_review_required'}}, {status: 409});
+  const run = async (product, {switched = true, operation = 'backend/patch'} = {}) => {
+    const api = new AdminApi(mount, saving(product, held, {switched}).fetcher, memoryStorage());
+    await api.bootstrap();
+    let caught = null;
+    try { await api.mutate(operation, operation === 'policy' ? {writes_enabled: false, disabled: [], enabled_write_tools: []}
+      : {changes: {dashboard_username: 'DUMMY-user-two'}}, revisionOf(DEFAULT_PROFILE)); } catch (error) { caught = error; }
+    assert.ok(caught instanceof ApiError && caught.status === 409 && caught.code === 'restore_review_required');
+    return caught.message;
+  };
+  assert.equal(await run('odoo'), `${WAITS} ${saveWaits('Odoo 的網址、資料庫或使用者')}`);
+  assert.equal(await run('hermes'), WAITS);
+  assert.equal(await run('hermes', {operation: 'backend'}), await run('hermes'));
+  // Another operation, a product whose token is not bound to its backend: the review copy alone.
+  assert.equal(await run('hermes', {operation: 'policy'}), WAITS);
+  assert.equal(await run('emqx'), WAITS);
 });
 
 // HM-22 review MF-1: a backend save of a profile whose restore review waits, refused because it would rotate the token

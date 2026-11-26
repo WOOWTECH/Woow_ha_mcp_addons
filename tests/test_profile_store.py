@@ -2,7 +2,8 @@
 
 Multi-profile plan §4.1, §4.3, §8.2 (I2, I5, I6), §10.1; DQ-02 (a) (2026-11-14): a new profile copies the default
 profile's current policy, gets new tokens and no backend, never the n8n session settings, and creation records no
-token history. Not wired yet: nothing in the add-on creates or opens an additional profile.
+token history. One exception (owner decision 2026-11-25, decisions.md): a new Headscale profile does not copy the
+write operations of headscale_api_keys. Not wired yet: nothing in the add-on creates or opens an additional profile.
 
 Mode and owner: asserted directly (stat), with a foreign owner simulated by a different effective uid, and once more
 for real in a uid 10001 process (test_mode_and_owner_as_the_add_on_user; it needs root, so only the CI runs it).
@@ -50,6 +51,13 @@ CONNECTIONS = {
                   'app_password': 'DUMMY-store-nextcloud-app-password'},
     'headscale': {'url': 'https://headscale.invalid', 'api_key': 'DUMMY-store-headscale-key'},
 }
+
+
+# What a new profile of the product does not copy from the default profile's enabled_write_tools (owner decision
+# 2026-11-25): a Headscale API key administers the whole server, and headscale_api_keys create hands a new one to the
+# holder of the token (HM-26 security review M-1). Written out here, not read from products, so that the code's own
+# notion of it is checked against it.
+WITHHELD = {'headscale': ['headscale_api_keys:create', 'headscale_api_keys:expire', 'headscale_api_keys:delete']}
 
 
 def tools(product):
@@ -117,9 +125,12 @@ def test_new_profile_copies_the_current_policy_and_nothing_else(tmp_path, log_sc
     # No backend identity of its own yet, and none borrowed (I5): the connection is empty, the endpoint is not stored.
     assert (new.connection, new.backend_url, new.backend_key, new.mcp_access_token, new.endpoint) == (None,) * 5
     assert not new.configured
-    # The default profile's policy as it is now.
+    # The default profile's policy as it is now, but for the write operations WITHHELD names (Headscale; the default
+    # profile here holds two of them, so a copy that kept them would differ).
+    kept = [grant for grant in default.enabled_write_tools if grant not in WITHHELD.get(product, ())]
     assert (new.writes_enabled, new.disabled, new.enabled_write_tools, new.denied_operations) == (
-        default.writes_enabled, default.disabled, default.enabled_write_tools, default.denied_operations)
+        default.writes_enabled, default.disabled, kept, default.denied_operations)
+    assert (kept != default.enabled_write_tools) == (product == 'headscale')
     assert new.disabled is not default.disabled and new.denied_operations is not default.denied_operations
     if product == 'odoo':
         assert new.odoo_write_switches == default.odoo_write_switches
@@ -148,6 +159,93 @@ def test_new_profile_never_carries_the_owner_defaults_marker(tmp_path, log_scan,
     assert new.owner_defaults_20261025 is None
     assert products.OWNER_DEFAULTS not in json.loads(new.model_dump_json())
     store.close()
+
+
+def headscale_default(grants=None, **policy):
+    """A Headscale default profile as a state: the grants a new installation holds (or *grants*) and *policy*."""
+    return ProductState(product='headscale', token='T' * 43, child_token='C' * 43,
+                        enabled_write_tools=sorted(write_grants('headscale')) if grants is None else grants, **policy)
+
+
+def test_the_withheld_writes_are_exactly_the_api_key_writes_of_headscale():
+    """Owner decision 2026-11-25: create, expire and delete of headscale_api_keys, nothing else (list stays a read the
+    new profile has) and nothing of any other product."""
+    api_keys = TOOLS['headscale']['headscale_api_keys']
+    assert (api_keys.read_operations, api_keys.write_operations) == (('list',), ('create', 'expire', 'delete'))
+    assert sorted(g for g in write_grants('headscale') if g.startswith('headscale_api_keys')) == sorted(WITHHELD['headscale'])
+    assert products.NEW_PROFILE_WITHHELD == {'headscale': ('headscale_api_keys',)}
+    assert len(write_grants('headscale')) == 21 and len(headscale_default().enabled_write_tools) == 21
+
+
+@pytest.mark.parametrize('start', ['all open', 'partly open', 'already denied', 'writes already off', 'tool disabled'])
+def test_a_new_headscale_profile_does_not_copy_the_api_key_writes(log_scan, start):
+    """Owner decision 2026-11-25 (an exception to DQ-02, Headscale only): from every starting point of the default
+    profile, the new profile has its other grants, disables, denies and legacy switch as the default profile has them
+    now, and none of the three headscale_api_keys writes; the default profile's own state is not touched."""
+    everything = sorted(write_grants('headscale'))
+    default = {
+        'all open': headscale_default(),  # what a new installation has
+        'partly open': headscale_default([g for g in everything if g not in (
+            'headscale_api_keys:expire', 'headscale_nodes:delete', 'headscale_policy:apply')],
+            disabled=['headscale_debug_node'], writes_enabled=False),
+        'already denied': headscale_default(denied_operations={'headscale_api_keys': ['create', 'expire', 'delete'],
+                                                               'headscale_users': ['delete']}),
+        'writes already off': headscale_default([g for g in everything if not g.startswith('headscale_api_keys')]),
+        'tool disabled': headscale_default(disabled=['headscale_api_keys']),
+    }[start]
+    before = default.model_dump_json()
+    new = profile_initial_state(default)
+    watch(log_scan, default, new)
+    assert default.model_dump_json() == before  # a copy: the default profile's state is read, never changed
+    assert new.enabled_write_tools == [g for g in default.enabled_write_tools if g not in WITHHELD['headscale']]
+    assert not [g for g in new.enabled_write_tools if g.startswith('headscale_api_keys')]
+    assert (new.writes_enabled, new.disabled, new.denied_operations) == (
+        default.writes_enabled, default.disabled, default.denied_operations)
+    assert new.enabled_write_tools is not default.enabled_write_tools
+    assert len(new.enabled_write_tools) == len(default.enabled_write_tools) - (
+        sum(g in default.enabled_write_tools for g in WITHHELD['headscale']))
+    # Nothing else changed from DQ-02: no backend of its own yet, its own tokens.
+    assert (new.connection, new.endpoint) == (None, None) and new.token != default.token
+
+
+def test_the_api_key_writes_stay_out_of_a_new_headscale_profile_until_its_administrator_turns_them_on():
+    """At the gateway's own check (policy.authorize, the one a tools/call passes): list is allowed (the new profile has
+    the read), create, expire and delete are refused as an operation the policy does not permit; the default profile
+    still has all four; and once the grants are saved for the new profile (PUT /api/policy does exactly this), the
+    three go through. Only the grants decide: nothing is denied for the new profile that the default profile does not
+    deny."""
+    from mcp_admin_core.policy import ToolCallRefused, authorize
+    default = headscale_default()
+    new = profile_initial_state(default)
+    assert new.denied_operations == default.denied_operations == {}
+
+    def call(state, operation, **arguments):
+        message = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
+                   'params': {'name': 'headscale_api_keys', 'arguments': {'operation': operation, **arguments}}}
+        return authorize(message, TOOLS['headscale'], state)
+
+    writes = {'create': {'expiration': '2099-01-01T00:00:00Z', 'reveal_once': True},
+              'expire': {'key_id': '401'}, 'delete': {'prefix': 'AbCdEf012345'}}
+    assert call(new, 'list') == 'tools/call'
+    for operation, arguments in writes.items():
+        assert call(default, operation, **arguments) == 'tools/call', operation
+        with pytest.raises(ToolCallRefused) as refused:
+            call(new, operation, **arguments)
+        assert refused.value.kind == 'operation_not_permitted', operation
+    turned_on = ProductState.model_validate({**new.model_dump(), 'enabled_write_tools': [
+        *new.enabled_write_tools, *WITHHELD['headscale']]})
+    for operation, arguments in writes.items():
+        assert call(turned_on, operation, **arguments) == 'tools/call', operation
+
+
+@pytest.mark.parametrize('product', [p for p in SUPPORTED if p != 'headscale'])
+def test_no_other_product_withholds_a_grant_from_a_new_profile(product):
+    """The exception is Headscale's alone (owner decision 2026-11-25): every other product's new profile has every
+    write grant its default profile has, including the ones the same tool names would suggest."""
+    assert product not in products.NEW_PROFILE_WITHHELD
+    default = ProductState(product=product, token='T' * 43, child_token='C' * 43,
+                           enabled_write_tools=sorted(write_grants(product)))
+    assert profile_initial_state(default).enabled_write_tools == default.enabled_write_tools
 
 
 def test_odoo_switches_are_written_as_saved_and_absent_methods_stay_absent(tmp_path, log_scan):

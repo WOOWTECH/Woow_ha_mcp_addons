@@ -721,3 +721,34 @@ test('a lost create answer whose profile was deleted since: the resend confirms 
   const posts = await calls(request, call => call.operation === 'profiles' && call.method === 'POST');
   expect(posts.map(call => call.operationId)).toEqual([posts[0].operationId, posts[0].operationId]);
 });
+
+test('Headscale connector rotation targets the selected profile only', async ({page, request}) => {
+  await reset(request, {product: 'headscale', parity: true, endpoint: 'https://mcp.example.test/mcp', profiles: {extra: [{id: B, label: 'Headscale B'}]}});
+  await open(page, '/access');
+  await choose(page, B, 'Headscale B');
+  await page.getByRole('button', {name: '產生新的 Claude.ai 連線網址', exact: true}).click();
+  await expect(page.getByRole('dialog')).toContainText('舊權杖');
+  await confirm(page, '確認繼續');
+  await expect(page.locator('#claude-secret')).toBeVisible();
+  const tokenCalls = await calls(request, call => call.operation?.startsWith('token/'));
+  expect(tokenCalls.map(call => [call.operation, call.profileHeader])).toEqual([['token/rotate', B]]);
+});
+
+test('the create dialog says Headscale\'s new profile does not copy the headscale_api_keys writes; Odoo\'s says nothing of it (owner decision 2026-11-25)', async ({page, request}) => {
+  for (const [product, said] of [['headscale', true], ['odoo', false]]) {
+    await reset(request, {product, parity: true, profiles: {}});
+    await open(page, '/overview');
+    await page.getByRole('button', {name: '新增帳號', exact: true}).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('新帳號會複製預設帳號目前的工具權限與寫入設定，之後各自獨立');
+    if (said) {
+      await expect(dialog).toContainText('不複製 headscale_api_keys 的建立、作廢與刪除（讀取照複製），預設不能用；需要時到這個帳號的「工具權限」頁自行開啟。');
+      await expect(dialog).toContainText('按「重新產生」');
+    } else {
+      await expect(dialog).not.toContainText('headscale_api_keys');
+      await expect(dialog).toContainText('按「顯示權杖」');
+    }
+    await confirm(page, '取消');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  }
+});

@@ -620,6 +620,7 @@ const server = http.createServer(async (request, response) => {
       }
       if (!['token/reveal','backend/test'].includes(operation) && !request.headers['if-match']) return switchedOn() ? refuse(response, 428, 'config_revision_required') : json(response,428,{detail:{code:'config_revision_required'}});
       if (request.headers['if-match'] && request.headers['if-match'] !== etag(profile)) return reply(response, 409, {detail: {code: 'config_conflict'}, untrusted: 'PRIVATE_CANARY_MUST_NOT_RENDER'}, profile, operation);
+      if (operation === 'token/reveal' && state.product === 'headscale') return reply(response,404,{detail:'Not Found'},profile,operation);
       if (operation === 'backend/test') return reply(response,200,{tested_configuration:'saved',backend:'reachable',health:state.health},profile,operation);
       if (operation === 'owner-defaults/restore' || operation === 'owner-defaults/dismiss') {
         // MOCK of the server rules: POST, no body, If-Match of the reviewed revision, a pending marker.

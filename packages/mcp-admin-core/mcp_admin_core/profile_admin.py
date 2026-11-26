@@ -23,7 +23,7 @@ A caller who is not an administrator never gets here (step 6), so nothing below 
 - A creation writes the profile once with its final first state (products.profile_initial_state: new tokens, no
   connection, the default profile's policy now; DQ-02), then the index (the commit), then registers and starts it
   (an unconfigured profile's child waits for its connection: status unconfigured). Its answer never carries a token:
-  token/reveal with X-MCP-Profile <the new id> does (plan 4.3).
+  token/reveal with X-MCP-Profile <the new id> does for other products; Headscale requires rotation.
 - A deletion (plan 4.4, DQ-14): the token revoked and the requests it carries ended (TokenAccess.committed), the
   backend credentials wiped, the profile no longer routed and its monitor and child stopped, its client and store
   closed, its index entry removed (only now is its port free), its directory removed without following a link (a
@@ -86,6 +86,11 @@ secret path (origin_policy.OriginPolicy, the manager's origin) is one more globa
   operation_outcome_unknown, the receipt left unknown (never a second write under its key).
 Neither carries a profile echo, a token or server text. A product with its own rule (Headscale: the manager made no
 policy) answers both as an unknown operation (404, no body).
+
+HM-25 (multi-profile plan 4.4 刪除順序 "產品清理"; plan 9 n8n row; DQ-04; FM-23): once a deleted profile's directory
+is gone (a profile's, an orphan's or a quarantine directory's), the product's cleanup runs (Registry.removed: the
+manager's profile_removed; n8n removes the profile's catalog copy outside /data). It runs whether or not the directory
+could be removed completely; a cleanup that fails is one WARNING and the deletion stands.
 
 What this module uses of profile_runtime.ProfileManager (HM-08's registry, HM-09's lifecycle) is in one class,
 Registry, so that a change of that interface is made in one place.
@@ -257,6 +262,10 @@ class Registry:
     async def unregister(self, profile_id):
         """No longer routed; its monitor stopped, its client and child closed, its store closed."""
         await self.manager.remove(profile_id)
+
+    def removed(self, profile_id):
+        """HM-25: the product's cleanup once a deleted profile's directory is gone (n8n: its catalog copy)."""
+        self.manager.removed(profile_id)
 
     async def reevaluate(self):
         await self.manager.reevaluate()
@@ -559,6 +568,7 @@ class ProfileAdmin:
             if not profiles.remove_profile_directory(self.registry.layout, profile_id):
                 logger.warning('multi-profile: the directory of deleted profile %s could not be removed completely; '
                                'what is left is an orphan and can be deleted again', profiles.log_id(profile_id))
+            self.registry.removed(profile_id)  # HM-25: the product's cleanup (n8n: the catalog copy)
             self._refresh_orphan_secrets(written)
             await self.registry.reevaluate()  # PaaS B-17: a profile its port or the limit held back starts now
             operation = self._complete(key, data)
@@ -758,6 +768,9 @@ class ProfileAdmin:
             if not profiles.remove_quarantine_directory(self.registry.layout, directory):
                 logger.warning('multi-profile: a quarantine directory of profile %s could not be removed completely; '
                                'it is still listed and can be deleted again', profiles.log_id(name[:24]))
+            quarantined = profiles.parse_quarantine_name(directory)[0]
+            if self.registry.entry(quarantined) is None:
+                self.registry.removed(quarantined)  # HM-25: the product's cleanup, unless that id is served again
             operation = self._complete(key, data)
             return self._answer({'deleted': name, 'operation': operation}, etag=etag)
 

@@ -4,7 +4,8 @@
 // 0.2.1: the child runs with WEBHOOK_SECURITY_MODE=permissive (owner decision 2026-10-15, set by n8n_adapter);
 // the global SSRFProtection validators are not patched here. HM-20: with WOOW_MCP_DENY_LOOPBACK=1 (n8n switched on),
 // SSRFProtection.createPinnedFetch, which only the official MCP client of the configured instance calls, refuses this
-// add-on's own addresses (below); the validators and createPinnedAgents are still not patched.
+// add-on's own addresses (below), and so does SSRFProtection.createPinnedAgents, which the webhook, chat and form
+// clients connect through (HM-25 security review S-1, owner decision 2026-11-25); the validators are still not patched.
 const dns = require("node:dns");
 const net = require("node:net");
 const crypto = require("node:crypto");
@@ -87,13 +88,17 @@ function allowedAddress(address) {
 // HM-20 (multi-profile plan 8.7, DQ-10; unreleased, behind the product switch): with WOOW_MCP_DENY_LOOPBACK=1 the
 // configured instance's own clients connect to no address that is this add-on itself: 127.0.0.0/8, ::1 or 0.0.0.0,
 // IPv4-mapped forms included, whether the URL names it or a name resolves to it (the add-on runs on Supervisor's
-// bridge network: loopback reaches only its own listeners). Both clients: the API client's pinned agents
-// (getPinnedAgents below) and the official MCP client's pinned fetch (services/n8n-official-mcp-client.js: the
-// instance's <origin>/mcp-server/http with N8N_MCP_ACCESS_TOKEN, after the webhook validation; it is the only caller of
-// createPinnedFetch, tests/test_backend_loopback.py). Who sets it: n8n_adapter.child_spec, only once n8n is switched on,
-// in the environment it builds (never inherited). Read once, when this file loads, before n8n-mcp's own code runs;
-// unset, nothing changes; any other value refuses to start. WEBHOOK_SECURITY_MODE=permissive and the webhook, chat and
-// form clients (createPinnedAgents) stay as they are (owner decision 2026-10-15, kept 2026-11-15; HM-25 reviews it).
+// bridge network: loopback reaches only its own listeners). The API client's pinned agents (getPinnedAgents below), the
+// official MCP client's pinned fetch (services/n8n-official-mcp-client.js: the instance's <origin>/mcp-server/http with
+// N8N_MCP_ACCESS_TOKEN, after the webhook validation; it is the only caller of createPinnedFetch,
+// tests/test_backend_loopback.py) and, since the HM-25 security review S-1 (owner decision 2026-11-25), the webhook, chat
+// and form clients (N8nApiClient.triggerWebhook, triggers/handlers/chat-handler.js and form-handler.js: n8n-mcp makes
+// their agents in createPinnedAgents and nowhere else, tests/test_backend_loopback.py). Who sets it:
+// n8n_adapter.child_spec, only once n8n is switched on, in the environment it builds (never inherited). Read once, when
+// this file loads, before n8n-mcp's own code runs; unset, nothing changes; any other value refuses to start.
+// WEBHOOK_SECURITY_MODE=permissive stays (owner decision 2026-10-15, kept 2026-11-15 and 2026-11-25): the validators
+// accept any address, so a LAN or public address still connects through the webhook, chat and form clients; only an
+// answer that is this add-on itself is refused.
 const denyLoopback = (() => {
     const value = process.env.WOOW_MCP_DENY_LOOPBACK;
     if (value === undefined) return false;
@@ -111,6 +116,13 @@ if (denyLoopback) {
     SSRFProtection.createPinnedFetch = function (addresses) {
         if (!Array.isArray(addresses) || addresses.some(entry => !entry || thisHost(String(entry.address)))) denied();
         return createPinnedFetch.apply(this, arguments);
+    };
+    // The webhook, chat and form clients pin their agents to every answer their permissive validation got, so a name
+    // that has one answer that is this add-on is refused as a whole (DNS rebinding); the refusal is the same as above.
+    const createPinnedAgents = SSRFProtection.createPinnedAgents;
+    SSRFProtection.createPinnedAgents = function (addresses) {
+        if (!Array.isArray(addresses) || addresses.some(entry => !entry || thisHost(String(entry.address)))) denied();
+        return createPinnedAgents.apply(this, arguments);
     };
 }
 

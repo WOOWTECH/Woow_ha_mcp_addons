@@ -276,11 +276,13 @@ def test_scrub_redacts_message_args_exception_and_keeps_access_format():
 
 
 def test_launchers_keep_access_log_off_and_install_redaction():
-    for launcher in ("packages/mcp-admin-core/mcp_admin_core/run_product.py", "apps/n8n/run.py"):
-        source = (ROOT / launcher).read_text()
-        assert source.count("uvicorn.Config(") == 1 and "access_log=False" in source, launcher
-        assert "redact.install()" in source and "redact.guard_handlers(*redact.UVICORN_LOGGERS)" in source, launcher
-        assert source.index("redact.install()") < source.index("server.serve()"), launcher
+    source = (ROOT / "packages/mcp-admin-core/mcp_admin_core/run_product.py").read_text()
+    assert source.count("uvicorn.Config(") == 1 and "access_log=False" in source
+    assert "redact.install()" in source and "redact.guard_handlers(*redact.UVICORN_LOGGERS)" in source
+    assert source.index("redact.install()") < source.index("server.serve()")
+    # HM-25: n8n's launcher makes no listener of its own: it runs run_product's runtime (the same listeners).
+    n8n = (ROOT / "apps/n8n/run.py").read_text()
+    assert "uvicorn" not in n8n and "run_product.run(" in n8n
 
 
 async def test_real_uvicorn_logs_never_show_the_secret(store):

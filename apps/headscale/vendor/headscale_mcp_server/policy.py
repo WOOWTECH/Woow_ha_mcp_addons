@@ -29,6 +29,9 @@ WRITE_GRANTS = frozenset(
 _NAME = re.compile(r"[A-Za-z0-9_]{1,128}\Z")
 _OPERATION = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
+# The child token this process was started with: products.child_spec sets it to the state's own child_token, and
+# apps/runtime/session_idle.py refuses to start without it (HM-06).
+CHILD_TOKEN_ENV = "WOOW_MCP_CHILD_TOKEN"
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,7 @@ class SavedPolicy:
             if "headscale" in get_args(Product):
                 ProductState.model_validate(value)
             connection = value["connection"]
+            own = os.environ.get(CHILD_TOKEN_ENV)
             if (not isinstance(connection, dict) or set(connection) != {"url", "api_key"}
                     or not isinstance(connection["url"], str)
                     or not isinstance(connection["api_key"], str)
@@ -95,7 +99,11 @@ class SavedPolicy:
                     or (value["token"] is not None and not isinstance(value["token"], str))
                     or (value["token"] is not None and not _TOKEN.fullmatch(value["token"]))
                     or not isinstance(value["child_token"], str)
-                    or not _TOKEN.fullmatch(value["child_token"])):
+                    or not _TOKEN.fullmatch(value["child_token"])
+                    # The state read is this child's own, not another profile's on the same server and key, nor one
+                    # whose child token was replaced while this child went on running (HM-26 security review S-1).
+                    or own is None or not _TOKEN.fullmatch(own)
+                    or not hmac.compare_digest(value["child_token"], own)):
                 raise ValueError()
             disabled, grants, denied = value["disabled"], value["enabled_write_tools"], value["denied_operations"]
             if (not isinstance(disabled, list) or len(disabled) > 256

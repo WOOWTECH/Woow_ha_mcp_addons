@@ -241,6 +241,9 @@ def test_http_status_errors_are_classified_by_status_with_the_response_body():
         'BACKEND_HTTP_ERROR status=503: 503 Service Unavailable for POST /api/cron/jobs'
 
 
+# Train B: Hermes is switched on in the repository, and a switched-on product's child refuses the loopback fake Dashboard
+# this test reads a rejected body from (HM-20: WOOW_MCP_DENY_LOOPBACK=1); the child's reporting is the same in both modes.
+@pytest.mark.usefixtures('switched_off')
 async def test_real_hermes_child_reports_status_without_reflecting_rejected_body(tmp_path):
     from test_six_hardening import Quiet, runtime, serve, call as hcall
 

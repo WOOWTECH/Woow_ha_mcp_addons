@@ -324,8 +324,9 @@ def check_saved_destinations(state, previous=None):
 # the products whose MCP token is bound to one backend identity once they are switched on: Odoo (PaaS #131,
 # woow-mcp-server 69ac425 apps/odoo/odoo_mcp_admin/routers/config.py ODOO_IDENTITY_KEYS) and, HM-22 (plan 9 Nextcloud
 # row), Nextcloud: its url and username, not its app password (PaaS #154, woow-mcp-server 0f94aa4
-# apps/nextcloud/nextcloud_mcp_admin/routers/config.py IDENTITY_KEYS). Hermes (HM-24) joins with its own slice;
-# identity_fields.TOKEN_ROTATING already names its fields.
+# apps/nextcloud/nextcloud_mcp_admin/routers/config.py IDENTITY_KEYS). Hermes (HM-24) is not in it: as PaaS (owner,
+# 2026-11-20) a Hermes backend identity change retains the existing MCP token (contract section 9 #134), so the fields
+# identity_fields.TOKEN_ROTATING names for it are data that nothing acts on. Other protections still apply.
 IDENTITY_BOUND = frozenset({'odoo', 'nextcloud'})
 
 
@@ -369,8 +370,8 @@ def identity_rebound(previous, candidate) -> bool:
     url, username) names another identity in candidate (same_identity), a cleared connection included (PaaS
     patch_connection_bound: a cleared identity field is a change; were it not, clearing and then saving another account
     would keep the token, as a first setup does). The first setup (no connection saved yet), a revoked token and a
-    change of the password alone keep the token as they do today. Switched off, never (plan 3.3: the token stays, byte
-    for byte)."""
+    change of a password or key alone keep the token as they do today. Switched off, never (plan 3.3: the token stays,
+    byte for byte)."""
     product = getattr(previous, 'product', 'n8n')
     if product not in IDENTITY_BOUND or not features.enabled(product):
         return False
@@ -734,6 +735,16 @@ class ProductStore(Store):
         return ProductState.model_validate(value)
 
 
+# Owner decision 2026-11-25 (docs/multi-profile/decisions.md; the one exception to DQ-02, which copies the default
+# profile's whole policy): the write operations of these tools are not copied into a NEW profile of the product, which
+# starts without them (the reads are copied). A Headscale API key administers the whole server, and headscale_api_keys
+# create hands a new one, in clear, to whoever holds the profile's token, out of reach of every tool policy and of
+# "Revoke all"; expire and delete stop the other profiles' keys (HM-26 security review M-1). An administrator turns them
+# on in the profile's own tool page. Only a creation applies it: the default profile and every profile that exists keep
+# their policy, and no other product has an entry.
+NEW_PROFILE_WITHHELD = {'headscale': ('headscale_api_keys',)}
+
+
 def profile_initial_state(default: ProductState, *, taken=()) -> ProductState:
     """The complete first state of a new additional profile, written once by ProductStore(create=...) (multi-profile
     plan §4.3; DQ-02 (a), 2026-11-14). HM-07: nothing calls it yet (HM-10 creates profiles).
@@ -741,7 +752,8 @@ def profile_initial_state(default: ProductState, *, taken=()) -> ProductState:
     New MCP and child tokens, never the default profile's or one of *taken* (the other profiles' tokens and child
     tokens; I2). No backend connection or credential, no endpoint (I5). The default profile's policy as it is now:
     writes_enabled, disabled, enabled_write_tools, denied_operations, Odoo's allowed methods as stored (absent stays
-    absent) and its four child switches as a saved value (the legacy absence means all four on). Never the n8n
+    absent) and its four child switches as a saved value (the legacy absence means all four on); but for the write grants
+    NEW_PROFILE_WITHHELD names (Headscale's headscale_api_keys writes), which are left out. Never the n8n
     session settings, the owner-defaults marker or a token history entry: creating a profile is no token change.
     identity_fields.STATE_FIELDS classifies every field. A product without additional profiles (NO_PROFILE_PRODUCTS,
     DQ-28) is refused here too; HM-10 refuses it first (409 profile_product_unsupported).
@@ -751,9 +763,12 @@ def profile_initial_state(default: ProductState, *, taken=()) -> ProductState:
     avoid = {*taken, default.token, default.child_token}
     token = _new_token(avoid)
     child_token = _new_token(avoid | {token})
+    withheld = {grant for name in NEW_PROFILE_WITHHELD.get(default.product, ())
+                for grant in TOOLS[default.product][name].grants(name)}
     return ProductState(
         product=default.product, token=token, child_token=child_token, writes_enabled=default.writes_enabled,
-        disabled=list(default.disabled), enabled_write_tools=list(default.enabled_write_tools),
+        disabled=list(default.disabled),
+        enabled_write_tools=[grant for grant in default.enabled_write_tools if grant not in withheld],
         denied_operations={name: list(operations) for name, operations in default.denied_operations.items()},
         odoo_write_switches=default.effective_odoo_write_switches if default.product == 'odoo' else None,
         odoo_allowed_methods=None if default.odoo_allowed_methods is None else list(default.odoo_allowed_methods))

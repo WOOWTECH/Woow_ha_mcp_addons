@@ -6,6 +6,8 @@
 
 **LiteLLM、Nextcloud、EMQX 0.5.0**（多帳號第一批 train A）：這三個產品開通多帳號（預設帳號＋最多 3 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），Hermes、Headscale、n8n 維持沒開通。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見各產品的 [LiteLLM](addons/litellm/CHANGELOG.md)、[Nextcloud](addons/nextcloud/CHANGELOG.md)、[EMQX](addons/emqx/CHANGELOG.md) CHANGELOG 與 [upgrade-notes.yaml](upgrade-notes.yaml)。三個映像由 GitHub 託管的發版流程建置並驗收，已發佈的 digest 與展示機真後端驗收結果見 [LiteLLM](docs/operations/release-decision-litellm-0.5.0.md)、[Nextcloud](docs/operations/release-decision-nextcloud-0.5.0.md)、[EMQX](docs/operations/release-decision-emqx-0.5.0.md) 發佈紀錄。
 
+**Hermes、n8n、Headscale 0.5.0**（多帳號第二批 train B，2026-11-25 準備，尚未發佈）：這三個產品開通多帳號（Hermes 與 Headscale 是預設帳號＋最多 3 個額外帳號，n8n 是預設帳號＋最多 2 個額外帳號，每個帳號一組後端、一把權杖與兩條網址、一份工具政策、一個子程式；只看權杖決定是哪個帳號），七個商店產品只剩 OpenDesign（商店停用）不開放。既有安裝升級後原本的網址、權杖、設定都不變，仍看得到的改變見各產品的 [Hermes](addons/hermes/CHANGELOG.md)、[n8n](addons/n8n/CHANGELOG.md)、[Headscale](addons/headscale/CHANGELOG.md) CHANGELOG 與 [upgrade-notes.yaml](upgrade-notes.yaml)；三個產品都另外帶出 PaaS #161 的重複 JSON-RPC id 防護（同一個 session 內進行中的請求重複用同一個 id 會被拒，不受多帳號開關管），Headscale 另外有：面板不再顯示現有權杖（要取得就重新產生）、新帳號預設不能用 `headscale_api_keys` 的建立、作廢與刪除、子程式只認自己帳號的 child token。這一版建在 2026-11-25 的維修版（下一段）之上，維修版要先合併。映像尚未建置；發佈紀錄（草稿）見 [Hermes](docs/operations/release-decision-hermes-0.5.0.md)、[n8n](docs/operations/release-decision-n8n-0.5.0.md)、[Headscale](docs/operations/release-decision-headscale-0.5.0.md)。
+
 Headscale 0.4.19 已有 Stable Release 並進入商店（2026-11-18）：主因是管理面板接受 HA Core 2026.11.2（0.4.18 只認到 2026.11.1），並帶出 0.4.18 之後合併、不受多帳號開關管的共用變更（見 [CHANGELOG](CHANGELOG.md)）；發佈紀錄見 [Headscale 0.4.19 發佈紀錄](docs/operations/release-decision-headscale-0.4.19.md)，0.4.18 見 [Headscale 0.4.18 發佈紀錄](docs/operations/release-decision-headscale-0.4.18.md)。其他產品的版號各自獨立。
 
 **2026-11-25 的維修版**（Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、n8n／Hermes 0.4.15、Headscale 0.4.20；OpenDesign 只升來源版本到 0.4.15）：主因是管理面板接受 HA Core 2026.11.3，並自動放行已審查月份的後續修補版（這些產品的前一版只認到 2026.11.2，在 Core 2026.11.3 上管理面板拒絕每個請求，MCP 端點不受影響）；另外帶出：面板把代理（例如 Cloudflare）改成的弱 ETag 當成同一個版本（Odoo、EMQX、LiteLLM、Nextcloud：經 Cloudflare 開 HA 時，「瀏覽器來源檢查」卡片原本不能儲存）、EMQX `emqx_list_topics` 的說明對齊 PaaS #160、EMQX 與 Nextcloud 的 DOCS 補上實測的限制，以及 n8n、Hermes、Headscale 的還原後開機守門與面板還原提示（見 [CHANGELOG](CHANGELOG.md)）。映像由 GitHub 託管機器的發版流程建置並驗收；已發佈的 digest 與展示機驗收結果見各產品的發佈紀錄：[Odoo 0.5.2](docs/operations/release-decision-odoo-0.5.2.md)、[EMQX 0.5.1](docs/operations/release-decision-emqx-0.5.1.md)、[LiteLLM 0.5.1](docs/operations/release-decision-litellm-0.5.1.md)、[Nextcloud 0.5.1](docs/operations/release-decision-nextcloud-0.5.1.md)、[n8n 0.4.15](docs/operations/release-decision-n8n-0.4.15.md)、[Hermes 0.4.15](docs/operations/release-decision-hermes-0.4.15.md)、[Headscale 0.4.20](docs/operations/release-decision-headscale-0.4.20.md)。
@@ -23,7 +25,7 @@ Headscale 0.4.19 已有 Stable Release 並進入商店（2026-11-18）：主因�
 **Odoo Manage 已於 2026-10-06 下架封存**：0.1.4 是最後一版，0.1.5 起不在商店，也不再建置或發佈。已安裝的仍以 0.1.4 執行，但不會再有更新或安全修正；它的設定保有 Odoo API key，並有 `homeassistant_api` 權限，建議改用 Woow Odoo MCP Server 後移除。Woow Odoo MCP Server 是不同的 MCP server（工具與設定不同，要另設後端、endpoint 與 token）。已發佈的 0.1.0–0.1.4 映像保留，舊備份仍可還原。步驟見[更新、備份與回復](docs/operations/update-backup-rollback.md)；原始碼保留在 `apps/odoo-manage`。
 僅以 **amd64 / Supervisor 2026.09.3** 為封裝目標；不是 Core 最低版本。
 
-**管理面板支援的 Core 版本**：只在該版 add-on 審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；0.4.2 起再加 2026.10.2–2026.10.4；Headscale 0.4.14 再加 2026.11.0–2026.11.1、0.4.19 起再加 2026.11.2，Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 0.4.14 起加 2026.11.0–2026.11.2；2026-11-25 的維修版（Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、n8n／Hermes 0.4.15、Headscale 0.4.20；OpenDesign 的來源版本 0.4.15）起再加 2026.11.3；0.1.5 及更早只有 2026.7.2）。這六支的 0.4.13 映像只支援到 2026.10.4，Headscale 0.4.18 只支援到 2026.11.1，維修版之前最新的映像（Odoo 0.5.1、EMQX／LiteLLM／Nextcloud 0.5.0、n8n／Hermes 0.4.14、Headscale 0.4.19）只支援到 2026.11.2；
+**管理面板支援的 Core 版本**：只在該版 add-on 審查過的 HA Core 版本運作（0.1.6–0.1.8：2026.7.2–2026.9.4 與 2026.10.0；0.1.9 起再加 2026.10.1；0.4.2 起再加 2026.10.2–2026.10.4；Headscale 0.4.14 再加 2026.11.0–2026.11.1、0.4.19 起再加 2026.11.2，Odoo、n8n、Hermes、EMQX、LiteLLM、Nextcloud 0.4.14 起加 2026.11.0–2026.11.2；2026-11-25 的維修版（Odoo 0.5.2、EMQX／LiteLLM／Nextcloud 0.5.1、n8n／Hermes 0.4.15、Headscale 0.4.20；OpenDesign 的來源版本 0.4.15）起再加 2026.11.3（Hermes、n8n、Headscale 的 0.5.0 建在維修版之上，同樣認得）；0.1.5 及更早只有 2026.7.2）。這六支的 0.4.13 映像只支援到 2026.10.4，Headscale 0.4.18 只支援到 2026.11.1，維修版之前最新的映像（Odoo 0.5.1、EMQX／LiteLLM／Nextcloud 0.5.0、n8n／Hermes 0.4.14、Headscale 0.4.19）只支援到 2026.11.2；
 **從上面 2026-11-25 的維修版起，已審查月份的後續修補版自動放行**（負責人 2026-11-25 決定：審過 2026.11 就放行 2026.11.x，新月份仍要先審）：版本字串要剛好是 `年.月.修補`（月份與修補號不補零，不接受前後空白、`v` 開頭、beta／rc／dev 或第四段），該年該月已有審過的版本，而且修補號大於該月審過的最大修補號（例如審過 2026.11.3 之後，2026.11.4 起放行；2026.7.0 與 2026.7.1 比審過的最早版本 2026.7.2 更早，不放行）；放行的版本沒有逐版審查，add-on 紀錄每個版本記一行，之後的 add-on 版本再補審並列入清單；最壞情況、偵測與回復見 [審查紀錄](docs/ha-role-core-contract.md)。
 其他版本（新的月份、預覽版、其他格式）整個管理面板都回 403；0.4.1 以前看起來和「不是管理員」完全一樣（add-on 紀錄也沒有訊息），0.4.2 起管理面板改顯示「這個 HA Core 版本尚未審核：<版本>」，add-on 紀錄也記一行同樣的說明（不含權杖）；
 MCP 端點（Bearer token）不經這項檢查，不受影響。新月份的 Core 版本要等 add-on 發新版才支援（同月份的後續修補版不用等），升級 Core 前請先對照這份清單。
@@ -51,8 +53,8 @@ Kubernetes MCP 與 Vibe Kanban 不在範圍。
 
 各產品 `addons/<product>/DOCS.md`、`CHANGELOG.md`、`translations/zh-Hant.yaml`
 提供工具數、連線欄位、風險與更新狀態（工具數以[工具表](docs/tool-surface.md)各產品段落為準）。一台 HA 可分別選裝，每個 Add-on
-獨立 token／資料／版本。Odoo 0.5.1 起同一個 Add-on 可開預設帳號＋最多 5 個額外帳號，LiteLLM、Nextcloud、EMQX 的 0.5.0 起可開預設帳號＋最多 3 個額外帳號（每個帳號一組後端、一把權杖；同產品可多帳號，
-但不宣稱多租戶，也不宣稱子程式之間隔離：所有帳號的子程式是同一個系統帳號）；其他產品仍是每個 Add-on 一組後端。
+獨立 token／資料／版本。Odoo 0.5.1 起同一個 Add-on 可開預設帳號＋最多 5 個額外帳號，LiteLLM、Nextcloud、EMQX、Hermes、Headscale 的 0.5.0 起可開預設帳號＋最多 3 個額外帳號，n8n 的 0.5.0 起可開預設帳號＋最多 2 個額外帳號（每個帳號一組後端、一把權杖；同產品可多帳號，
+但不宣稱多租戶，也不宣稱子程式之間隔離：所有帳號的子程式是同一個系統帳號）；OpenDesign（商店停用）仍是每個 Add-on 一組後端。
 
 ## 管理功能與範圍
 

@@ -69,7 +69,7 @@ owned local fixtures, not evidence of HA Ingress or a live third-party backend.
 
 ## 多帳號（產品開通後）的設定
 
-這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫產品開通多帳號之後的設定；**Odoo 從 0.5.1 起、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通（HM-19a、火車 A），其他產品還沒開通**，沒開通的產品照上面
+這一節照多帳號契約 `docs/multi-profile/contract.md`（HM-18 定稿）寫產品開通多帳號之後的設定；**Odoo 從 0.5.1 起，LiteLLM、Nextcloud、EMQX、Hermes、n8n、Headscale 從各自的 0.5.0 起開通（HM-19a、火車 A、火車 B），只有 OpenDesign 與 Odoo Manage 不開放**，沒開通的產品照上面
 各節，回應一個位元組都不變。逐條規則、錯誤代碼與欄位以契約為準（第 2、3、4.1 節；開通後預設帳號會變的事：第 1.4 節）。
 
 - **每個帳號一份設定**：預設帳號在 `/data/mcp/state.json`（一個鍵都不加），額外帳號在 `/data/mcp/profiles/<24 位小寫 hex>/state.json`。每個帳號各有自己的
@@ -90,6 +90,9 @@ owned local fixtures, not evidence of HA Ingress or a live third-party backend.
   回 200 `{"saved":true,"token_rotated":true,…}`（不含權杖，新權杖照舊經 `token/reveal`）。只換密碼、第一次設定、權杖已撤銷時照上面，不換權杖。寫入失敗一律
   503 `{"error":"state unavailable"}`，結果不明時重啟後照磁碟上的設定（權杖可能已換）；新子程式起不來時是上面那種 HTTP 503（`saved:true`、`detail.code="config_apply_failed"`）另帶
   `token_rotated:true`（權杖已換；契約第 3.1 節 `backend` 列）。
+- **Hermes 換後端不換權杖**（HM-24，2026-11-20 定案，與 PaaS 一致；契約 §8.8 #134）：改 `gateway_url`、`dashboard_url`、`dashboard_username`
+  （含補上或清空 Dashboard；三欄只給一部分照舊 400）都保留原權杖，沒有 `token_rotated`，舊網址仍可使用並連到新的後端；要收回舊的存取，明確重新
+  產生或撤銷權杖。新來源要重填秘密與帳號隔離照舊。
 - **新來源要重填秘密**（DQ-40 ⑨，全部產品）：`backend/patch` 把網址改到另一個來源（scheme、host、port）卻沒帶那條網址會送去的已存秘密，回 422
   `CREDENTIAL_REPLACEMENT_REQUIRED_FOR_NEW_ORIGIN`，什麼都不寫。`backend` 整份取代本來就帶全部秘密，不受影響。
 - **後端網址拒絕 loopback**（HM-20）：存檔改到的後端網址是 127.0.0.0/8、::1 或 `localhost` 時回 400 `{"error":"request denied"}`；子程式連線時也擋。

@@ -57,20 +57,24 @@ CURRENT_POST_SOURCE_BYTES = {
         'emqx', '4498443ea16462a52621645b3b6625198fe0f20b12166fa7c7c9197557502b67'),
     'apps/emqx/vendor/emqx_mcp_server/deps.py': (
         'emqx', 'fef905c6b76e7b07e6a0c67264ae2981e0c4e2aaeb5ebf4a57927ed2eac95261'),
-    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on.
-    # No tool, schema or handler change.
-    'apps/n8n/n8n_adapter.py': ('n8n', 'e3df8d0f88233051e1b399f45ed1e42e4c3fb621324117f77e0b386f3277309c'),
-    # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; no tool, schema or handler change.
-    'apps/n8n/backend_policy.cjs': ('n8n', '055ca90a23c5d401d742fb165ffab2e6efcc5ca6a41a96a51293a4a8943f1826'),
+    # HM-04: the child port is a parameter (3000 by default); HM-20: WOOW_MCP_DENY_LOOPBACK once n8n is switched on;
+    # HM-25: an additional profile's child (HOME, its own catalog copy, --port, none without a backend); its review: the
+    # copy made through directory descriptors and again for another backend; HM-25 security review S-1 (2026-11-25): comments
+    # only. No tool, schema or handler change.
+    'apps/n8n/n8n_adapter.py': ('n8n', 'c26630383366d7bc36619e2e651abb070881f0fbeeb526a145d53a380c8a01e1'),
+    # HM-20: loopback refusal for the configured instance behind WOOW_MCP_DENY_LOOPBACK; HM-25 security review S-1
+    # (2026-11-25): the same refusal in createPinnedAgents, for the webhook, chat and form clients' connections; no
+    # tool, schema or handler change.
+    'apps/n8n/backend_policy.cjs': ('n8n', '665aed20ed757fd5baac46dd80de9fb0166f3cd1f205eac9db76f5e8c81806e6'),
     # HM-13b: the boot guard (restore_lock.guard) before the child and the listeners, and the bootstrap's
-    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; no tool, schema or
-    # handler change.
-    'apps/n8n/run.py': ('n8n', '2eab88d9f1090d02092b8ec36d454bfd5a966fe3b2448909ee6fa65fc0192c88'),
+    # dormant_profiles; HM-13c: the restore notice (restore_lock.read_notice) for the bootstrap; HM-25: the runtime is
+    # run_product's (the n8n adapter); no tool, schema or handler change.
+    'apps/n8n/run.py': ('n8n', '71d86351c716ed6f40b25ca337205930686531f450fc16bc088f37bff2e13360'),
     'apps/hermes/launch.py': ('hermes', '68ebc3f2b72d59001fb9e26d7836fb47cd4c82d68676b15babe4d1f5ac9f8903'),
-    # 0.4.14 and 0.4.15 releases: the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14 -> 0.4.15); 0.4.15 also moves the Node
-    # base image 26.12.1 -> 26.13.1 (both FROM lines and the node version check; Node CVEs fixed in 26.13.1). No tool, schema
-    # or handler change.
-    'apps/n8n/Dockerfile': ('n8n', 'b4d793cce1e3797bcfd0aba2ce82e031827810aa34c1956704ee417ab2009eea'),
+    # 0.4.14, 0.4.15 and 0.5.0 releases: the ARG BUILD_VERSION default changes (0.4.13 -> 0.4.14 -> 0.4.15 -> 0.5.0, n8n's own
+    # version line from train B's 0.5.0); 0.4.15 also moves the Node base image 26.12.1 -> 26.13.1 (both FROM lines and the
+    # node version check; Node CVEs fixed in 26.13.1). No tool, schema or handler change.
+    'apps/n8n/Dockerfile': ('n8n', 'bad433fe70a482407e1c57201002d989836f71576b260798bbc0a8df39675dd0'),
     # 0.4.14 and Headscale 0.4.19 releases: only dnspython 2.9.0 -> 2.9.2 in the child's lock (GHSA-vvf4-9x63-8xvv, a fixable
     # High the release scanner blocks; email-validator's dependency). No tool, schema or handler change.
     'apps/emqx/uv.lock': ('emqx', '297392a4f80abe5723b9518b1f7379ad64a1b638931e328577caf1e9f4fce16a'),

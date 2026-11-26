@@ -77,8 +77,7 @@ https://<你的對外網址>/private_<token>/mcp
 ```
 
 1. 在管理面板「連線與權杖」頁，先把「MCP 用戶端端點」設成 Claude.ai 連得到的 `https://…/mcp` 並儲存。
-2. 按「顯示 Claude.ai 連線網址」，確認後網址只顯示 60 秒（與「顯示權杖」同一個 CSRF 保護的 reveal 流程；離開頁面、切換視窗即隱藏），
-   按「複製 Claude.ai 連線網址」。沒設定端點時按鈕停用並顯示說明，不會產生猜測的網址。
+2. Headscale 按「產生新的 Claude.ai 連線網址」並確認：這會輪替該帳號權杖，使舊網址與所有使用舊權杖的連線失效。其他產品按「顯示 Claude.ai 連線網址」，不輪替目前權杖。網址只顯示 60 秒，離開頁面或切換視窗即隱藏；按「複製 Claude.ai 連線網址」。沒設定端點時按鈕停用，不會產生猜測的網址。若 Headscale 輪替結果遺失或未顯示，要再取得權杖須再次輪替。
 3. 在 Claude.ai 新增自訂連接器，把網址貼進伺服器網址欄位；OAuth 進階設定留空。
 
 0.2.2 起不必先設定後端：還沒設定或後端暫時連不上時，連接器照樣能新增並列出全部工具，呼叫工具會得到說明原因的錯誤
@@ -112,7 +111,7 @@ Gateway 在這條路徑上的行為：
 
 ## 多帳號（產品開通後）
 
-這一節寫產品開通多帳號之後的接法。**Odoo 從 0.5.1 起、LiteLLM、Nextcloud、EMQX 從各自的 0.5.0 起開通**（HM-19a、火車 A；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`），其他產品還沒開通；之後哪一版、哪個產品
+這一節寫產品開通多帳號之後的接法。**Odoo 從 0.5.1 起，LiteLLM、Nextcloud、EMQX、Hermes、n8n、Headscale 從各自的 0.5.0 起開通**（HM-19a、火車 A、火車 B；`MULTI_PROFILE_PRODUCTS` 是 `odoo`、`emqx`、`litellm`、`nextcloud`、`hermes`、`n8n`、`headscale`），只有 OpenDesign 與 Odoo Manage 不開放（DQ-28）；之後哪一版、哪個產品
 開通，以該產品的 CHANGELOG 為準。沒開通的產品照上面兩種接法，回應一個位元組都不變。完整規則見多帳號契約 `docs/multi-profile/contract.md` 第 2 節；管理與故障
 處理見[操作指南](guide.md#多帳號產品開通後)。
 
@@ -164,7 +163,7 @@ Gateway 在這條路徑上的行為：
   多餘的 params 鍵、`_meta` 不合法、initialize 參數錯、帶 id 的 initialized 等）仍回 403，body 只有 `{"error":"request denied"}`。
   不應因被拒而開全權限後端帳號。已知 client 差異（0.1.5 審查 RC F7）：Python MCP SDK 1.x client 遇到 403 會讓整個 session
   斷線（要重新連線）；TypeScript SDK 只有那一次呼叫失敗。斷線時 Python client 不送 DELETE，子程序的 session 會留下來：n8n 所有
-  client 共用 20 個 session，10 分鐘內約 20 次這種拒絕就會用完，之後所有 client 的 initialize 都回 429（JSON-RPC 錯誤 -32000
+  client 共用 20 個 session（多帳號開通後是同一個帳號的 client 共用該帳號的 20 個），10 分鐘內約 20 次這種拒絕就會用完，之後所有 client 的 initialize 都回 429（JSON-RPC 錯誤 -32000
   「Too Many Requests」），要等閒置 10 分鐘的 session 被回收；其他六支（Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud）
   留下的 session 0.1.8 起閒置 30 分鐘就結束（0.1.7 以前會累積到子程序重啟）。0.1.14 起帶 session 的工具拒絕不再是 403，
   Python client 對 JSON-RPC 錯誤的行為尚未在本 repo 重測。
@@ -175,7 +174,8 @@ Gateway 在這條路徑上的行為：
   會為這種請求開一個新 session 並留到子程序重啟；n8n 對這種請求回 400，但沒有 session 的通知回 202。
 - Session 結束：client 用完要送 `DELETE /mcp`（帶 `Mcp-Session-Id`）。沒送 DELETE 的 session（例如 client 當掉、斷線，或 TypeScript
   SDK 只呼叫 `close()`：1.30.0 的 `close()` 不送 DELETE，要先呼叫 transport 的 `terminateSession()`）：
-  - n8n：不變，所有 client 共用 20 個 session，閒置 10 分鐘回收。
+  - n8n：不變，所有 client 共用 20 個 session，閒置 10 分鐘回收。多帳號開通後（n8n 的升版 PR 才開通；HM-25）是每個帳號各自
+    20 個：每個帳號有自己的子程序與自己的 session 設定，一個帳號的 session 用完不影響別的帳號。
   - Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud：0.1.8 起閒置 30 分鐘由子程序結束（0.1.7 以前留到子程序重啟）。
   被結束的 session，之後用它的請求：
   - Odoo、Hermes、OpenDesign、EMQX、LiteLLM、Nextcloud：回 404，有 id 的請求與 GET 是 JSON-RPC 錯誤 -32000「Not Found」

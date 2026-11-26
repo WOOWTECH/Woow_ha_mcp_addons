@@ -19,6 +19,16 @@ export const connectionHelp = {
   nextcloud: '建議為 AI 助理建一個專用帳號（例如 assistant），只把需要的資料夾與行事曆分享給它：app password 能存取該帳號看得到的一切，無法只限定某些資料夾。App 密碼的取得方式：以該帳號登入 Nextcloud → 右上角頭像 →「個人設定」→「安全性」→「裝置與工作階段」，輸入名稱（例如 MCP）後按「建立新應用程式密碼」，複製只顯示一次的密碼貼到這裡。不要填登入密碼；啟用兩步驟驗證的帳號也可用 app password，日後可在同一處撤銷。',
   headscale: '填 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。這個 Add-on 只管理同一個 Headscale 執行個體；工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
 };
+// HM-26 (plan 9 Headscale row; DQ-26, the plan's recommendation): once the panel serves profiles (the product switched on),
+// each profile manages its own Headscale server, or the same one with a policy of its own, and an API key administers the
+// whole server. Profiles on one server are kept apart by their tool policies alone, whatever keys they use, and only a
+// policy without headscale_api_keys create, expire and delete keeps a profile restricted (HM-26 security review M-1).
+// Without profiles the help is connectionHelp's, word for word.
+const scopedConnectionHelp = {
+  headscale: '填這個帳號要管理的 Headscale 控制伺服器的管理 API 網址（根網址或 /api/v1），並使用專門建立的 API 金鑰。API 金鑰是整台 Headscale 的管理權限，Headscale 沒有金鑰層級的權限：同一台 Headscale 上的帳號，不論是否共用金鑰，彼此只靠工具權限分權。要讓某個帳號真的受限，請在它的工具權限頁停用 headscale_api_keys 的建立、作廢與刪除：建立會把一把新的整台管理金鑰交給持有權杖的人，在 Add-on 外也能用，「全部撤銷」撤不到；作廢與刪除能停掉其他帳號的金鑰。仍建議每個帳號在 Headscale 各建一把金鑰，不要共用：某個帳號不用了，可以只撤銷它那一把，不會停掉其他帳號。工具預設開啟，請在工具權限頁限制不需要的寫入操作。它不會替使用者安裝或登入 Tailscale 客戶端。',
+};
+export const connectionHelpFor = (product, scoped = false) =>
+  scoped === true && Object.hasOwn(scopedConnectionHelp, product) ? scopedConnectionHelp[product] : connectionHelp[product];
 
 // These children restart after policy changes so public MCP sessions see one consistent tool list.
 // Headscale also reads the current saved policy on every child call, including direct child calls.
@@ -188,6 +198,7 @@ export const urlSecrets = {
 };
 // HM-12 (DQ-05; contract 3.1, section 9 #113 and HM-12's panel rows): the products whose MCP token is bound to the backend identity once
 // switched on (the add-on's products.IDENTITY_BOUND; tests/test_identity_fields.py fails when they differ). HM-22: Nextcloud too.
+// Hermes is not in it: it keeps its token on a backend identity change, matching PaaS (HM-24, 2026-11-20).
 export const identityBound = ['odoo', 'nextcloud'];
 // HM-22 review MF-1 (HM-24's shape): the fields whose change is a new backend identity (the add-on's identity_fields.rotating_fields),
 // as the panel names them for each product of identityBound (api.js: a backend save held for its profile's restore review says

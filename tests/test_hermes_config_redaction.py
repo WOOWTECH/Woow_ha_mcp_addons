@@ -6,6 +6,13 @@ LOCAL fake dashboard. Not the "backend errors carry their own text" decision: th
 import json
 
 from test_six_hardening import Quiet, call, runtime, serve
+import pytest
+from switch_modes import switched_off  # noqa: F401  (fixture: the switch these tests pin)
+
+# Train B (Hermes switched on with its 0.5.0): written for the switched-off add-on, with a loopback fake backend (or
+# the order of a switched-off pipeline) that a switched-on product refuses or answers differently (HM-20, the
+# switched-on pipeline); the tests keep testing the same thing with the switch off (tests/switch_modes.py).
+pytestmark = pytest.mark.usefixtures('switched_off')
 
 PROVIDER_KEY = 'held-provider-key'
 WEBHOOK_SECRET = 'held-sign-key'

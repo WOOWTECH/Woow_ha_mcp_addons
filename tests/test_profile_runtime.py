@@ -11,7 +11,7 @@ byte for byte). What is new is reachable from code only, and only the tests here
   it: a token, a session (the child's or the gateway's own), a child URL and spec, the child client (with the options
   run_product gave it), a token change, a save and its restart, the apply status, the receipts, the child's output and
   the reply redaction all stay with their profile. Not proven here: the forwarding slots (32 in every make_apps; HM-08's
-  quota tests take them across profiles) and n8n's catalog copy (one per process; DQ-04, HM-25).
+  quota tests take them across profiles) and n8n's catalog copies (DQ-04: tests/test_n8n_multi_profile.py, HM-25).
 - SharedAdmin: what the whole add-on shares on 8099 (plan 3.2, FM-54), given to every profile: one AdminAuthority (one
   CSRF key, one HA role verifier), one set of 16 management slots and, for HM-10, the shared management pipeline. One
   CSRF token then works for every profile, and another profile's ETag is a conflict (409 config_conflict; FM-06): the
@@ -430,8 +430,8 @@ async def test_lifecycle_options_reach_the_profiles_supervisor(tmp_path, monkeyp
 async def test_two_runtimes_keep_their_tokens_and_children_apart(tmp_path, monkeypatch, log_scan, product):
     """Every shipped product's child_spec(state, directory, port) fits the runtime (plan risk 19): two profiles of it
     in one process, each answering its own token only, each child reached on its own port with its own bearer. n8n's
-    catalog copy (n8n_adapter.prepare_catalog's nodes.db, the child's NODE_DB_PATH) is not made here: it is one per
-    process, and where an extra profile's copy goes is DQ-04 (HM-25)."""
+    catalog copy (n8n_adapter.prepare_catalog's nodes.db, the child's NODE_DB_PATH) is not made here (both runtimes are
+    on default-profile directories); each additional profile's own copy is HM-25's (tests/test_n8n_multi_profile.py)."""
     async with Profiles(tmp_path, monkeypatch, log_scan) as profiles:
         default = await profiles.open('default', product, port=DEFAULT_PORT)
         extra = await profiles.open('extra', product, port=EXTRA_PORT, profile_id=EXTRA_ID)
@@ -951,12 +951,12 @@ async def test_an_injected_pipeline_takes_every_management_request(two_stores, l
 
 # ---- run_product: the default profile ----
 
-@pytest.mark.parametrize('product', [product for product in PRODUCTS if product != 'n8n'])
+@pytest.mark.parametrize('product', PRODUCTS)
 async def test_run_product_serves_the_default_profiles_runtime(tmp_path, monkeypatch, log_scan, product):
     """run_product builds the default profile with ProfileRuntime: one runtime, profile 'default' on the child port
     3000, on the data directory's store, with no shared administration and no lifecycle option (so make_apps creates
     its authority and slots as before) and no echo; the two listeners serve its two apps; make_apps gets the runtime's
-    TokenAccess and lock. n8n keeps its own runtime until HM-25 (plan 12.2)."""
+    TokenAccess and lock. HM-25: n8n too (apps/n8n/run.py runs run_product's runtime with the n8n adapter)."""
     module = runtime_module()
     built, calls = [], []
 
